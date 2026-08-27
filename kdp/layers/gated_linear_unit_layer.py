@@ -1,6 +1,7 @@
 import tensorflow as tf
 
 
+@tf.keras.utils.register_keras_serializable(package="kdp.layers")
 class GatedLinearUnit(tf.keras.layers.Layer):
     """GatedLinearUnit is a custom Keras layer that implements a gated linear unit.
 

@@ -1,6 +1,7 @@
 import tensorflow as tf
 
 
+@tf.keras.utils.register_keras_serializable(package="kdp.layers")
 class MultiResolutionTabularAttention(tf.keras.layers.Layer):
     """Multi-resolution attention layer for tabular data.
 

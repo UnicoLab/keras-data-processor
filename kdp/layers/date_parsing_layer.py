@@ -1,6 +1,7 @@
 import tensorflow as tf
 
 
+@tf.keras.utils.register_keras_serializable(package="kdp.layers")
 class DateParsingLayer(tf.keras.layers.Layer):
     def __init__(self, date_format: str = "YYYY-MM-DD", **kwargs) -> None:
         """Initializing DateParsingLayer.

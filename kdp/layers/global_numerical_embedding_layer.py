@@ -84,6 +84,29 @@ class GlobalNumericalEmbedding(tf.keras.layers.Layer):
         else:
             raise ValueError(f"Unsupported pooling method: {self.global_pooling}")
 
+    def build(self, input_shape) -> None:
+        """Explicitly build the sub-layers so saved weights can be restored.
+
+        Keras only restores the weights of sub-layers that already exist and are
+        built when a model is deserialized. Building them lazily inside ``call``
+        leaves them unbuilt at load time, which makes ``load_model`` fail, so the
+        inner embedding and pooling layers are built here instead.
+
+        Args:
+            input_shape: Shape of the inputs, ``(batch, ...)``.
+        """
+        flat_dim = input_shape[-1]
+        if len(input_shape) > 2:
+            flat_dim = 1
+            for dim in input_shape[1:]:
+                flat_dim *= dim
+
+        self.inner_embedding.build((input_shape[0], flat_dim))
+        self.global_pooling_layer.build(
+            (input_shape[0], flat_dim, self.global_embedding_dim)
+        )
+        super().build(input_shape)
+
     def call(self, inputs: tf.Tensor, training: bool = False) -> tf.Tensor:
         """
         Expects inputs with shape (batch, ...) and flattens them (except for the batch dim).

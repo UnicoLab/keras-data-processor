@@ -2,6 +2,7 @@ import tensorflow as tf
 from tensorflow.keras.layers import Layer
 
 
+@tf.keras.utils.register_keras_serializable(package="kdp.layers")
 class MovingAverageLayer(Layer):
     """Layer for computing moving averages of time series data.
 

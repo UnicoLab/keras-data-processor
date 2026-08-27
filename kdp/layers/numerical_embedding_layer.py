@@ -149,6 +149,20 @@ class NumericalEmbedding(tf.keras.layers.Layer):
             initializer="zeros",
             trainable=True,
         )
+
+        # Explicitly build the sub-layers. Keras restores weights only for
+        # sub-layers that are already built when a saved model is deserialized,
+        # so leaving these to build lazily inside `call` breaks `load_model`
+        # whenever this layer is nested inside another custom layer.
+        batch = input_shape[0]
+        branch_input_shape = (batch, self.num_features, 1)
+        self.cont_mlp.build(branch_input_shape)
+        self.residual_proj.build(branch_input_shape)
+        if self.use_batch_norm:
+            self.batch_norm.build((batch, self.num_features, self.embedding_dim))
+        for embed_layer in self.bin_embeddings:
+            embed_layer.build((batch,))
+
         super().build(input_shape)
 
     def call(self, inputs: tf.Tensor, training: bool = False) -> tf.Tensor:

@@ -564,6 +564,11 @@ class PreprocessingModel:
                 numeric_features=self.numeric_features,
                 categorical_features=self.categorical_features,
                 text_features=self.text_features,
+                date_features=self.date_features,
+                time_series_features=self.time_series_features,
+                features_stats_path=self.features_stats_path,
+                overwrite_stats=self.overwrite_stats,
+                batch_size=self.batch_size,
             )
             self.features_stats = self.stats_instance._load_stats()
 
@@ -2831,6 +2836,7 @@ class PreprocessingModel:
 
 # Define serializable custom layers
 @tf.keras.utils.register_keras_serializable(package="kdp.processor")
+@tf.keras.utils.register_keras_serializable(package="kdp")
 class SplitLayer(keras.layers.Layer):
     """Custom layer to split a tensor into individual features based on dimensions."""
 

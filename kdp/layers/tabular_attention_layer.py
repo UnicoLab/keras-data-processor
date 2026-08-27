@@ -1,6 +1,7 @@
 import tensorflow as tf
 
 
+@tf.keras.utils.register_keras_serializable(package="kdp.layers")
 class TabularAttention(tf.keras.layers.Layer):
     """Custom layer to apply inter-feature and inter-sample attention for tabular data.
 

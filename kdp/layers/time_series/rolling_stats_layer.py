@@ -2,6 +2,7 @@ import tensorflow as tf
 from tensorflow.keras.layers import Layer
 
 
+@tf.keras.utils.register_keras_serializable(package="kdp.layers")
 class RollingStatsLayer(Layer):
     """Layer for computing rolling statistics on time series data.
 

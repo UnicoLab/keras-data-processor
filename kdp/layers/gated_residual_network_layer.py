@@ -2,6 +2,7 @@ import tensorflow as tf
 from kdp.layers.gated_linear_unit_layer import GatedLinearUnit
 
 
+@tf.keras.utils.register_keras_serializable(package="kdp.layers")
 class GatedResidualNetwork(tf.keras.layers.Layer):
     """GatedResidualNetwork is a custom Keras layer that implements a gated residual network.
 

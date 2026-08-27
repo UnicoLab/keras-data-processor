@@ -3,6 +3,7 @@ import string
 import tensorflow as tf
 
 
+@tf.keras.utils.register_keras_serializable(package="kdp.layers")
 class TextPreprocessingLayer(tf.keras.layers.Layer):
     def __init__(self, stop_words: list, **kwargs: dict) -> None:
         """Initializes a TextPreprocessingLayer.

@@ -3,6 +3,7 @@ from tensorflow.keras.layers import Layer
 import numpy as np
 
 
+@tf.keras.utils.register_keras_serializable(package="kdp.layers")
 class FFTFeatureLayer(Layer):
     """Layer for extracting frequency domain features using Fast Fourier Transform.
 

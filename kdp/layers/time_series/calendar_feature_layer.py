@@ -5,6 +5,7 @@ from loguru import logger
 import pandas as pd
 
 
+@tf.keras.utils.register_keras_serializable(package="kdp.layers")
 class CalendarFeatureLayer(Layer):
     """Layer for generating calendar features from date or timestamp inputs.
 

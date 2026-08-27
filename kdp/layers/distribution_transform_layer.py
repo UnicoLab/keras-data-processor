@@ -10,6 +10,7 @@ from keras import ops, KerasTensor
 import tensorflow as tf
 
 
+@tf.keras.utils.register_keras_serializable(package="kdp.layers")
 class DistributionTransformLayer(tf.keras.layers.Layer):
     """Layer for transforming data distributions to improve anomaly detection.
 

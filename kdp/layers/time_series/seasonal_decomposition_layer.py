@@ -3,6 +3,7 @@ from tensorflow.keras.layers import Layer
 import numpy as np
 
 
+@tf.keras.utils.register_keras_serializable(package="kdp.layers")
 class SeasonalDecompositionLayer(Layer):
     """Layer for decomposing time series data into trend, seasonal, and residual components.
 

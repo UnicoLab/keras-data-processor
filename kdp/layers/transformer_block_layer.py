@@ -1,6 +1,7 @@
 import tensorflow as tf
 
 
+@tf.keras.utils.register_keras_serializable(package="kdp.layers")
 class TransformerBlock(tf.keras.layers.Layer):
     """Class that implements a transformer block."""
 

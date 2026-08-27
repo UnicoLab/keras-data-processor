@@ -1,4 +1,5 @@
 import json
+import math
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -14,6 +15,7 @@ from kdp.features import (
     NumericalFeature,
     TimeSeriesFeature,
 )
+from kdp.layers.date_parsing_layer import DateParsingLayer
 
 MAX_WORKERS = os.cpu_count() or 4
 
@@ -162,8 +164,11 @@ class TextAccumulator:
         Returns:
             list of str: Unique words accumulated.
         """
-        unique_words = self.words.value().numpy().tolist()
-        return unique_words
+        # `.numpy().tolist()` yields `bytes`; decode so the vocabulary is made of
+        # real `str` values. Keeping `bytes` here breaks Keras serialization of the
+        # TextVectorization layer and corrupts the vocabulary when the stats are
+        # round-tripped through JSON.
+        return [word.decode("utf-8") for word in self.words.value().numpy().tolist()]
 
 
 class DateAccumulator:
@@ -178,19 +183,37 @@ class DateAccumulator:
         self.day_of_week_sin_accumulator = WelfordAccumulator()
         self.day_of_week_cos_accumulator = WelfordAccumulator()
 
-    @tf.function
     def update(self, dates: tf.Tensor) -> None:
         """Updates the accumulators with new date values.
 
         Args:
-            dates: A tensor of shape [batch_size, 3] where each row contains [year, month, day_of_week].
+            dates: Either a tensor of date strings (``YYYY-MM-DD`` or ``YYYY/MM/DD``),
+                as read from a CSV column, or an already parsed numeric tensor of
+                shape ``[batch_size, >=4]`` whose columns are
+                ``[year, month, day_of_month, day_of_week]``.
+
+        Raises:
+            ValueError: If a parsed numeric tensor does not carry the four
+                expected date components.
         """
-        year = dates[:, 0]
-        month = dates[:, 1]
-        day_of_week = dates[:, 2]
+        if dates.dtype == tf.string:
+            parsed = DateParsingLayer()(tf.reshape(dates, [-1, 1]))
+        else:
+            parsed = tf.convert_to_tensor(dates)
+            if parsed.shape.rank != 2 or parsed.shape[-1] < 4:
+                raise ValueError(
+                    "Parsed date tensors must have shape [batch_size, >=4] with "
+                    "columns [year, month, day_of_month, day_of_week], got shape "
+                    f"{parsed.shape}."
+                )
+
+        parsed = tf.cast(parsed, tf.float32)
+        year = parsed[:, 0]
+        month = parsed[:, 1]
+        day_of_week = parsed[:, 3]
 
         # Cyclical encoding
-        pi = tf.math.pi
+        pi = tf.constant(math.pi, dtype=tf.float32)
         month_sin = tf.math.sin(2 * pi * month / 12)
         month_cos = tf.math.cos(2 * pi * month / 12)
         day_of_week_sin = tf.math.sin(2 * pi * day_of_week / 7)
@@ -202,7 +225,6 @@ class DateAccumulator:
         self.day_of_week_sin_accumulator.update(day_of_week_sin)
         self.day_of_week_cos_accumulator.update(day_of_week_cos)
 
-    @property
     def mean(self) -> dict:
         """Returns the mean statistics for date features."""
         return {
@@ -213,7 +235,6 @@ class DateAccumulator:
             "day_of_week_cos": self.day_of_week_cos_accumulator.mean.numpy(),
         }
 
-    @property
     def variance(self) -> dict:
         """Returns the variance statistics for date features."""
         return {
@@ -767,7 +788,9 @@ class DatasetStatistics:
         elif isinstance(obj, np.floating):
             return float(obj)  # Convert numpy float to Python float
         elif isinstance(obj, bytes):
-            return str(obj)
+            # `str(b"foo")` would serialize the *repr* ("b'foo'") and silently
+            # corrupt vocabularies on reload, so decode explicitly.
+            return obj.decode("utf-8")
         elif isinstance(obj, np.ndarray):
             return obj.tolist()  # Convert numpy arrays to lists
         logger.debug(f"Type {type(obj)} is not serializable")

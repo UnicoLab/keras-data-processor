@@ -2,6 +2,7 @@ import tensorflow as tf
 from tensorflow.keras.layers import Layer
 
 
+@tf.keras.utils.register_keras_serializable(package="kdp.layers")
 class DifferencingLayer(Layer):
     """Layer for computing differences of time series data.
 

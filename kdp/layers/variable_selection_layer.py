@@ -2,6 +2,7 @@ import tensorflow as tf
 from kdp.layers.gated_residual_network_layer import GatedResidualNetwork
 
 
+@tf.keras.utils.register_keras_serializable(package="kdp.layers")
 class VariableSelection(tf.keras.layers.Layer):
     """VariableSelection is a custom Keras layer that implements a variable selection mechanism.
 

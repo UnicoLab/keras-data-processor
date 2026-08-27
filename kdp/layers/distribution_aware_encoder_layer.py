@@ -65,6 +65,7 @@ class DistributionType(str, Enum):
     ORDINAL = "ordinal"  # For ordered categorical data
 
 
+@tf.keras.utils.register_keras_serializable(package="kdp.layers")
 class DistributionAwareEncoder(tf.keras.layers.Layer):
     """An advanced layer that adapts its encoding based on the input distribution.
 

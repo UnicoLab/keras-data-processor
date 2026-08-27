@@ -3,6 +3,7 @@ from tensorflow.keras.layers import Layer
 import numpy as np
 
 
+@tf.keras.utils.register_keras_serializable(package="kdp.layers")
 class AutoLagSelectionLayer(Layer):
     """Layer for automatically selecting optimal lag features based on autocorrelation analysis.
 

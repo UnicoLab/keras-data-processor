@@ -1,6 +1,7 @@
 import tensorflow as tf
 
 
+@tf.keras.utils.register_keras_serializable(package="kdp.layers")
 class SeasonLayer(tf.keras.layers.Layer):
     """A Keras Layer that adds seasonal information to the input tensor based on the month.
 
