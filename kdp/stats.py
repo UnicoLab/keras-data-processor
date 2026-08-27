@@ -838,6 +838,36 @@ class DatasetStatistics:
             json.dump(self.features_stats, f, default=self._custom_serializer)
         logger.info("features_stats saved ")
 
+    @staticmethod
+    def _has_repr_encoded_vocabulary(features_stats: dict) -> bool:
+        """Detect vocabularies saved as Python byte reprs by older releases.
+
+        Args:
+            features_stats: Statistics loaded from disk.
+
+        Returns:
+            True when any vocabulary entry looks like ``b'value'`` rather than
+            the value itself.
+        """
+        for stats_group in features_stats.values():
+            if not isinstance(stats_group, dict):
+                continue
+            for feature_stats in stats_group.values():
+                if not isinstance(feature_stats, dict):
+                    continue
+                vocabulary = feature_stats.get("vocab")
+                if not isinstance(vocabulary, list):
+                    continue
+                for entry in vocabulary:
+                    if (
+                        isinstance(entry, str)
+                        and len(entry) >= 3
+                        and entry.startswith(("b'", 'b"'))
+                        and entry[-1] == entry[1]
+                    ):
+                        return True
+        return False
+
     def _load_stats(self) -> dict:
         """Loads serialized features stats from a file, with custom handling for TensorFlow dtypes.
 
@@ -855,6 +885,22 @@ class DatasetStatistics:
             )
             with stats_path.open() as f:
                 self.features_stats = json.load(f)
+
+            # Statistics written before the bytes-decoding fix hold repr strings
+            # ("b'paris'") instead of the real categories. Such a file still
+            # loads and still builds a model, but every category then misses the
+            # vocabulary and encodes identically to an unseen value -- silent,
+            # total signal loss. Recompute instead of trusting it.
+            if self._has_repr_encoded_vocabulary(self.features_stats):
+                logger.warning(
+                    f"{self.features_stats_path} was written by an older KDP "
+                    "release whose vocabularies were stored as byte reprs "
+                    "(\"b'value'\"). Reusing it would silently map every "
+                    "category to the out-of-vocabulary slot, so the statistics "
+                    "are being recomputed from the data.",
+                )
+                self.features_stats = {}
+                return self.features_stats
 
             # Convert dtype strings back to TensorFlow dtype objects
             for stats_type in (

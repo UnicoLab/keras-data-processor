@@ -183,5 +183,76 @@ class TestPredictAcceptsPlainPython(unittest.TestCase):
         self.assertEqual(int(tf.shape(output)[0]), 1)
 
 
+class TestLegacyStatsFileDetection(unittest.TestCase):
+    """Statistics written before the bytes fix must not be trusted."""
+
+    def test_repr_encoded_vocabulary_is_detected(self):
+        """`b'paris'` is a byte repr, not a category."""
+        self.assertTrue(
+            DatasetStatistics._has_repr_encoded_vocabulary(
+                {"categorical_stats": {"city": {"vocab": ["b'paris'", "b'lima'"]}}}
+            )
+        )
+
+    def test_correct_vocabulary_is_left_alone(self):
+        """A properly decoded vocabulary is not mistaken for the old format."""
+        self.assertFalse(
+            DatasetStatistics._has_repr_encoded_vocabulary(
+                {"categorical_stats": {"city": {"vocab": ["paris", "lima"]}}}
+            )
+        )
+
+    def test_single_letter_b_category_is_not_a_false_positive(self):
+        """A category that merely starts with "b" is still a category."""
+        self.assertFalse(
+            DatasetStatistics._has_repr_encoded_vocabulary(
+                {"categorical_stats": {"c": {"vocab": ["b", "berlin", "b'"]}}}
+            )
+        )
+
+    def test_legacy_file_is_recomputed_rather_than_reused(self):
+        """Reusing it would map every category to the OOV slot."""
+        import json
+        import tempfile
+        from pathlib import Path
+
+        keras.backend.clear_session()
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            csv_path = _write_dataset(tmp_path)
+            stats_path = tmp_path / "features_stats.json"
+            # Exactly what the previous release wrote.
+            stats_path.write_text(
+                json.dumps(
+                    {
+                        "categorical_stats": {
+                            "city": {
+                                "size": 3,
+                                "vocab": ["b'paris'", "b'tokyo'", "b'lima'"],
+                                "dtype": "string",
+                            }
+                        }
+                    }
+                )
+            )
+
+            preprocessor = PreprocessingModel(
+                path_data=str(csv_path),
+                features_specs={"city": FeatureType.STRING_CATEGORICAL},
+                features_stats_path=str(stats_path),
+            )
+            preprocessor.build_preprocessor()
+
+            output = np.asarray(
+                preprocessor.model(
+                    {"city": tf.constant([["paris"], ["tokyo"], ["UNSEEN"]])}
+                )
+            )
+
+        # Known categories must not collapse onto the out-of-vocabulary vector.
+        self.assertFalse(np.allclose(output[0], output[2]))
+        self.assertFalse(np.allclose(output[0], output[1]))
+
+
 if __name__ == "__main__":
     unittest.main()
