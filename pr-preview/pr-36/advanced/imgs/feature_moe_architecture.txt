@@ -1,0 +1,45 @@
+graph TD
+    subgraph "Feature-wise Mixture of Experts"
+        F1[Feature 1] --> Stack[Feature Stack]
+        F2[Feature 2] --> Stack
+        F3[Feature 3] --> Stack
+        F4[Feature 4] --> Stack
+
+        Stack --> Router[Router Network]
+
+        subgraph "Expert Networks"
+            E1[Expert 1]
+            E2[Expert 2]
+            E3[Expert 3]
+            E4[Expert 4]
+        end
+
+        Router -->|Routing Weights| Weights[Expert Weights]
+        Stack --> E1
+        Stack --> E2
+        Stack --> E3
+        Stack --> E4
+
+        E1 --> Combine[Weighted Combination]
+        E2 --> Combine
+        E3 --> Combine
+        E4 --> Combine
+        Weights --> Combine
+
+        Combine --> Unstack[Feature Unstack]
+
+        Unstack --> OF1[Enhanced Feature 1]
+        Unstack --> OF2[Enhanced Feature 2]
+        Unstack --> OF3[Enhanced Feature 3]
+        Unstack --> OF4[Enhanced Feature 4]
+    end
+
+    classDef feature fill:#b5e3d8,stroke:#333,stroke-width:1px
+    classDef expert fill:#ffcda8,stroke:#333,stroke-width:1px
+    classDef router fill:#a8c5e8,stroke:#333,stroke-width:1px
+    classDef enhanced fill:#d5a8e8,stroke:#333,stroke-width:1px
+
+    class F1,F2,F3,F4 feature
+    class E1,E2,E3,E4 expert
+    class Router,Weights router
+    class OF1,OF2,OF3,OF4 enhanced
