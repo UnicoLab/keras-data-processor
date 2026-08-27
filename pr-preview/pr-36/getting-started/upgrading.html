@@ -8,28 +8,28 @@
       
       
       
-        <link rel="canonical" href="https://unicolab.github.io/keras-data-processor/contributing/development/images-organization.html">
+        <link rel="canonical" href="https://unicolab.github.io/keras-data-processor/getting-started/upgrading.html">
       
       
-        <link rel="prev" href="auto-documentation.html">
+        <link rel="prev" href="architecture.html">
       
       
-        <link rel="next" href="../../api/layers-factory.html">
+        <link rel="next" href="../features/overview.html">
       
       
-      <link rel="icon" href="../../assets/images/favicon.png">
+      <link rel="icon" href="../assets/images/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.16">
     
     
       
-        <title>🖼️ Images Organization - KDP - Keras Data Preprocessor</title>
+        <title>⬆️ Upgrading from 1.11.x - KDP - Keras Data Preprocessor</title>
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.7e37652d.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.7e37652d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+        <link rel="stylesheet" href="../assets/stylesheets/palette.06af60db.min.css">
       
       
   
@@ -89,9 +89,9 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
     
-    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -117,7 +117,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#documentation-image-organization" class="md-skip">
+        <a href="#upgrading-from-111x" class="md-skip">
           Skip to content
         </a>
       
@@ -137,7 +137,7 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../../index.html" title="KDP - Keras Data Preprocessor" class="md-header__button md-logo" aria-label="KDP - Keras Data Preprocessor" data-md-component="logo">
+    <a href="../index.html" title="KDP - Keras Data Preprocessor" class="md-header__button md-logo" aria-label="KDP - Keras Data Preprocessor" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 11a1 1 0 0 1 1 1 1 1 0 0 1-1 1 1 1 0 0 1-1-1 1 1 0 0 1 1-1M4.22 4.22C5.65 2.79 8.75 3.43 12 5.56c3.25-2.13 6.35-2.77 7.78-1.34s.79 4.53-1.34 7.78c2.13 3.25 2.77 6.35 1.34 7.78s-4.53.79-7.78-1.34c-3.25 2.13-6.35 2.77-7.78 1.34S3.43 15.25 5.56 12C3.43 8.75 2.79 5.65 4.22 4.22m11.32 4.24c.61.62 1.17 1.25 1.69 1.88 1.38-2.13 1.88-3.96 1.13-4.7-.74-.75-2.57-.25-4.7 1.13.63.52 1.26 1.08 1.88 1.69m-7.08 7.08c-.61-.62-1.17-1.25-1.69-1.88-1.38 2.13-1.88 3.96-1.13 4.7.74.75 2.57.25 4.7-1.13-.63-.52-1.26-1.08-1.88-1.69m-2.82-9.9c-.75.74-.25 2.57 1.13 4.7.52-.63 1.08-1.26 1.69-1.88.62-.61 1.25-1.17 1.88-1.69-2.13-1.38-3.96-1.88-4.7-1.13m4.24 8.48c.7.7 1.42 1.34 2.12 1.91.7-.57 1.42-1.21 2.12-1.91s1.34-1.42 1.91-2.12c-.57-.7-1.21-1.42-1.91-2.12S12.7 8.54 12 7.97c-.7.57-1.42 1.21-2.12 1.91S8.54 11.3 7.97 12c.57.7 1.21 1.42 1.91 2.12m8.48 4.24c.75-.74.25-2.57-1.13-4.7-.52.63-1.08 1.26-1.69 1.88-.62.61-1.25 1.17-1.88 1.69 2.13 1.38 3.96 1.88 4.7 1.13"/></svg>
@@ -157,7 +157,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              🖼️ Images Organization
+              ⬆️ Upgrading from 1.11.x
             
           </span>
         </div>
@@ -273,7 +273,7 @@
 
 <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../index.html" title="KDP - Keras Data Preprocessor" class="md-nav__button md-logo" aria-label="KDP - Keras Data Preprocessor" data-md-component="logo">
+    <a href="../index.html" title="KDP - Keras Data Preprocessor" class="md-nav__button md-logo" aria-label="KDP - Keras Data Preprocessor" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 11a1 1 0 0 1 1 1 1 1 0 0 1-1 1 1 1 0 0 1-1-1 1 1 0 0 1 1-1M4.22 4.22C5.65 2.79 8.75 3.43 12 5.56c3.25-2.13 6.35-2.77 7.78-1.34s.79 4.53-1.34 7.78c2.13 3.25 2.77 6.35 1.34 7.78s-4.53.79-7.78-1.34c-3.25 2.13-6.35 2.77-7.78 1.34S3.43 15.25 5.56 12C3.43 8.75 2.79 5.65 4.22 4.22m11.32 4.24c.61.62 1.17 1.25 1.69 1.88 1.38-2.13 1.88-3.96 1.13-4.7-.74-.75-2.57-.25-4.7 1.13.63.52 1.26 1.08 1.88 1.69m-7.08 7.08c-.61-.62-1.17-1.25-1.69-1.88-1.38 2.13-1.88 3.96-1.13 4.7.74.75 2.57.25 4.7-1.13-.63-.52-1.26-1.08-1.88-1.69m-2.82-9.9c-.75.74-.25 2.57 1.13 4.7.52-.63 1.08-1.26 1.69-1.88.62-.61 1.25-1.17 1.88-1.69-2.13-1.38-3.96-1.88-4.7-1.13m4.24 8.48c.7.7 1.42 1.34 2.12 1.91.7-.57 1.42-1.21 2.12-1.91s1.34-1.42 1.91-2.12c-.57-.7-1.21-1.42-1.91-2.12S12.7 8.54 12 7.97c-.7.57-1.42 1.21-2.12 1.91S8.54 11.3 7.97 12c.57.7 1.21 1.42 1.91 2.12m8.48 4.24c.75-.74.25-2.57-1.13-4.7-.52.63-1.08 1.26-1.69 1.88-.62.61-1.25 1.17-1.88 1.69 2.13 1.38 3.96 1.88 4.7 1.13"/></svg>
@@ -303,7 +303,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../index.html" class="md-nav__link">
+      <a href="../index.html" class="md-nav__link">
         
   
   
@@ -322,18 +322,20 @@
       
   
   
+    
   
   
+  
     
     
     
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
         
           
           <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
@@ -349,7 +351,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_2">
             <span class="md-nav__icon md-icon"></span>
             🚀 Getting Started
@@ -363,7 +365,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../getting-started/installation.html" class="md-nav__link">
+      <a href="installation.html" class="md-nav__link">
         
   
   
@@ -386,7 +388,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../getting-started/quick-start.html" class="md-nav__link">
+      <a href="quick-start.html" class="md-nav__link">
         
   
   
@@ -409,7 +411,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../getting-started/motivation.html" class="md-nav__link">
+      <a href="motivation.html" class="md-nav__link">
         
   
   
@@ -432,7 +434,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../getting-started/architecture.html" class="md-nav__link">
+      <a href="architecture.html" class="md-nav__link">
         
   
   
@@ -452,10 +454,32 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../getting-started/upgrading.html" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    ⬆️ Upgrading from 1.11.x
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="upgrading.html" class="md-nav__link md-nav__link--active">
         
   
   
@@ -466,6 +490,80 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      📋 Overview
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#output-values-change" class="md-nav__link">
+    <span class="md-ellipsis">
+      ⚠️ Output values change
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#existing-features_statsjson-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      🗂️ Existing features_stats.json files
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      🐍 Requirements
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#things-that-now-work-that-did-not-before" class="md-nav__link">
+    <span class="md-ellipsis">
+      ✅ Things that now work that did not before
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#moved-symbols" class="md-nav__link">
+    <span class="md-ellipsis">
+      🔀 Moved symbols
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -523,7 +621,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/overview.html" class="md-nav__link">
+      <a href="../features/overview.html" class="md-nav__link">
         
   
   
@@ -546,7 +644,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/numerical-features.html" class="md-nav__link">
+      <a href="../features/numerical-features.html" class="md-nav__link">
         
   
   
@@ -569,7 +667,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/categorical-features.html" class="md-nav__link">
+      <a href="../features/categorical-features.html" class="md-nav__link">
         
   
   
@@ -592,7 +690,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/text-features.html" class="md-nav__link">
+      <a href="../features/text-features.html" class="md-nav__link">
         
   
   
@@ -615,7 +713,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/date-features.html" class="md-nav__link">
+      <a href="../features/date-features.html" class="md-nav__link">
         
   
   
@@ -638,7 +736,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/time_series_features.html" class="md-nav__link">
+      <a href="../features/time_series_features.html" class="md-nav__link">
         
   
   
@@ -661,7 +759,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../time_series_inference.html" class="md-nav__link">
+      <a href="../time_series_inference.html" class="md-nav__link">
         
   
   
@@ -684,7 +782,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/cross-features.html" class="md-nav__link">
+      <a href="../features/cross-features.html" class="md-nav__link">
         
   
   
@@ -707,7 +805,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/passthrough-features.html" class="md-nav__link">
+      <a href="../features/passthrough-features.html" class="md-nav__link">
         
   
   
@@ -775,7 +873,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/distribution-aware-encoding.html" class="md-nav__link">
+      <a href="../advanced/distribution-aware-encoding.html" class="md-nav__link">
         
   
   
@@ -798,7 +896,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/numerical-embeddings.html" class="md-nav__link">
+      <a href="../advanced/numerical-embeddings.html" class="md-nav__link">
         
   
   
@@ -821,7 +919,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/tabular-attention.html" class="md-nav__link">
+      <a href="../advanced/tabular-attention.html" class="md-nav__link">
         
   
   
@@ -844,7 +942,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/transformer-blocks.html" class="md-nav__link">
+      <a href="../advanced/transformer-blocks.html" class="md-nav__link">
         
   
   
@@ -867,7 +965,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/feature-moe.html" class="md-nav__link">
+      <a href="../advanced/feature-moe.html" class="md-nav__link">
         
   
   
@@ -890,7 +988,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/custom-preprocessing.html" class="md-nav__link">
+      <a href="../advanced/custom-preprocessing.html" class="md-nav__link">
         
   
   
@@ -958,7 +1056,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../optimization/feature-selection.html" class="md-nav__link">
+      <a href="../optimization/feature-selection.html" class="md-nav__link">
         
   
   
@@ -981,7 +1079,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../optimization/tabular-optimization.html" class="md-nav__link">
+      <a href="../optimization/tabular-optimization.html" class="md-nav__link">
         
   
   
@@ -1004,7 +1102,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../optimization/auto-configuration.html" class="md-nav__link">
+      <a href="../optimization/auto-configuration.html" class="md-nav__link">
         
   
   
@@ -1072,7 +1170,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../examples/basic-examples.html" class="md-nav__link">
+      <a href="../examples/basic-examples.html" class="md-nav__link">
         
   
   
@@ -1095,7 +1193,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../examples/complex-examples.html" class="md-nav__link">
+      <a href="../examples/complex-examples.html" class="md-nav__link">
         
   
   
@@ -1118,7 +1216,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../examples/categorical-hashing-example.html" class="md-nav__link">
+      <a href="../examples/categorical-hashing-example.html" class="md-nav__link">
         
   
   
@@ -1186,7 +1284,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../integrations/overview.html" class="md-nav__link">
+      <a href="../integrations/overview.html" class="md-nav__link">
         
   
   
@@ -1213,20 +1311,18 @@
       
   
   
-    
   
   
-  
     
     
     
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
         
           
           <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
@@ -1242,7 +1338,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             🤝 Contributing
@@ -1256,7 +1352,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../overview.html" class="md-nav__link">
+      <a href="../contributing/overview.html" class="md-nav__link">
         
   
   
@@ -1279,7 +1375,7 @@
   
   
     <li class="md-nav__item">
-      <a href="auto-documentation.html" class="md-nav__link">
+      <a href="../contributing/development/auto-documentation.html" class="md-nav__link">
         
   
   
@@ -1299,32 +1395,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    🖼️ Images Organization
-    
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="images-organization.html" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../contributing/development/images-organization.html" class="md-nav__link">
         
   
   
@@ -1335,98 +1409,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
-    <span class="md-ellipsis">
-      Overview
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#directory-structure" class="md-nav__link">
-    <span class="md-ellipsis">
-      📁 Directory Structure
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#image-organization-script" class="md-nav__link">
-    <span class="md-ellipsis">
-      🔄 Image Organization Script
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#image-categories" class="md-nav__link">
-    <span class="md-ellipsis">
-      🎨 Image Categories
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#adding-new-images" class="md-nav__link">
-    <span class="md-ellipsis">
-      🖊️ Adding New Images
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#best-practices" class="md-nav__link">
-    <span class="md-ellipsis">
-      📋 Best Practices
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#finding-unused-images" class="md-nav__link">
-    <span class="md-ellipsis">
-      🔍 Finding Unused Images
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#related-topics" class="md-nav__link">
-    <span class="md-ellipsis">
-      🤝 Related Topics
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1484,7 +1466,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../api/layers-factory.html" class="md-nav__link">
+      <a href="../api/layers-factory.html" class="md-nav__link">
         
   
   
@@ -1507,7 +1489,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../generated/api_index.html" class="md-nav__link">
+      <a href="../generated/api_index.html" class="md-nav__link">
         
   
   
@@ -1559,70 +1541,52 @@
         <li class="md-nav__item">
   <a href="#overview" class="md-nav__link">
     <span class="md-ellipsis">
-      Overview
+      📋 Overview
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#directory-structure" class="md-nav__link">
+  <a href="#output-values-change" class="md-nav__link">
     <span class="md-ellipsis">
-      📁 Directory Structure
+      ⚠️ Output values change
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#image-organization-script" class="md-nav__link">
+  <a href="#existing-features_statsjson-files" class="md-nav__link">
     <span class="md-ellipsis">
-      🔄 Image Organization Script
+      🗂️ Existing features_stats.json files
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#image-categories" class="md-nav__link">
+  <a href="#requirements" class="md-nav__link">
     <span class="md-ellipsis">
-      🎨 Image Categories
+      🐍 Requirements
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#adding-new-images" class="md-nav__link">
+  <a href="#things-that-now-work-that-did-not-before" class="md-nav__link">
     <span class="md-ellipsis">
-      🖊️ Adding New Images
+      ✅ Things that now work that did not before
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#best-practices" class="md-nav__link">
+  <a href="#moved-symbols" class="md-nav__link">
     <span class="md-ellipsis">
-      📋 Best Practices
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#finding-unused-images" class="md-nav__link">
-    <span class="md-ellipsis">
-      🔍 Finding Unused Images
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#related-topics" class="md-nav__link">
-    <span class="md-ellipsis">
-      🤝 Related Topics
+      🔀 Moved symbols
     </span>
   </a>
   
@@ -1647,115 +1611,148 @@
   
 
 
-<h1 id="documentation-image-organization">🖼️ Documentation Image Organization</h1>
-<blockquote>
-<p>A guide to working with images in the KDP documentation</p>
-</blockquote>
-<h2 id="overview">Overview</h2>
-<p>KDP documentation uses a section-specific image organization pattern where each documentation section has its own <code>imgs/</code> directory containing relevant images. This approach provides better organization and makes it clear which images are used in each section.</p>
-<h2 id="directory-structure">📁 Directory Structure</h2>
-<p>Each major documentation section has its own <code>imgs/</code> directory:</p>
-<div class="highlight"><pre><span></span><code>docs/
-├── features/
-│   ├── imgs/             # Feature-specific images
-│   │   └── models/       # Generated model diagrams
-│   ├── overview.md
-│   └── ...
-├── advanced/
-│   ├── imgs/             # Advanced feature images
-│   └── ...
-├── getting-started/
-│   ├── imgs/             # Getting started images
-│   └── ...
-└── ...
-</code></pre></div>
-<h2 id="image-organization-script">🔄 Image Organization Script</h2>
-<p>The <code>scripts/organize_docs_images.sh</code> script handles image organization:</p>
-<ol>
-<li>It categorizes images into common, feature-specific, and advanced types</li>
-<li>It distributes these images to appropriate section folders</li>
-<li>It ensures generated model diagrams are correctly placed in the <code>features/imgs/models/</code> directory</li>
-</ol>
-<p>This script runs automatically during documentation generation:</p>
-<div class="highlight"><pre><span></span><code>make<span class="w"> </span>generate_doc_content
-</code></pre></div>
-<h2 id="image-categories">🎨 Image Categories</h2>
-<p>Images are organized into three main categories:</p>
-<ol>
-<li><strong>Common Images</strong> (distributed to all sections):</li>
-<li><code>Model_Architecture.png</code> - Main architecture diagram</li>
-<li><code>features_stats.png</code> - Feature statistics visualization</li>
-<li><code>time_vs_nr_data.png</code> - Performance comparison chart</li>
-<li><code>time_vs_nr_features.png</code> - Feature scaling chart</li>
-<li>
-<p><code>kdp_logo.png</code> - Project logo</p>
-</li>
-<li>
-<p><strong>Feature-Specific Images</strong> (in <code>features/imgs/</code> and <code>getting-started/imgs/</code>):</p>
-</li>
-<li><code>cat_feature_pipeline.png</code> - Categorical feature processing pipeline</li>
-<li><code>numerical_example_model.png</code> - Example numerical feature model</li>
-<li>
-<p>And others related to core feature types</p>
-</li>
-<li>
-<p><strong>Advanced Feature Images</strong> (in <code>advanced/imgs/</code>, <code>optimization/imgs/</code>, and <code>examples/imgs/</code>):</p>
-</li>
-<li><code>TransformerBlockAllFeatures.png</code> - Transformer block architecture</li>
-<li><code>numerical_example_model_with_distribution_aware.png</code> - Distribution-aware encoding</li>
-<li>
-<p>And others related to advanced features</p>
-</li>
-<li>
-<p><strong>Model Diagrams</strong> (in <code>features/imgs/models/</code>):</p>
-</li>
-<li>Automatically generated diagrams showing different model architectures</li>
-<li>Created by the <code>generate_model_diagrams.py</code> script</li>
-</ol>
-<h2 id="adding-new-images">🖊️ Adding New Images</h2>
-<p>When adding new images to the documentation:</p>
-<ol>
-<li>Place the image in the appropriate section's <code>imgs/</code> directory</li>
-<li>Reference it in the Markdown using a relative path: <code>![Description](imgs/image_name.png)</code></li>
-<li>Run <code>make generate_doc_content</code> to ensure proper organization</li>
-</ol>
-<h2 id="best-practices">📋 Best Practices</h2>
-<ol>
-<li><strong>Use Descriptive Filenames</strong>:</li>
-<li>Choose clear, descriptive names: <code>categorical_processing_flow.png</code> not <code>img1.png</code></li>
-<li>
-<p>Use snake_case for filenames</p>
-</li>
-<li>
-<p><strong>Optimize Images</strong>:</p>
-</li>
-<li>Compress images to reduce file size</li>
-<li>Use PNG for diagrams and screenshots</li>
-<li>
-<p>Keep dimensions reasonable (800-1200px width for most images)</p>
-</li>
-<li>
-<p><strong>Include Alt Text</strong>:</p>
-</li>
-<li>
-<p>Always provide descriptive alt text: <code>![Distribution-aware encoding architecture](imgs/distribution_aware.png)</code></p>
-</li>
-<li>
-<p><strong>Keep Images Relevant</strong>:</p>
-</li>
-<li>Only include images that add value to the documentation</li>
-<li>Remove unused images using <code>make clean_old_diagrams</code></li>
-</ol>
-<h2 id="finding-unused-images">🔍 Finding Unused Images</h2>
-<p>To identify potentially unused images:</p>
-<div class="highlight"><pre><span></span><code>make<span class="w"> </span>identify_unused_diagrams
-</code></pre></div>
-<p>This will generate an <code>unused_diagrams_report.txt</code> file listing images that may not be referenced in the documentation.</p>
-<h2 id="related-topics">🤝 Related Topics</h2>
+<h1 id="upgrading-from-111x">⬆️ Upgrading from 1.11.x</h1>
+<div class="feature-header">
+  <div class="feature-title">
+    <h2>Upgrade Guide</h2>
+    <p>What changes when you move off 1.11.x, and what you need to do about it.</p>
+  </div>
+</div>
+
+<h2 id="overview">📋 Overview</h2>
+<div class="overview-card">
+  <p>This release repairs defects that produced <strong>wrong numbers rather than errors</strong>. Pipelines that ran without complaint on 1.11.x will keep running, but several of them will now emit different values &mdash; correct ones. Re-train any downstream model that was fitted on the old output.</p>
+</div>
+
+<h2 id="output-values-change">⚠️ Output values change</h2>
+<p>These transforms returned incorrect values before. Nothing about your
+configuration changes, but the numbers coming out of the preprocessor do.</p>
+<table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Before</th>
+<th>Now</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Time series layers</td>
+<td><code>DifferencingLayer</code>, <code>MovingAverageLayer</code>, <code>RollingStatsLayer</code>, <code>LagFeatureLayer</code> and <code>AutoLagSelectionLayer</code> returned fixed constants for certain shapes instead of computing over the input</td>
+<td>Values are computed from the data in every case</td>
+</tr>
+<tr>
+<td><code>DistributionTransformLayer</code> — <code>robust-scale</code></td>
+<td>Median and IQR were taken across the whole tensor</td>
+<td>Computed per feature, as the transform is defined</td>
+</tr>
+<tr>
+<td><code>DistributionTransformLayer</code> — <code>quantile</code></td>
+<td>Ranking was global</td>
+<td>Ranked per feature</td>
+</tr>
+<tr>
+<td>Distribution-aware encoding</td>
+<td><code>preferred_distribution</code> was accepted and then ignored, so the layer always auto-detected</td>
+<td>The requested distribution is honoured</td>
+</tr>
+<tr>
+<td>Output width</td>
+<td><code>get_output_dim()</code> combined dimensions additively for some feature configurations</td>
+<td>Combined multiplicatively, matching the tensor the model actually produces</td>
+</tr>
+<tr>
+<td>Time series + other features</td>
+<td>A time series feature could not be combined with any other feature: the warm-up rows <code>drop_na</code> removes left that column shorter and <code>Concatenate</code> raised</td>
+<td>Transforms preserve rows by default, so the documented combinations build</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition warning">
+<p class="admonition-title">Re-train downstream models</p>
+<p>If you trained a model on top of KDP output from 1.11.x and any of the
+rows above apply to your feature set, the preprocessor now feeds it
+different numbers. Re-fit before you compare metrics.</p>
+</div>
+<h2 id="existing-features_statsjson-files">🗂️ Existing <code>features_stats.json</code> files</h2>
+<p>Statistics files written by 1.11.2 and earlier stored categorical
+vocabularies as byte reprs — the literal string <code>"b'paris'"</code> rather than
+<code>paris</code>. Such a file loaded without complaint and produced a model in which
+<strong>every category missed the vocabulary and encoded identically to an unseen
+value</strong>.</p>
+<p>KDP now detects that format and recomputes from the data instead of trusting
+it, logging a warning that names the file. You do not have to do anything,
+but be aware that:</p>
 <ul>
-<li><a href="auto-documentation.html">Documentation Generation</a></li>
-<li><a href="../overview.html">Contributing Guide</a></li>
+<li>the first build after upgrading re-reads your dataset, so it takes as long
+  as a fresh statistics pass;</li>
+<li><code>path_data</code> must still point at the data for that recomputation to happen.</li>
 </ul>
+<p>To recompute deliberately instead, pass <code>overwrite_stats=True</code> once.</p>
+<h2 id="requirements">🐍 Requirements</h2>
+<div class="code-container">
+
+<div class="highlight"><pre><span></span><code>Python  &gt;= 3.10        # 1.11.x declared 3.9, but never ran on it
+keras   &gt;= 3.5, &lt; 4.0  # now an explicit dependency
+</code></pre></div>
+
+</div>
+
+<p>The package previously reached Keras through the <code>tf.keras</code> compatibility
+shim. It targets the Keras 3 API directly, which means it is no longer tied
+to whichever Keras version TensorFlow happens to pin, and it is tested
+against the newest Keras 3 release on every pull request. The <code>tf-keras</code>
+dependency is gone.</p>
+<p>The 3.9 requirement in 1.11.x was a metadata error rather than a supported
+configuration — the source already used <code>X | None</code> type syntax, which 3.9
+cannot parse — so no working 3.9 installation exists to break.</p>
+<h2 id="things-that-now-work-that-did-not-before">✅ Things that now work that did not before</h2>
+<p>None of these need a change on your side; they simply stop failing.</p>
+<div class="code-container">
+
+<div class="highlight"><pre><span></span><code><span class="c1"># Saving and reloading a preprocessor. Custom layers are registered as</span>
+<span class="c1"># serializable, so a saved model round-trips.</span>
+<span class="n">preprocessor</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;model.keras&quot;</span><span class="p">)</span>
+<span class="n">reloaded</span> <span class="o">=</span> <span class="n">keras</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">load_model</span><span class="p">(</span><span class="s2">&quot;model.keras&quot;</span><span class="p">)</span>
+
+<span class="c1"># predict() with plain Python or NumPy input, including string columns.</span>
+<span class="n">preprocessor</span><span class="o">.</span><span class="n">predict</span><span class="p">({</span>
+    <span class="s2">&quot;age&quot;</span><span class="p">:</span> <span class="p">[[</span><span class="mf">35.0</span><span class="p">]],</span>
+    <span class="s2">&quot;city&quot;</span><span class="p">:</span> <span class="p">[[</span><span class="s2">&quot;paris&quot;</span><span class="p">]],</span>
+<span class="p">})</span>
+
+<span class="c1"># Custom pipelines by layer name -- the spelling the docs lead with.</span>
+<span class="n">Feature</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;value&quot;</span><span class="p">,</span>
+    <span class="n">feature_type</span><span class="o">=</span><span class="n">FeatureType</span><span class="o">.</span><span class="n">FLOAT_NORMALIZED</span><span class="p">,</span>
+    <span class="n">preprocessors</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Rescaling&quot;</span><span class="p">,</span> <span class="s2">&quot;Dense&quot;</span><span class="p">],</span>
+    <span class="n">scale</span><span class="o">=</span><span class="mf">2.0</span><span class="p">,</span>
+    <span class="n">units</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># auto_configure() returns real per-feature recommendations rather than an</span>
+<span class="c1"># empty set, and DatasetStatistics works from features_specs alone.</span>
+<span class="n">auto_configure</span><span class="p">(</span><span class="s2">&quot;data.csv&quot;</span><span class="p">,</span> <span class="n">features_specs</span><span class="o">=</span><span class="n">specs</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+
+<p>Building a model whose features learn nothing from the data — hashing
+categoricals with an explicit <code>hash_bucket_size</code> — no longer requires
+<code>path_data</code>, because no statistics pass runs. When a feature <em>does</em> need
+statistics and <code>path_data</code> is missing, the error now names the parameter
+instead of surfacing as a <code>TypeError</code> from inside <code>tf.data</code>.</p>
+<h2 id="moved-symbols">🔀 Moved symbols</h2>
+<p><code>FeatureSpaceConverter</code> now lives in <code>kdp.features</code>, next to the feature
+classes it converts. It is re-exported from <code>kdp.processor</code>, so existing
+imports keep working:</p>
+<div class="code-container">
+
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">kdp.features</span><span class="w"> </span><span class="kn">import</span> <span class="n">FeatureSpaceConverter</span>   <span class="c1"># preferred</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">kdp.processor</span><span class="w"> </span><span class="kn">import</span> <span class="n">FeatureSpaceConverter</span>  <span class="c1"># still works</span>
+</code></pre></div>
+
+</div>
 
 
 
@@ -1830,12 +1827,12 @@
     
     
       
-      <script id="__config" type="application/json">{"base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.d50fe291.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"base": "..", "features": [], "search": "../assets/javascripts/workers/search.d50fe291.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.50899def.min.js"></script>
+      <script src="../assets/javascripts/bundle.50899def.min.js"></script>
       
-        <script src="../../assets/js/fix-image-paths.js"></script>
+        <script src="../assets/js/fix-image-paths.js"></script>
       
     
   </body>
