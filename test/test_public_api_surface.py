@@ -254,5 +254,53 @@ class TestLegacyStatsFileDetection(unittest.TestCase):
         self.assertFalse(np.allclose(output[0], output[1]))
 
 
+class TestStatisticsAreOnlyComputedWhenNeeded(unittest.TestCase):
+    """A model whose features learn nothing from the data needs no dataset."""
+
+    def test_hashing_only_model_builds_without_any_data(self):
+        """Hashing sizes its own buckets, so no statistics pass is required."""
+        from kdp.features import CategoricalFeature, CategoryEncodingOptions
+
+        keras.backend.clear_session()
+        preprocessor = PreprocessingModel(
+            features_specs={
+                "city": CategoricalFeature(
+                    name="city",
+                    feature_type=FeatureType.STRING_CATEGORICAL,
+                    category_encoding=CategoryEncodingOptions.HASHING,
+                    hash_bucket_size=32,
+                ),
+            },
+        )
+        preprocessor.build_preprocessor()
+        output = preprocessor.model({"city": tf.constant([["paris"], ["lima"]])})
+        self.assertEqual(tuple(output.shape), (2, 32))
+
+    def test_numeric_feature_without_data_raises_a_clear_error(self):
+        """The old failure was a pathlib TypeError from deep inside the stats pass."""
+        keras.backend.clear_session()
+        with self.assertRaises(ValueError) as ctx:
+            PreprocessingModel(
+                features_specs={"age": FeatureType.FLOAT_NORMALIZED},
+            ).build_preprocessor()
+        self.assertIn("path_data", str(ctx.exception))
+
+    def test_hashing_without_explicit_bucket_size_still_needs_statistics(self):
+        """Without a bucket count the size is derived from the vocabulary."""
+        from kdp.features import CategoricalFeature, CategoryEncodingOptions
+
+        keras.backend.clear_session()
+        with self.assertRaises(ValueError):
+            PreprocessingModel(
+                features_specs={
+                    "city": CategoricalFeature(
+                        name="city",
+                        feature_type=FeatureType.STRING_CATEGORICAL,
+                        category_encoding=CategoryEncodingOptions.HASHING,
+                    ),
+                },
+            ).build_preprocessor()
+
+
 if __name__ == "__main__":
     unittest.main()

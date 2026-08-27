@@ -2322,6 +2322,37 @@ class PreprocessingModel:
         keras.backend.clear_session()
 
     @_monitor_performance
+    def _requires_dataset_statistics(self) -> bool:
+        """Report whether any configured feature needs a pass over the data.
+
+        Numeric features need moments and text features need a vocabulary.
+        Categorical features need a vocabulary unless they are hashed with an
+        explicit bucket count -- hashing exists precisely so the data need not
+        be scanned. Date, passthrough and time series features derive
+        everything from their inputs.
+
+        Returns:
+            True when the statistics pass is required.
+        """
+        if self.numeric_features or self.text_features:
+            return True
+
+        for feature_name in self.categorical_features:
+            feature = self.features_specs.get(feature_name)
+            if feature is None:
+                return True
+            if (
+                getattr(feature, "category_encoding", None)
+                != CategoryEncodingOptions.HASHING
+            ):
+                return True
+            # Without an explicit size, the bucket count is derived from the
+            # vocabulary, which still requires the statistics pass.
+            if "hash_bucket_size" not in getattr(feature, "kwargs", {}):
+                return True
+
+        return False
+
     def build_preprocessor(self) -> dict:
         """Building preprocessing model.
 
@@ -2345,13 +2376,34 @@ class PreprocessingModel:
 
             # preparing statistics if they do not exist
             if not self.features_stats or self.overwrite_stats:
-                logger.info("No input features_stats detected !")
-                if not hasattr(self, "stats_instance"):
-                    raise ValueError(
-                        "stats_instance not initialized. Cannot calculate features stats.",
+                if not self._requires_dataset_statistics():
+                    # Hashing sizes its own buckets and dates parse themselves;
+                    # a model built only from such features has nothing to learn
+                    # from the data, so it should not demand a dataset.
+                    logger.info(
+                        "No feature requires dataset statistics; skipping the "
+                        "statistics pass.",
                     )
-                self.features_stats = self.stats_instance.main()
-                logger.debug(f"Features Stats were calculated: {self.features_stats}")
+                    self.features_stats = self.features_stats or {}
+                else:
+                    logger.info("No input features_stats detected !")
+                    if self.path_data is None:
+                        raise ValueError(
+                            "Statistics are needed to build this preprocessor "
+                            "(numeric, text, or vocabulary-based categorical "
+                            "features are present) but neither `features_stats` "
+                            "nor `path_data` was provided. Pass `path_data` "
+                            "pointing at your CSV data, or supply precomputed "
+                            "`features_stats`.",
+                        )
+                    if not hasattr(self, "stats_instance"):
+                        raise ValueError(
+                            "stats_instance not initialized. Cannot calculate features stats.",
+                        )
+                    self.features_stats = self.stats_instance.main()
+                    logger.debug(
+                        f"Features Stats were calculated: {self.features_stats}",
+                    )
 
             # Set up inputs for all feature types BEFORE processing them
             for feature_name in (

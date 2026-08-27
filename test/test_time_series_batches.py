@@ -4,6 +4,7 @@ import shutil
 import tempfile
 import unittest
 import numpy as np
+from pathlib import Path
 import pandas as pd
 import tensorflow as tf
 from tensorflow.test import TestCase  # For tf-specific assertions
@@ -910,8 +911,19 @@ class TestTimeSeriesBatches(TestCase):  # Use TestCase from tensorflow.test
             "store_id": FeatureType.STRING_CATEGORICAL,
         }
 
+        # KDP reads its statistics from CSV data on disk, so `path_data` takes a
+        # file path rather than an in-memory frame.
+        work_dir = Path(tempfile.mkdtemp(prefix="kdp_ts_inference_validation_"))
+        csv_path = work_dir / "data.csv"
+        df.to_csv(csv_path, index=False)
+
         # Create and build the preprocessor
-        preprocessor = PreprocessingModel(features_specs=features, path_data=df)
+        preprocessor = PreprocessingModel(
+            features_specs=features,
+            path_data=str(csv_path),
+            features_stats_path=str(work_dir / "features_stats.json"),
+            overwrite_stats=True,
+        )
         preprocessor.build_preprocessor()
 
         # Test 1: Single point inference should fail
@@ -1017,10 +1029,15 @@ class TestTimeSeriesBatches(TestCase):  # Use TestCase from tensorflow.test
         }
 
         # Create preprocessor with our feature stats
+        work_dir = Path(tempfile.mkdtemp(prefix="kdp_ts_validation_"))
+        csv_path = work_dir / "data.csv"
+        df.to_csv(csv_path, index=False)
+
         preprocessor = PreprocessingModel(
             features_specs=features,
-            path_data=df,
+            path_data=str(csv_path),
             features_stats=feature_stats,
+            features_stats_path=str(work_dir / "features_stats.json"),
             overwrite_stats=True,
         )
 

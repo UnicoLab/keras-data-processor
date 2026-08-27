@@ -332,6 +332,18 @@ class DatasetStatistics:
             str: File pattern that always has *.csv at the end
 
         """
+        if path is None:
+            raise ValueError(
+                "`path_data` is required to compute statistics but was None. "
+                "Pass a path to a CSV file or to a directory of CSV files.",
+            )
+        if not isinstance(path, str | os.PathLike):
+            raise TypeError(
+                "`path_data` must be a path to CSV data (a str or PathLike), "
+                f"got {type(path).__name__}. In-memory frames are not read "
+                "directly -- write the data to a CSV first and pass its path.",
+            )
+
         file_path = Path(path)
         # Check if the path is a directory
         if file_path.suffix:
