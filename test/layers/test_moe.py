@@ -8,7 +8,7 @@ UnstackLayer, and ExpertBlock classes.
 import unittest
 import numpy as np
 import tensorflow as tf
-from tensorflow import keras
+import keras
 from pathlib import Path
 import tempfile
 

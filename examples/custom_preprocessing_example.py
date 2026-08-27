@@ -6,6 +6,7 @@ for various feature types in the KDP framework.
 """
 # ruff: noqa: E402
 
+import keras
 import os
 import sys
 
@@ -40,7 +41,7 @@ tf.random.set_seed(42)
 #################################################
 
 
-class LogTransformLayer(tf.keras.layers.Layer):
+class LogTransformLayer(keras.layers.Layer):
     """
     Custom layer that applies log(x + offset) transformation.
     Useful for handling right-skewed data.
@@ -59,7 +60,7 @@ class LogTransformLayer(tf.keras.layers.Layer):
         return config
 
 
-class ClippingLayer(tf.keras.layers.Layer):
+class ClippingLayer(keras.layers.Layer):
     """
     Custom layer that clips values between min_value and max_value.
     Useful for handling outliers.
@@ -79,7 +80,7 @@ class ClippingLayer(tf.keras.layers.Layer):
         return config
 
 
-class StringCleaningLayer(tf.keras.layers.Layer):
+class StringCleaningLayer(keras.layers.Layer):
     """
     Custom layer that performs basic text cleaning operations.
     - Converts to lowercase
@@ -288,12 +289,12 @@ def main():
 
     # Build prediction model using the preprocessed data
     print("\nBuilding prediction model...")
-    model = tf.keras.Sequential(
+    model = keras.Sequential(
         [
-            tf.keras.layers.Dense(64, activation="relu"),
-            tf.keras.layers.Dropout(0.2),
-            tf.keras.layers.Dense(32, activation="relu"),
-            tf.keras.layers.Dense(1),
+            keras.layers.Dense(64, activation="relu"),
+            keras.layers.Dropout(0.2),
+            keras.layers.Dense(32, activation="relu"),
+            keras.layers.Dense(1),
         ],
     )
 

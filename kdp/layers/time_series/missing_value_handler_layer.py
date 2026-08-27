@@ -1,9 +1,10 @@
+import keras
 import tensorflow as tf
-from tensorflow.keras.layers import Layer
+from keras.layers import Layer
 import numpy as np
 
 
-@tf.keras.utils.register_keras_serializable(package="kdp.layers")
+@keras.saving.register_keras_serializable(package="kdp.layers")
 class MissingValueHandlerLayer(Layer):
     """Layer for advanced handling of missing values in time series data.
 

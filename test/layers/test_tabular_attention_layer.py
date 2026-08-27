@@ -1,3 +1,4 @@
+import keras
 import tensorflow as tf
 import numpy as np
 import pytest
@@ -90,10 +91,10 @@ def test_tabular_attention_end_to_end_simple():
     num_features = 4
 
     # Create a simple model with TabularAttention
-    inputs = tf.keras.Input(shape=(num_samples, num_features))
+    inputs = keras.Input(shape=(num_samples, num_features))
     x = TabularAttention(num_heads=2, d_model=8)(inputs)
-    outputs = tf.keras.layers.Dense(1)(x)
-    model = tf.keras.Model(inputs=inputs, outputs=outputs)
+    outputs = keras.layers.Dense(1)(x)
+    model = keras.Model(inputs=inputs, outputs=outputs)
 
     # Compile the model
     model.compile(optimizer="adam", loss="mse")
@@ -218,14 +219,14 @@ def test_tabular_attention_end_to_end():
     num_heads = 2
 
     # Create a simple model
-    inputs = tf.keras.Input(shape=(num_samples, num_features))
+    inputs = keras.Input(shape=(num_samples, num_features))
     attention_layer = TabularAttention(num_heads=num_heads, d_model=d_model)
 
     x = attention_layer(inputs)
-    x = tf.keras.layers.GlobalAveragePooling1D()(x)
-    outputs = tf.keras.layers.Dense(1)(x)
+    x = keras.layers.GlobalAveragePooling1D()(x)
+    outputs = keras.layers.Dense(1)(x)
 
-    model = tf.keras.Model(inputs=inputs, outputs=outputs)
+    model = keras.Model(inputs=inputs, outputs=outputs)
 
     # Compile model
     model.compile(optimizer="adam", loss="mse")

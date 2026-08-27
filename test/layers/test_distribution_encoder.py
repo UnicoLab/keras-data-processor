@@ -1,3 +1,4 @@
+import keras
 # import numpy as np
 # import pytest
 # import tensorflow as tf
@@ -148,10 +149,10 @@
 # def test_graph_mode_compatibility(encoder):
 #     """Test that the encoder works in graph mode."""
 #     # Create a simple model with the encoder
-#     inputs = tf.keras.layers.Input(shape=(1,))
+#     inputs = keras.layers.Input(shape=(1,))
 #     encoded = encoder(inputs)
-#     outputs = tf.keras.layers.Dense(1)(encoded)
-#     model = tf.keras.Model(inputs=inputs, outputs=outputs)
+#     outputs = keras.layers.Dense(1)(encoded)
+#     model = keras.Model(inputs=inputs, outputs=outputs)
 
 #     # Compile the model
 #     model.compile(optimizer="adam", loss="mse")

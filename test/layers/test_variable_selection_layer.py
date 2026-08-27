@@ -1,3 +1,4 @@
+import keras
 import os
 import tempfile
 
@@ -144,9 +145,9 @@ class TestVariableSelection(tf.test.TestCase):
     def test_model_serialization(self):
         """Test serialization of a model containing these layers."""
         inputs = [
-            tf.keras.Input(shape=(10,)),
-            tf.keras.Input(shape=(20,)),
-            tf.keras.Input(shape=(30,)),
+            keras.Input(shape=(10,)),
+            keras.Input(shape=(20,)),
+            keras.Input(shape=(30,)),
         ]
 
         vs = VariableSelection(nr_features=3, units=64)
@@ -157,7 +158,7 @@ class TestVariableSelection(tf.test.TestCase):
         x = grn(x)
         outputs = gl(x)
 
-        model = tf.keras.Model(inputs=inputs, outputs=outputs)
+        model = keras.Model(inputs=inputs, outputs=outputs)
 
         # Save and reload the model
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -165,7 +166,7 @@ class TestVariableSelection(tf.test.TestCase):
                 tmp_dir, "test_model.keras"
             )  # Added .keras extension
             model.save(model_path)
-            loaded_model = tf.keras.models.load_model(
+            loaded_model = keras.saving.load_model(
                 model_path,
                 custom_objects={
                     "GatedLinearUnit": GatedLinearUnit,

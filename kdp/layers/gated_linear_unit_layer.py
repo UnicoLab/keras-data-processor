@@ -1,8 +1,9 @@
+import keras
 import tensorflow as tf
 
 
-@tf.keras.utils.register_keras_serializable(package="kdp.layers")
-class GatedLinearUnit(tf.keras.layers.Layer):
+@keras.saving.register_keras_serializable(package="kdp.layers")
+class GatedLinearUnit(keras.layers.Layer):
     """GatedLinearUnit is a custom Keras layer that implements a gated linear unit.
 
     This layer applies a dense linear transformation to the input tensor and multiplies the result with the output
@@ -25,8 +26,8 @@ class GatedLinearUnit(tf.keras.layers.Layer):
         """
         super().__init__(**kwargs)
         self.units = units
-        self.linear = tf.keras.layers.Dense(units)
-        self.sigmoid = tf.keras.layers.Dense(units, activation="sigmoid")
+        self.linear = keras.layers.Dense(units)
+        self.sigmoid = keras.layers.Dense(units, activation="sigmoid")
 
     def call(self, inputs: tf.Tensor) -> tf.Tensor:
         """Forward pass of the layer.

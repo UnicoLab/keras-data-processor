@@ -28,6 +28,10 @@ build-backend = "poetry.core.masonry.api"
 # import time, so 3.10 is the real floor -- `import kdp` fails on 3.9.
 python = ">=3.10,<4.0"
 tensorflow = "^2.18.0"
+# Declared explicitly rather than inherited from TensorFlow: the package targets
+# the Keras 3 API directly (`import keras`) instead of the `tf.keras`
+# compatibility shim, so the requirement belongs here.
+keras = ">=3.5,<4.0"
 numpy = ">=1.22.0"
 pandas = "^2.2.0"
 loguru = "^0.7.2"

@@ -1,9 +1,10 @@
+import keras
 import tensorflow as tf
 from kdp.layers.gated_linear_unit_layer import GatedLinearUnit
 
 
-@tf.keras.utils.register_keras_serializable(package="kdp.layers")
-class GatedResidualNetwork(tf.keras.layers.Layer):
+@keras.saving.register_keras_serializable(package="kdp.layers")
+class GatedResidualNetwork(keras.layers.Layer):
     """GatedResidualNetwork is a custom Keras layer that implements a gated residual network.
 
     This layer applies a series of transformations to the input tensor and combines it with the original input
@@ -29,12 +30,12 @@ class GatedResidualNetwork(tf.keras.layers.Layer):
         super().__init__(**kwargs)
         self.units = units
         self.dropout_rate = dropout_rate
-        self.elu_dense = tf.keras.layers.Dense(units, activation="elu")
-        self.linear_dense = tf.keras.layers.Dense(units)
-        self.dropout = tf.keras.layers.Dropout(dropout_rate)
+        self.elu_dense = keras.layers.Dense(units, activation="elu")
+        self.linear_dense = keras.layers.Dense(units)
+        self.dropout = keras.layers.Dropout(dropout_rate)
         self.gated_linear_unit = GatedLinearUnit(units=units)
-        self.layer_norm = tf.keras.layers.LayerNormalization()
-        self.project = tf.keras.layers.Dense(units)
+        self.layer_norm = keras.layers.LayerNormalization()
+        self.project = keras.layers.Dense(units)
 
     def call(self, inputs: tf.Tensor, training: bool = False) -> tf.Tensor:
         """Forward pass of the layer.

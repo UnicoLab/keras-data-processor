@@ -1,8 +1,9 @@
+import keras
 import tensorflow as tf
 
 
-@tf.keras.utils.register_keras_serializable(package="kdp.layers")
-class NumericalEmbedding(tf.keras.layers.Layer):
+@keras.saving.register_keras_serializable(package="kdp.layers")
+class NumericalEmbedding(keras.layers.Layer):
     """Advanced numerical embedding layer for continuous features.
 
     This layer embeds each continuous numerical feature into a higher-dimensional space by
@@ -77,36 +78,36 @@ class NumericalEmbedding(tf.keras.layers.Layer):
         """
         self.num_features = input_shape[-1]
         # Continuous branch: process each feature independently using TimeDistributed MLP.
-        self.cont_mlp = tf.keras.Sequential(
+        self.cont_mlp = keras.Sequential(
             [
-                tf.keras.layers.TimeDistributed(
-                    tf.keras.layers.Dense(self.mlp_hidden_units, activation="relu"),
+                keras.layers.TimeDistributed(
+                    keras.layers.Dense(self.mlp_hidden_units, activation="relu"),
                 ),
-                tf.keras.layers.TimeDistributed(
-                    tf.keras.layers.Dense(self.embedding_dim),
+                keras.layers.TimeDistributed(
+                    keras.layers.Dense(self.embedding_dim),
                 ),
             ],
             name="cont_mlp",
         )
         self.dropout = (
-            tf.keras.layers.Dropout(self.dropout_rate)
+            keras.layers.Dropout(self.dropout_rate)
             if self.dropout_rate > 0
             else lambda x, **kwargs: x  # no-op matching the Dropout call signature
         )
         if self.use_batch_norm:
-            self.batch_norm = tf.keras.layers.TimeDistributed(
-                tf.keras.layers.BatchNormalization(),
+            self.batch_norm = keras.layers.TimeDistributed(
+                keras.layers.BatchNormalization(),
                 name="cont_batch_norm",
             )
         # Residual projection to match embedding_dim.
-        self.residual_proj = tf.keras.layers.TimeDistributed(
-            tf.keras.layers.Dense(self.embedding_dim, activation=None),
+        self.residual_proj = keras.layers.TimeDistributed(
+            keras.layers.Dense(self.embedding_dim, activation=None),
             name="residual_proj",
         )
         # Discrete branch: Create one Embedding layer per feature.
         self.bin_embeddings = []
         for i in range(self.num_features):
-            embed_layer = tf.keras.layers.Embedding(
+            embed_layer = keras.layers.Embedding(
                 input_dim=self.num_bins,
                 output_dim=self.embedding_dim,
                 name=f"bin_embed_{i}",

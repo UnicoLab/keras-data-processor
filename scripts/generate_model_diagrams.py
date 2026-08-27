@@ -20,6 +20,7 @@ The script can also be run through the Makefile:
     make generate_doc_content
 """
 
+import keras
 import os
 import tempfile
 from pathlib import Path
@@ -146,7 +147,7 @@ def generate_model_diagram(name, features_specs, **kwargs):
         output_path = OUTPUT_DIR / filename
 
         # Use TensorFlow's plot_model to generate the image
-        tf.keras.utils.plot_model(
+        keras.utils.plot_model(
             model,
             to_file=str(output_path),
             show_shapes=True,

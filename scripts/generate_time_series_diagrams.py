@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import tensorflow as tf
+import keras
 from pathlib import Path
 
 from kdp.layers.time_series.lag_feature_layer import LagFeatureLayer
@@ -15,22 +15,22 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 def create_simple_model(name, layer):
     """Create a simple model with a single time series layer for diagram generation."""
     # Create a simple input
-    inputs = tf.keras.Input(shape=(1,), name="sales")
+    inputs = keras.Input(shape=(1,), name="sales")
 
     # Apply normalization for better visualization
-    norm = tf.keras.layers.Normalization()(inputs)
+    norm = keras.layers.Normalization()(inputs)
 
     # Apply the time series layer
     outputs = layer(norm)
 
     # Create model
-    model = tf.keras.Model(inputs=inputs, outputs=outputs, name=f"time_series_{name}")
+    model = keras.Model(inputs=inputs, outputs=outputs, name=f"time_series_{name}")
 
     # Generate diagram
     filename = f"{name}.png"
     output_path = OUTPUT_DIR / filename
 
-    tf.keras.utils.plot_model(
+    keras.utils.plot_model(
         model,
         to_file=str(output_path),
         show_shapes=True,
@@ -48,23 +48,23 @@ def create_simple_model(name, layer):
 def create_combined_model(name, layers):
     """Create a model with multiple time series layers in sequence."""
     # Create a simple input
-    inputs = tf.keras.Input(shape=(1,), name="sales")
+    inputs = keras.Input(shape=(1,), name="sales")
 
     # Apply normalization for better visualization
-    x = tf.keras.layers.Normalization()(inputs)
+    x = keras.layers.Normalization()(inputs)
 
     # Apply all the time series layers sequentially
     for layer in layers:
         x = layer(x)
 
     # Create model
-    model = tf.keras.Model(inputs=inputs, outputs=x, name=f"time_series_{name}")
+    model = keras.Model(inputs=inputs, outputs=x, name=f"time_series_{name}")
 
     # Generate diagram
     filename = f"{name}.png"
     output_path = OUTPUT_DIR / filename
 
-    tf.keras.utils.plot_model(
+    keras.utils.plot_model(
         model,
         to_file=str(output_path),
         show_shapes=True,
@@ -85,7 +85,7 @@ def main():
     # Basic time series
     create_simple_model(
         "basic_time_series",
-        tf.keras.layers.LayerNormalization(name="time_series_norm"),
+        keras.layers.LayerNormalization(name="time_series_norm"),
     )
 
     # Time series with lag features

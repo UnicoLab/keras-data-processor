@@ -3,14 +3,15 @@ to make data more normally distributed or to handle specific distribution types 
 It's particularly useful for preprocessing data before anomaly detection or other statistical analyses.
 """
 
+import keras
 from typing import Any
 from loguru import logger
 from keras import ops, KerasTensor
 import tensorflow as tf
 
 
-@tf.keras.utils.register_keras_serializable(package="kdp.layers")
-class DistributionTransformLayer(tf.keras.layers.Layer):
+@keras.saving.register_keras_serializable(package="kdp.layers")
+class DistributionTransformLayer(keras.layers.Layer):
     """Layer for transforming data distributions to improve anomaly detection.
 
     This layer applies various transformations to make data more normally distributed
@@ -93,7 +94,7 @@ class DistributionTransformLayer(tf.keras.layers.Layer):
         See the class docstring for the accepted arguments and what
         each one controls.
         """
-        tf.keras.layers.Layer.__init__(self, name=name, **kwargs)
+        super().__init__(name=name, **kwargs)
 
         # Set private attributes
         self._transform_type = transform_type
@@ -201,7 +202,7 @@ class DistributionTransformLayer(tf.keras.layers.Layer):
             f"DistributionTransformLayer built with transform_type={self.transform_type}, "
             f"lambda_param={self.lambda_param}",
         )
-        tf.keras.layers.Layer.build(self, input_shape)
+        super().build(input_shape)
 
     def _percentile(self, x_sorted: tf.Tensor, q: float) -> tf.Tensor:
         """Compute a percentile of a pre-sorted tensor along its first axis.
@@ -812,7 +813,7 @@ class DistributionTransformLayer(tf.keras.layers.Layer):
         Returns:
             Configuration dictionary
         """
-        config = tf.keras.layers.Layer.get_config(self)
+        config = super().get_config()
         config.update(
             {
                 "transform_type": self.transform_type,

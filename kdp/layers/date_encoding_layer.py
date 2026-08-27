@@ -1,9 +1,10 @@
 import math
+import keras
 import tensorflow as tf
 
 
-@tf.keras.utils.register_keras_serializable(package="kdp.layers")
-class DateEncodingLayer(tf.keras.layers.Layer):
+@keras.saving.register_keras_serializable(package="kdp.layers")
+class DateEncodingLayer(keras.layers.Layer):
     def __init__(self, **kwargs):
         """Initializing DateEncodingLayer."""
         super().__init__(**kwargs)

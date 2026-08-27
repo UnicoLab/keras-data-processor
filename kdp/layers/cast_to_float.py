@@ -1,8 +1,8 @@
 import tensorflow as tf
-from tensorflow import keras
+import keras
 
 
-@tf.keras.utils.register_keras_serializable(package="kdp.layers")
+@keras.saving.register_keras_serializable(package="kdp.layers")
 class CastToFloat32Layer(keras.layers.Layer):
     """Custom Keras layer that casts input tensors to float32.
 

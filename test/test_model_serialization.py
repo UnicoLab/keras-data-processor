@@ -6,6 +6,7 @@ registry and must rebuild its sub-layers eagerly, otherwise
 ``PreprocessingModel.load_model`` raises instead of returning a usable model.
 """
 
+import keras
 import tempfile
 import unittest
 from pathlib import Path
@@ -86,7 +87,7 @@ def _assert_same_output(expected, actual) -> None:
 )
 def test_model_survives_save_load_round_trip(config_name, config, tmp_path):
     """A saved preprocessor reloads and produces byte-identical predictions."""
-    tf.keras.backend.clear_session()
+    keras.backend.clear_session()
     csv_path = _write_dataset(tmp_path)
 
     preprocessor = PreprocessingModel(
@@ -119,7 +120,7 @@ class TestLayerRegistration(unittest.TestCase):
         unregistered = []
         for name in kdp_layers.__all__:
             obj = getattr(kdp_layers, name)
-            if not (isinstance(obj, type) and issubclass(obj, tf.keras.layers.Layer)):
+            if not (isinstance(obj, type) and issubclass(obj, keras.layers.Layer)):
                 continue  # e.g. the DistributionType enum
             # An unregistered class serializes under its bare name and cannot be
             # looked up again; a registered one gets a "package>Name" key.
@@ -138,7 +139,7 @@ class TestLayerRegistration(unittest.TestCase):
         from kdp.layers import DateParsingLayer
 
         layer = DateParsingLayer(date_format="YYYY-MM-DD", name="parse")
-        restored = tf.keras.layers.deserialize(tf.keras.layers.serialize(layer))
+        restored = keras.layers.deserialize(keras.layers.serialize(layer))
         self.assertIsInstance(restored, DateParsingLayer)
         self.assertEqual(restored.date_format, "YYYY-MM-DD")
 

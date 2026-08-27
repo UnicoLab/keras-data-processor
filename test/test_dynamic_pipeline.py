@@ -4,6 +4,7 @@ Layers are addressed by name: a layer reads the entry that shares its name when
 the data provides one, and otherwise consumes the previous layer's output.
 """
 
+import keras
 import unittest
 
 import numpy as np
@@ -14,7 +15,7 @@ from kdp.layers_factory import PreprocessorLayerFactory
 from kdp.pipeline import FeaturePreprocessor
 
 
-class ScalingLayer(tf.keras.layers.Layer):
+class ScalingLayer(keras.layers.Layer):
     """Multiplies its input by a constant factor."""
 
     def __init__(self, scaling_factor: float = 2.0, **kwargs):
@@ -153,8 +154,8 @@ class TestFeaturePreprocessorDynamicMode(unittest.TestCase):
     def test_chain_builds_a_usable_keras_graph(self):
         """Dynamic chain() returns a symbolic tensor usable in a Keras model."""
         preprocessor = self._build()
-        inputs = tf.keras.Input(shape=(1,), dtype=tf.int32)
-        model = tf.keras.Model(inputs, preprocessor.chain(inputs))
+        inputs = keras.Input(shape=(1,), dtype=tf.int32)
+        model = keras.Model(inputs, preprocessor.chain(inputs))
         self.assertEqual(_flat(model(tf.constant([[2]], dtype=tf.int32))), [6.0])
 
     def test_empty_dynamic_pipeline_is_a_passthrough(self):

@@ -1,5 +1,6 @@
 """Tests for the DistributionAwareEncoder layer."""
 
+import keras
 import numpy as np
 import tensorflow as tf
 import os
@@ -113,9 +114,9 @@ class TestDistributionAwareEncoder(tf.test.TestCase):
             tensor_data = tf.convert_to_tensor(dist_data, dtype=tf.float32)
 
             # Create a small model with the encoder
-            inputs = tf.keras.Input(shape=(1,))
+            inputs = keras.Input(shape=(1,))
             encoded = encoder(inputs)
-            model = tf.keras.Model(inputs, encoded)
+            model = keras.Model(inputs, encoded)
 
             # Feed data through the model to trigger detection
             _ = model(tensor_data, training=True)
@@ -167,9 +168,9 @@ class TestDistributionAwareEncoder(tf.test.TestCase):
                 tensor_data = tf.convert_to_tensor(data["normal"], dtype=tf.float32)
 
                 # Create a small model
-                inputs = tf.keras.Input(shape=(1,))
+                inputs = keras.Input(shape=(1,))
                 encoded = encoder(inputs)
-                model = tf.keras.Model(inputs, encoded)
+                model = keras.Model(inputs, encoded)
 
                 # Feed data through the model
                 output = model(tensor_data)
@@ -340,16 +341,16 @@ class TestDistributionAwareEncoder(tf.test.TestCase):
         y_train = (x_train[:, 0] > 0).astype(np.float32)  # Simple binary task
 
         # Create a model with the encoder - disable periodic features to avoid shape issues
-        inputs = tf.keras.Input(shape=(5,))
+        inputs = keras.Input(shape=(5,))
         encoded = DistributionAwareEncoder(
             embedding_dim=16,
             detect_periodicity=False,  # Disable periodic features to avoid gradient issues
             auto_detect=True,
         )(inputs)
-        hidden = tf.keras.layers.Dense(8, activation="relu")(encoded)
-        outputs = tf.keras.layers.Dense(1, activation="sigmoid")(hidden)
+        hidden = keras.layers.Dense(8, activation="relu")(encoded)
+        outputs = keras.layers.Dense(1, activation="sigmoid")(hidden)
 
-        model = tf.keras.Model(inputs, outputs)
+        model = keras.Model(inputs, outputs)
         model.compile(
             optimizer="adam", loss="binary_crossentropy", metrics=["accuracy"]
         )
@@ -368,7 +369,7 @@ class TestDistributionAwareEncoder(tf.test.TestCase):
             model.save(model_path)
             # Use get_custom_objects to load the model
             custom_objects = get_custom_objects()
-            loaded_model = tf.keras.models.load_model(
+            loaded_model = keras.saving.load_model(
                 model_path, custom_objects=custom_objects
             )
 

@@ -1,11 +1,12 @@
+import keras
 import tensorflow as tf
-from tensorflow.keras.layers import Layer
+from keras.layers import Layer
 import numpy as np
 from loguru import logger
 import pandas as pd
 
 
-@tf.keras.utils.register_keras_serializable(package="kdp.layers")
+@keras.saving.register_keras_serializable(package="kdp.layers")
 class CalendarFeatureLayer(Layer):
     """Layer for generating calendar features from date or timestamp inputs.
 

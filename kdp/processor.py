@@ -7,7 +7,7 @@ import os
 import time
 import gc
 import tensorflow as tf
-from tensorflow import keras
+import keras
 from collections import OrderedDict
 from collections.abc import Callable, Generator
 from concurrent.futures import ThreadPoolExecutor
@@ -612,7 +612,7 @@ class PreprocessingModel:
             Creates a Keras Input layer with shape (1,) and adds it to self.inputs
         """
         logger.debug(f"Adding {feature_name = }, {dtype =} to the input columns")
-        self.inputs[feature_name] = tf.keras.Input(
+        self.inputs[feature_name] = keras.Input(
             shape=(1,),
             name=feature_name,
             dtype=dtype,
@@ -1793,7 +1793,7 @@ class PreprocessingModel:
             ValueError: If no features are available for concatenation
         """
         if concat_num is not None and concat_cat is not None:
-            self.concat_all = tf.keras.layers.Concatenate(
+            self.concat_all = keras.layers.Concatenate(
                 name="ConcatenateAll",
                 axis=-1,
             )([concat_num, concat_cat])
@@ -1898,7 +1898,7 @@ class PreprocessingModel:
         if not numeric_features:
             return None
 
-        concat_num = tf.keras.layers.Concatenate(
+        concat_num = keras.layers.Concatenate(
             name="ConcatenateNumeric",
             axis=-1,
         )(numeric_features)
@@ -1932,7 +1932,7 @@ class PreprocessingModel:
         if not categorical_features:
             return None
 
-        return tf.keras.layers.Concatenate(
+        return keras.layers.Concatenate(
             name="ConcatenateCategorical",
             axis=-1,
         )(categorical_features)
@@ -1951,13 +1951,13 @@ class PreprocessingModel:
         logger.info("Adding multi-resolution tabular attention")
 
         # Reshape numeric features to 3D tensor
-        num_features_3d = tf.keras.layers.Reshape(
+        num_features_3d = keras.layers.Reshape(
             target_shape=(1, -1),
             name="reshape_numeric_3d",
         )(concat_num)
 
         # Reshape categorical features to 3D tensor
-        cat_features_3d = tf.keras.layers.Reshape(
+        cat_features_3d = keras.layers.Reshape(
             target_shape=(1, -1),
             name="reshape_categorical_3d",
         )(concat_cat)
@@ -1974,17 +1974,17 @@ class PreprocessingModel:
         )(num_features_3d, cat_features_3d)
 
         # Squeeze back to 2D
-        num_output = tf.keras.layers.Reshape(
+        num_output = keras.layers.Reshape(
             target_shape=(-1,),
             name="reshape_num_output_2d",
         )(num_output)
 
-        cat_output = tf.keras.layers.Reshape(
+        cat_output = keras.layers.Reshape(
             target_shape=(-1,),
             name="reshape_cat_output_2d",
         )(cat_output)
 
-        self.concat_all = tf.keras.layers.Concatenate(
+        self.concat_all = keras.layers.Concatenate(
             name="ConcatenateMultiResolutionAttention",
             axis=-1,
         )([num_output, cat_output])
@@ -2005,7 +2005,7 @@ class PreprocessingModel:
         if placement == TabularAttentionPlacementOptions.ALL_FEATURES:
             logger.info("Adding tabular attention to all features")
             # Reshape to 3D tensor (batch_size, 1, features)
-            features_3d = tf.keras.layers.Reshape(
+            features_3d = keras.layers.Reshape(
                 target_shape=(1, -1),
                 name="reshape_features_3d",
             )(self.concat_all)
@@ -2018,7 +2018,7 @@ class PreprocessingModel:
             )(features_3d)
 
             # Reshape back to 2D
-            self.concat_all = tf.keras.layers.Reshape(
+            self.concat_all = keras.layers.Reshape(
                 target_shape=(-1,),
                 name="reshape_attention_2d",
             )(attention_output)
@@ -2043,7 +2043,7 @@ class PreprocessingModel:
         logger.info("Adding tabular attention to numeric features")
         if concat_num is not None:
             # Reshape numeric features to 3D
-            num_features_3d = tf.keras.layers.Reshape(
+            num_features_3d = keras.layers.Reshape(
                 target_shape=(1, -1),
                 name="reshape_numeric_3d",
             )(concat_num)
@@ -2056,13 +2056,13 @@ class PreprocessingModel:
             )(num_features_3d)
 
             # Reshape back to 2D
-            concat_num = tf.keras.layers.Reshape(
+            concat_num = keras.layers.Reshape(
                 target_shape=(-1,),
                 name="reshape_numeric_attention_2d",
             )(attention_output)
 
         if concat_cat is not None:
-            self.concat_all = tf.keras.layers.Concatenate(
+            self.concat_all = keras.layers.Concatenate(
                 name="ConcatenateTabularAttention",
                 axis=-1,
             )([concat_num, concat_cat])
@@ -2083,7 +2083,7 @@ class PreprocessingModel:
         logger.info("Adding tabular attention to categorical features")
         if concat_cat is not None:
             # Reshape categorical features to 3D
-            cat_features_3d = tf.keras.layers.Reshape(
+            cat_features_3d = keras.layers.Reshape(
                 target_shape=(1, -1),
                 name="reshape_categorical_3d",
             )(concat_cat)
@@ -2096,13 +2096,13 @@ class PreprocessingModel:
             )(cat_features_3d)
 
             # Reshape back to 2D
-            concat_cat = tf.keras.layers.Reshape(
+            concat_cat = keras.layers.Reshape(
                 target_shape=(-1,),
                 name="reshape_categorical_attention_2d",
             )(attention_output)
 
         if concat_num is not None:
-            self.concat_all = tf.keras.layers.Concatenate(
+            self.concat_all = keras.layers.Concatenate(
                 name="ConcatenateTabularAttention",
                 axis=-1,
             )([concat_num, concat_cat])
@@ -2185,14 +2185,14 @@ class PreprocessingModel:
                 name=f"transformer_block_{block_idx}_{self.transfo_nr_heads}heads",
             )(transformed)
         # Reshape transformer output to remove the extra dimension
-        transformed = tf.keras.layers.Reshape(
+        transformed = keras.layers.Reshape(
             target_shape=(-1,),  # Flatten to match numeric shape
             name="reshape_transformer_output",
         )(transformed)
 
         # Recombine with numeric features if they exist
         if concat_num is not None:
-            self.concat_all = tf.keras.layers.Concatenate(
+            self.concat_all = keras.layers.Concatenate(
                 name="ConcatenateTransformed",
                 axis=-1,
             )([concat_num, transformed])
@@ -2278,7 +2278,7 @@ class PreprocessingModel:
         for i, feature_name in enumerate(feature_names):
             feature_output = unstacked_outputs[i]
             # Add a projection layer for this feature
-            projection = tf.keras.layers.Dense(
+            projection = keras.layers.Dense(
                 self.feature_moe_expert_dim,
                 activation="relu",
                 name=f"{feature_name}_moe_projection_dict",
@@ -2334,7 +2334,7 @@ class PreprocessingModel:
                 return
 
             # Set equal dimensions for all features if actual dimensions are not available
-            feature_dim = keras.backend.int_shape(self.concat_all)[-1] // total_features
+            feature_dim = int(self.concat_all.shape[-1]) // total_features
             output_dims = [feature_dim] * total_features
 
             # Store these calculated dimensions for future use
@@ -2412,7 +2412,7 @@ class PreprocessingModel:
         gc.collect()
 
         # Clear backend session to free GPU memory if using GPU
-        tf.keras.backend.clear_session()
+        keras.backend.clear_session()
 
     @_monitor_performance
     def build_preprocessor(self) -> dict:
@@ -2576,7 +2576,7 @@ class PreprocessingModel:
                     logger.info(
                         "Only passthrough features detected - creating passthrough-only model",
                     )
-                    self.model = tf.keras.Model(
+                    self.model = keras.Model(
                         inputs=self.inputs,
                         outputs=self.passthrough_outputs,
                         name="preprocessor",
@@ -2605,7 +2605,7 @@ class PreprocessingModel:
                         # Standard concat output
                         model_outputs = self.concat_all
 
-                    self.model = tf.keras.Model(
+                    self.model = keras.Model(
                         inputs=self.inputs,
                         outputs=model_outputs,
                         name="preprocessor",
@@ -2636,7 +2636,7 @@ class PreprocessingModel:
                         "Only passthrough features detected - creating passthrough-only dict model",
                     )
 
-                self.model = tf.keras.Model(
+                self.model = keras.Model(
                     inputs=self.inputs,
                     outputs=final_outputs,
                     name="preprocessor",
@@ -2759,7 +2759,7 @@ class PreprocessingModel:
             raise ValueError(f"Metadata file {metadata_path} does not exist")
 
         # Load the model
-        loaded_model = tf.keras.models.load_model(str(model_path))
+        loaded_model = keras.saving.load_model(str(model_path))
         logger.info(f"Model loaded from {model_path}")
 
         # Load metadata
@@ -2956,8 +2956,8 @@ class PreprocessingModel:
 
 
 # Define serializable custom layers
-@tf.keras.utils.register_keras_serializable(package="kdp.processor")
-@tf.keras.utils.register_keras_serializable(package="kdp")
+@keras.saving.register_keras_serializable(package="kdp.processor")
+@keras.saving.register_keras_serializable(package="kdp")
 class SplitLayer(keras.layers.Layer):
     """Custom layer to split a tensor into individual features based on dimensions."""
 

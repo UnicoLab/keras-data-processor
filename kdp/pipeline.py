@@ -1,5 +1,6 @@
 from collections.abc import Callable
 
+import keras
 import tensorflow as tf
 from loguru import logger
 
@@ -10,18 +11,18 @@ from kdp.dynamic_pipeline import DynamicPreprocessingPipeline
 class ProcessingStep:
     def __init__(
         self,
-        layer_creator: Callable[..., tf.keras.layers.Layer],
+        layer_creator: Callable[..., keras.layers.Layer],
         **layer_kwargs,
     ) -> None:
         """Initialize a processing step.
 
         Args:
-            layer_creator (Callable[..., tf.keras.layers.Layer]): A callable that creates a layer.
+            layer_creator (Callable[..., keras.layers.Layer]): A callable that creates a layer.
             **layer_kwargs: Additional keyword arguments for the layer creator.
         """
         self.layer = layer_creator(**layer_kwargs)
 
-    def process(self, input_data) -> tf.keras.layers.Layer:
+    def process(self, input_data) -> keras.layers.Layer:
         """Apply the processing step to the input data.
 
         Args:
@@ -29,7 +30,7 @@ class ProcessingStep:
         """
         return self.layer(input_data)
 
-    def connect(self, input_layer) -> tf.keras.layers.Layer:
+    def connect(self, input_layer) -> keras.layers.Layer:
         """Connect this step's layer to an input layer and return the output layer.
 
         Args:
@@ -63,7 +64,7 @@ class Pipeline:
         logger.info(f"Adding new preprocessing layer: {step.name} to the pipeline ➕")
         self.steps.append(step)
 
-    def chain(self, input_layer) -> tf.keras.layers.Layer:
+    def chain(self, input_layer) -> keras.layers.Layer:
         """Chain the pipeline steps by connecting each step in sequence, starting from the input layer.
 
         Args:
@@ -109,7 +110,7 @@ class FeaturePreprocessor:
 
     def add_processing_step(
         self,
-        layer_creator: Callable[..., tf.keras.layers.Layer] = None,
+        layer_creator: Callable[..., keras.layers.Layer] = None,
         **layer_kwargs,
     ) -> None:
         """Add a preprocessing layer to the feature preprocessor pipeline.
@@ -117,7 +118,7 @@ class FeaturePreprocessor:
         Otherwise, the layer is added to a list for dynamic handling.
 
         Args:
-            layer_creator (Callable[..., tf.keras.layers.Layer]): A callable that creates a layer.
+            layer_creator (Callable[..., keras.layers.Layer]): A callable that creates a layer.
                 If not provided, the default layer creator is used.
             **layer_kwargs: Additional keyword arguments for the layer creator.
         """
@@ -154,7 +155,7 @@ class FeaturePreprocessor:
         output_dict = dynamic_pipeline.transform({self.layers[0].name: input_data})
         return output_dict[self.layers[-1].name]
 
-    def chain(self, input_layer) -> tf.keras.layers.Layer:
+    def chain(self, input_layer) -> keras.layers.Layer:
         """Chains the processing steps starting from the given input_layer.
 
         For a static pipeline, this delegates to the internal Pipeline's chain() method.

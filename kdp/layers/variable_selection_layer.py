@@ -1,9 +1,10 @@
+import keras
 import tensorflow as tf
 from kdp.layers.gated_residual_network_layer import GatedResidualNetwork
 
 
-@tf.keras.utils.register_keras_serializable(package="kdp.layers")
-class VariableSelection(tf.keras.layers.Layer):
+@keras.saving.register_keras_serializable(package="kdp.layers")
+class VariableSelection(keras.layers.Layer):
     """VariableSelection is a custom Keras layer that implements a variable selection mechanism.
 
     This layer applies a gated residual network to each feature independently and concatenates the results.
@@ -49,7 +50,7 @@ class VariableSelection(tf.keras.layers.Layer):
 
         # Create a GRN for the concatenation of all the features
         self.grn_concat = GatedResidualNetwork(units=units, dropout_rate=dropout_rate)
-        self.softmax = tf.keras.layers.Dense(units=nr_features, activation="softmax")
+        self.softmax = keras.layers.Dense(units=nr_features, activation="softmax")
 
     def call(
         self,
@@ -66,7 +67,7 @@ class VariableSelection(tf.keras.layers.Layer):
             tuple[tf.Tensor, tf.Tensor]: Tuple containing selected features and feature weights.
         """
         # Process concatenated features
-        v = tf.keras.layers.concatenate(inputs)
+        v = keras.layers.concatenate(inputs)
         v = self.grn_concat(v, training=training)
         feature_weights = self.softmax(v)
         feature_weights = tf.expand_dims(feature_weights, axis=-1)

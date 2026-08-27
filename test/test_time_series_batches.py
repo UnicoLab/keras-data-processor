@@ -1,3 +1,4 @@
+import keras
 import os
 import shutil
 import tempfile
@@ -485,10 +486,10 @@ class TestTimeSeriesBatches(TestCase):  # Use TestCase from tensorflow.test
         dataset = dataset.batch(2)  # Small batch size to test batching
 
         # Create a simple model
-        inputs = tf.keras.layers.Input(shape=(2,))
-        x = tf.keras.layers.Dense(16, activation="relu")(inputs)
-        outputs = tf.keras.layers.Dense(1)(x)
-        model = tf.keras.Model(inputs=inputs, outputs=outputs)
+        inputs = keras.layers.Input(shape=(2,))
+        x = keras.layers.Dense(16, activation="relu")(inputs)
+        outputs = keras.layers.Dense(1)(x)
+        model = keras.Model(inputs=inputs, outputs=outputs)
 
         # Compile the model
         model.compile(optimizer="adam", loss="mse", metrics=["mae"])
@@ -656,13 +657,13 @@ class TestTimeSeriesBatches(TestCase):  # Use TestCase from tensorflow.test
         prediction_output = preprocessor_model(new_batch)
 
         # Verify the prediction output has the expected shape
-        # With time series features, the number of rows in the output may be reduced
-        # due to grouping and processing by store_id
         expected_feature_dim = full_output["sales"].shape[1]
         self.assertEqual(prediction_output["sales"].shape[1], expected_feature_dim)
 
-        # In this particular case, the time series feature layers reduce the data to one row per store
-        self.assertEqual(prediction_output["sales"].shape[0], num_stores)
+        # One output row per input row. The layers used to drop their warm-up
+        # rows, so a caller got back fewer rows than it sent with no way to tell
+        # which ones survived -- unusable next to other features or to labels.
+        self.assertEqual(prediction_output["sales"].shape[0], len(new_df))
 
         # Test with new batches containing data for only some stores
         # This tests that the model handles partial data correctly

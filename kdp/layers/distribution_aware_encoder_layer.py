@@ -10,24 +10,27 @@ zero-inflated, bounded, and ordinal distributions.
 
 Example usage:
     ```python
-    import tensorflow as tf
+    import keras
+
     from kdp.layers import DistributionAwareEncoder
 
     # Creating a model with automatic distribution detection
-    inputs = tf.keras.Input(shape=(10,))
+    inputs = keras.Input(shape=(10,))
     encoded = DistributionAwareEncoder(embedding_dim=16)(inputs)
-    outputs = tf.keras.layers.Dense(1)(encoded)
-    model = tf.keras.Model(inputs, outputs)
+    outputs = keras.layers.Dense(1)(encoded)
+    model = keras.Model(inputs, outputs)
 
     # Save and load model with custom objects
     model.save("my_model.keras")
     custom_objects = DistributionAwareEncoder.get_custom_objects()
-    loaded_model = tf.keras.models.load_model("my_model", custom_objects=custom_objects)
+    loaded_model = keras.saving.load_model("my_model", custom_objects=custom_objects)
     ```
 """
 
 from enum import Enum
 from typing import Any
+
+import keras
 import tensorflow as tf
 from loguru import logger
 import inspect
@@ -65,8 +68,8 @@ class DistributionType(str, Enum):
     ORDINAL = "ordinal"  # For ordered categorical data
 
 
-@tf.keras.utils.register_keras_serializable(package="kdp.layers")
-class DistributionAwareEncoder(tf.keras.layers.Layer):
+@keras.saving.register_keras_serializable(package="kdp.layers")
+class DistributionAwareEncoder(keras.layers.Layer):
     """An advanced layer that adapts its encoding based on the input distribution.
 
     This layer automatically detects and handles various distribution types using
@@ -149,7 +152,7 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
             mixture_components: Number of mixture components. Not used in current implementation.
             prefered_distribution: Legacy way to specify distribution_type. If provided, auto_detect
                 will be set to False and this value will be used as distribution_type.
-            **kwargs: Additional arguments forwarded to `tf.keras.layers.Layer`.
+            **kwargs: Additional arguments forwarded to `keras.layers.Layer`.
 
         Note on output dimensions:
             - If detect_periodicity=True and periodic features are detected/forced:
@@ -159,9 +162,7 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
             - If add_distribution_embedding=True:
                 output_dim += 8 (distribution embedding dimension)
         """
-        # Call parent's __init__ with proper parameters
-        # Fix: Use the full class name instead of just super()
-        tf.keras.layers.Layer.__init__(self, name=name, trainable=trainable, **kwargs)
+        super().__init__(name=name, trainable=trainable, **kwargs)
 
         # Initialize class attributes to avoid attribute errors
         self._added_periodic_features = False
@@ -234,7 +235,7 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
 
         # Projection layer for embedding dimension if specified
         if self.embedding_dim is not None:
-            self.projection = tf.keras.layers.Dense(
+            self.projection = keras.layers.Dense(
                 self.embedding_dim,
                 activation="relu",
                 name=f"{self.name}_projection",
@@ -297,7 +298,7 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
             self.projection.build(transformed_shape)
 
         # Fix the super().build call
-        tf.keras.layers.Layer.build(self, input_shape)
+        super().build(input_shape)
 
     def _calculate_statistics(self, x) -> dict:
         """Calculate statistics for distribution detection.
@@ -1049,7 +1050,7 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
         """Get the layer configuration for serialization.
 
         This method enables serialization and deserialization of the layer via
-        `tf.keras.models.save_model()` and `tf.keras.models.load_model()`.
+        `keras.saving.save_model()` and `keras.saving.load_model()`.
 
         Returns:
             Configuration dictionary containing all parameters needed to reconstruct the layer.
@@ -1061,12 +1062,12 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
             ```python
             model.save("my_model.keras")
             custom_objects = get_custom_objects()
-            loaded_model = tf.keras.models.load_model(
+            loaded_model = keras.saving.load_model(
                 "my_model", custom_objects=custom_objects
             )
             ```
         """
-        config = tf.keras.layers.Layer.get_config(self)
+        config = super().get_config()
         config.update(
             {
                 "embedding_dim": self.embedding_dim,
@@ -1111,7 +1112,7 @@ def get_custom_objects() -> dict:
 
         # Load the model
         custom_objects = get_custom_objects()
-        loaded_model = tf.keras.models.load_model("my_model", custom_objects=custom_objects)
+        loaded_model = keras.saving.load_model("my_model", custom_objects=custom_objects)
         ```
     """
     return {

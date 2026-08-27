@@ -5,6 +5,7 @@ their textbook definitions and must operate per feature, not across the whole
 tensor.
 """
 
+import keras
 import unittest
 
 import numpy as np
@@ -142,9 +143,9 @@ class TestGraphModeCompatibility(unittest.TestCase):
         data = np.abs(_multi_scale_data(seed=2)[:16]) / 5000.0
         for transform_type in ALL_TRANSFORMS:
             with self.subTest(transform_type=transform_type):
-                tf.keras.backend.clear_session()
-                inputs = tf.keras.Input(shape=(3,))
-                model = tf.keras.Model(
+                keras.backend.clear_session()
+                inputs = keras.Input(shape=(3,))
+                model = keras.Model(
                     inputs,
                     DistributionTransformLayer(transform_type=transform_type)(inputs),
                 )

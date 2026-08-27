@@ -1,10 +1,11 @@
 import re
 import string
+import keras
 import tensorflow as tf
 
 
-@tf.keras.utils.register_keras_serializable(package="kdp.layers")
-class TextPreprocessingLayer(tf.keras.layers.Layer):
+@keras.saving.register_keras_serializable(package="kdp.layers")
+class TextPreprocessingLayer(keras.layers.Layer):
     def __init__(self, stop_words: list, **kwargs: dict) -> None:
         """Initializes a TextPreprocessingLayer.
 

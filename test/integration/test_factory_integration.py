@@ -1,3 +1,4 @@
+import keras
 import unittest
 import os
 import numpy as np
@@ -103,7 +104,7 @@ class TestFactoryIntegration(unittest.TestCase):
 
         # Test combining multiple layers in sequence
         # First normalize, then apply distribution transform
-        normalize_layer = tf.keras.layers.Normalization(name="normalize")
+        normalize_layer = keras.layers.Normalization(name="normalize")
         # Adapt the normalization layer to the data before using it
         normalize_layer.adapt(age_data)
 

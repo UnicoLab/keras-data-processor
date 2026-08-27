@@ -1,6 +1,7 @@
 from enum import Enum, auto
 from typing import Any
 
+import keras
 import tensorflow as tf
 from loguru import logger
 
@@ -168,7 +169,7 @@ class NumericalFeature(Feature):
     def get_embedding_layer(
         self,
         input_shape: tuple | None = None,  # noqa: ARG002 - kept for API compatibility
-    ) -> tf.keras.layers.Layer:
+    ) -> keras.layers.Layer:
         """Creates and returns a NumericalEmbedding layer configured for this feature.
 
         Args:
@@ -410,8 +411,45 @@ class TimeSeriesFeature(Feature):
             },
         )
 
-    def build_layers(self) -> list:
+    def _resolve_drop_na(
+        self,
+        config: dict,
+        config_name: str,
+        row_preserving: bool,
+    ) -> bool:
+        """Decide whether a transform may drop its warm-up rows.
+
+        Args:
+            config: The transform's configuration dictionary.
+            config_name: Name of the configuration, used in the warning.
+            row_preserving: Whether the caller needs the row count preserved.
+
+        Returns:
+            The drop_na value the layer should be built with.
+        """
+        drop_na = config.get("drop_na", True)
+        if row_preserving and drop_na:
+            if "drop_na" in config:
+                logger.warning(
+                    f"{config_name} for feature '{self.name}' requested "
+                    "drop_na=True, but a preprocessing model must keep one output "
+                    "row per input row or the features cannot be concatenated. "
+                    "Building with drop_na=False; the warm-up rows are padded "
+                    "instead, and can be discarded downstream.",
+                )
+            return False
+        return drop_na
+
+    def build_layers(self, row_preserving: bool = True) -> list:
         """Build the appropriate layers for this time series feature based on configuration.
+
+        Args:
+            row_preserving: When True (the default) the layers keep every input
+                row, padding the warm-up positions instead of dropping them.
+                A preprocessing model lays features out side by side, so a layer
+                that removes its feature's leading rows leaves that column
+                shorter than every other one and the concatenation fails. Pass
+                False only when driving the returned layers directly.
 
         Returns:
             list: List of TensorFlow layers for time series preprocessing
@@ -429,7 +467,11 @@ class TimeSeriesFeature(Feature):
         # Add lag layer if configured
         if self.lag_config and "lags" in self.lag_config:
             lags = self.lag_config.get("lags", [1])
-            drop_na = self.lag_config.get("drop_na", True)
+            drop_na = self._resolve_drop_na(
+                self.lag_config,
+                "lag_config",
+                row_preserving,
+            )
             keep_original = self.lag_config.get("keep_original", True)
             fill_value = self.lag_config.get("fill_value", 0.0)
 
@@ -448,7 +490,11 @@ class TimeSeriesFeature(Feature):
             window_size = self.rolling_stats_config.get("window_size")
             statistics = self.rolling_stats_config.get("statistics")
             window_stride = self.rolling_stats_config.get("window_stride", 1)
-            drop_na = self.rolling_stats_config.get("drop_na", True)
+            drop_na = self._resolve_drop_na(
+                self.rolling_stats_config,
+                "rolling_stats_config",
+                row_preserving,
+            )
             keep_original = self.rolling_stats_config.get("keep_original", True)
             pad_value = self.rolling_stats_config.get("pad_value", 0.0)
 
@@ -467,7 +513,11 @@ class TimeSeriesFeature(Feature):
         # Add differencing layer if configured
         if self.differencing_config and "order" in self.differencing_config:
             order = self.differencing_config.get("order", 1)
-            drop_na = self.differencing_config.get("drop_na", True)
+            drop_na = self._resolve_drop_na(
+                self.differencing_config,
+                "differencing_config",
+                row_preserving,
+            )
             keep_original = self.differencing_config.get("keep_original", True)
             fill_value = self.differencing_config.get("fill_value", 0.0)
 
@@ -484,7 +534,11 @@ class TimeSeriesFeature(Feature):
         # Add moving average layer if configured
         if self.moving_average_config and "periods" in self.moving_average_config:
             periods = self.moving_average_config.get("periods", [7])
-            drop_na = self.moving_average_config.get("drop_na", True)
+            drop_na = self._resolve_drop_na(
+                self.moving_average_config,
+                "moving_average_config",
+                row_preserving,
+            )
             keep_original = self.moving_average_config.get("keep_original", True)
             pad_value = self.moving_average_config.get("pad_value", 0.0)
 
@@ -504,7 +558,11 @@ class TimeSeriesFeature(Feature):
             window_sizes = self.wavelet_transform_config.get("window_sizes", None)
             keep_levels = self.wavelet_transform_config.get("keep_levels", "all")
             flatten_output = self.wavelet_transform_config.get("flatten_output", True)
-            drop_na = self.wavelet_transform_config.get("drop_na", True)
+            drop_na = self._resolve_drop_na(
+                self.wavelet_transform_config,
+                "wavelet_transform_config",
+                row_preserving,
+            )
 
             layers.append(
                 WaveletTransformLayer(
@@ -525,7 +583,11 @@ class TimeSeriesFeature(Feature):
             )
             window_size = self.tsfresh_feature_config.get("window_size", None)
             stride = self.tsfresh_feature_config.get("stride", 1)
-            drop_na = self.tsfresh_feature_config.get("drop_na", True)
+            drop_na = self._resolve_drop_na(
+                self.tsfresh_feature_config,
+                "tsfresh_feature_config",
+                row_preserving,
+            )
             normalize = self.tsfresh_feature_config.get("normalize", False)
 
             layers.append(

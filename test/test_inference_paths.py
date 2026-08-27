@@ -5,8 +5,10 @@ defects only appeared when the model was invoked, and specifically when it was
 invoked the way serving does it -- one row at a time.
 """
 
+import keras
 import unittest
 
+import keras
 import numpy as np
 import pandas as pd
 import pytest
@@ -84,14 +86,14 @@ class TestDistributionAwareConstantBatch(unittest.TestCase):
 
     def test_constant_batch_does_not_raise(self):
         """min == max is exactly what a single-row batch looks like."""
-        tf.keras.backend.clear_session()
+        keras.backend.clear_session()
         layer = DistributionAwareEncoder()
         output = layer(tf.constant([[50000.0]]))
         self.assertEqual(output.shape[0], 1)
 
     def test_large_magnitude_constant_batch(self):
         """A fixed epsilon vanishes at large magnitudes; the range must still widen."""
-        tf.keras.backend.clear_session()
+        keras.backend.clear_session()
         layer = DistributionAwareEncoder()
         output = layer(tf.constant([[1e7], [1e7], [1e7]]))
         self.assertTrue(np.all(np.isfinite(np.asarray(output))))
@@ -104,7 +106,7 @@ class TestDiscretizedFeature(unittest.TestCase):
         self,
     ):
         """The documented `num_bins` configuration builds *and* runs."""
-        tf.keras.backend.clear_session()
+        keras.backend.clear_session()
         import tempfile
         from pathlib import Path
 
@@ -150,7 +152,7 @@ class TestDiscretizedFeature(unittest.TestCase):
 )
 def test_single_row_prediction(config, tmp_path):
     """A model built from a full feature set answers a one-row request."""
-    tf.keras.backend.clear_session()
+    keras.backend.clear_session()
     csv_path = _write_dataset(tmp_path)
     preprocessor = PreprocessingModel(
         path_data=str(csv_path),
@@ -195,7 +197,7 @@ class TestPassthroughExcludedFromOutput(unittest.TestCase):
         import tempfile
         from pathlib import Path
 
-        tf.keras.backend.clear_session()
+        keras.backend.clear_session()
         with tempfile.TemporaryDirectory() as tmp:
             preprocessor = self._build(Path(tmp))
             output = preprocessor.model(
@@ -207,6 +209,81 @@ class TestPassthroughExcludedFromOutput(unittest.TestCase):
         np.testing.assert_allclose(
             np.asarray(output["passthrough"]["record_id"]), [[0.5]]
         )
+
+
+class TestTimeSeriesRowAlignment(unittest.TestCase):
+    """Time series features must stay concatenable with ordinary ones."""
+
+    def _build(self, tmp_path, **ts_config):
+        from kdp import TimeSeriesFeature
+
+        rng = np.random.default_rng(3)
+        rows = 120
+        csv_path = tmp_path / "series.csv"
+        pd.DataFrame(
+            {
+                "date": pd.date_range("2022-01-01", periods=rows).strftime("%Y-%m-%d"),
+                "sales": np.linspace(100, 300, rows) + rng.normal(0, 5, rows),
+                "temp": rng.normal(20, 3, rows),
+            }
+        ).to_csv(csv_path, index=False)
+
+        preprocessor = PreprocessingModel(
+            path_data=str(csv_path),
+            features_specs={
+                "sales": TimeSeriesFeature(name="sales", sort_by="date", **ts_config),
+                "temp": FeatureType.FLOAT_NORMALIZED,
+            },
+            features_stats_path=str(tmp_path / "stats.json"),
+            overwrite_stats=True,
+        )
+        preprocessor.build_preprocessor()
+        return preprocessor
+
+    def test_time_series_feature_concatenates_with_a_numeric_feature(self):
+        """Dropping warm-up rows left the column shorter than its neighbours."""
+        import tempfile
+        from pathlib import Path
+
+        for config in (
+            {"lag_config": {"lags": [1, 7]}},
+            {"rolling_stats_config": {"window_size": 7, "statistics": ["mean"]}},
+            {"differencing_config": {"order": 1}},
+            {"moving_average_config": {"periods": [7]}},
+        ):
+            with self.subTest(config=next(iter(config))):
+                keras.backend.clear_session()
+                with tempfile.TemporaryDirectory() as tmp:
+                    preprocessor = self._build(Path(tmp), **config)
+                    rows = 20
+                    output = preprocessor.model(
+                        {
+                            "sales": tf.constant(
+                                np.linspace(100, 200, rows).reshape(-1, 1),
+                                dtype=tf.float32,
+                            ),
+                            "temp": tf.constant(
+                                np.full((rows, 1), 20.0), dtype=tf.float32
+                            ),
+                        }
+                    )
+                self.assertEqual(int(output.shape[0]), rows)
+
+    def test_explicit_drop_na_is_overridden_for_models(self):
+        """An explicit drop_na=True cannot be honoured inside a model."""
+        from kdp import TimeSeriesFeature
+
+        feature = TimeSeriesFeature(
+            name="sales",
+            sort_by="date",
+            lag_config={"lags": [1, 3], "drop_na": True},
+        )
+        model_layers = feature.build_layers()
+        self.assertFalse(model_layers[0].drop_na)
+
+        # Driving the layers directly still honours the request.
+        standalone = feature.build_layers(row_preserving=False)
+        self.assertTrue(standalone[0].drop_na)
 
 
 if __name__ == "__main__":

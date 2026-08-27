@@ -9,8 +9,8 @@ for extracting features from time series data.
 
 import numpy as np
 import matplotlib.pyplot as plt
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input, Dense, Concatenate
+from keras.models import Model
+from keras.layers import Input, Dense, Concatenate
 
 from kdp.layers.time_series import (
     WaveletTransformLayer,

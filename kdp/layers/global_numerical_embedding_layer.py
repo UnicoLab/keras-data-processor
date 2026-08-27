@@ -1,10 +1,11 @@
+import keras
 import tensorflow as tf
 import numpy as np
 from kdp.layers.numerical_embedding_layer import NumericalEmbedding
 
 
-@tf.keras.utils.register_keras_serializable(package="kdp.layers")
-class GlobalNumericalEmbedding(tf.keras.layers.Layer):
+@keras.saving.register_keras_serializable(package="kdp.layers")
+class GlobalNumericalEmbedding(keras.layers.Layer):
     """Global NumericalEmbedding processes concatenated numeric features.
     It applies an inner NumericalEmbedding over the flattened input and then
     performs global pooling (average or max) to produce a compact representation.
@@ -73,11 +74,11 @@ class GlobalNumericalEmbedding(tf.keras.layers.Layer):
             name="global_numeric_emebedding",
         )
         if self.global_pooling == "average":
-            self.global_pooling_layer = tf.keras.layers.GlobalAveragePooling1D(
+            self.global_pooling_layer = keras.layers.GlobalAveragePooling1D(
                 name="global_avg_pool",
             )
         elif self.global_pooling == "max":
-            self.global_pooling_layer = tf.keras.layers.GlobalMaxPooling1D(
+            self.global_pooling_layer = keras.layers.GlobalMaxPooling1D(
                 name="global_max_pool",
             )
         else:

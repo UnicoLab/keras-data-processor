@@ -1,3 +1,4 @@
+import keras
 import unittest
 import numpy as np
 import tensorflow as tf
@@ -101,9 +102,9 @@ class TestPreserveDtypeLayer(unittest.TestCase):
         layer = PreserveDtypeLayer(target_dtype=tf.float32)
 
         # Create a simple model
-        inputs = tf.keras.Input(shape=(3,), dtype=tf.int32)
+        inputs = keras.Input(shape=(3,), dtype=tf.int32)
         outputs = layer(inputs)
-        model = tf.keras.Model(inputs=inputs, outputs=outputs)
+        model = keras.Model(inputs=inputs, outputs=outputs)
 
         # Test the model
         test_input = tf.constant([[1, 2, 3], [4, 5, 6]])
