@@ -32,7 +32,7 @@ jobs:
       release_created: ${{ steps.semantic-release.outputs.new_release_published }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -68,11 +68,13 @@ jobs:
 
   PYPI_PUBLISH:
     needs: [SEMANTIC_RELEASE]
-    if: ${{ needs.SEMANTIC_RELEASE.outputs.release_created == 'true' || inputs.SKIP_RELEASE }}
+    # `!cancelled()` is required so this still runs when SKIP_RELEASE skips
+    # SEMANTIC_RELEASE: a skipped dependency otherwise skips this job too.
+    if: ${{ !cancelled() && (needs.SEMANTIC_RELEASE.outputs.release_created == 'true' || inputs.SKIP_RELEASE) }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 1
@@ -100,7 +102,7 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: 3.11
           cache: 'pip'
@@ -143,11 +145,15 @@ jobs:
 
   UPDATE_DOCS:
     needs: [SEMANTIC_RELEASE, PYPI_PUBLISH]
-    if: ${{ (needs.SEMANTIC_RELEASE.outputs.release_created == 'true' && !failure('PYPI_PUBLISH')) || inputs.SKIP_RELEASE }}
+    # A job's result is read from `needs.<job>.result`; `failure()` takes no
+    # arguments, so `failure('PYPI_PUBLISH')` never tested what it looked like.
+    if: >-
+      ${{ !cancelled() && needs.PYPI_PUBLISH.result != 'failure'
+      && (needs.SEMANTIC_RELEASE.outputs.release_created == 'true' || inputs.SKIP_RELEASE) }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 1
@@ -175,7 +181,7 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: 3.11
           cache: 'pip'

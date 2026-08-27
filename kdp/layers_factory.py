@@ -1,4 +1,5 @@
 import inspect
+from typing import Any
 
 import tensorflow as tf
 
@@ -35,7 +36,7 @@ class PreprocessorLayerFactory:
     def create_layer(
         layer_class: str | object,
         name: str = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> tf.keras.layers.Layer:
         """Create a layer using the layer class name, automatically filtering kwargs based on the layer class.
 
@@ -78,7 +79,7 @@ class PreprocessorLayerFactory:
         adaptive_binning: bool = True,
         mixture_components: int = 3,
         prefered_distribution: "DistributionType" = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> tf.keras.layers.Layer:
         """Create a DistributionAwareEncoder layer.
 
@@ -119,7 +120,7 @@ class PreprocessorLayerFactory:
         max_value: float = 1.0,
         clip_values: bool = True,
         auto_candidates: list[str] = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> tf.keras.layers.Layer:
         """Create a DistributionTransformLayer layer.
 
@@ -192,7 +193,7 @@ class PreprocessorLayerFactory:
     @staticmethod
     def preserve_dtype_layer(
         name: str = "preserve_dtype",
-        target_dtype=None,
+        target_dtype: tf.DType | None = None,
         **kwargs: dict,
     ) -> tf.keras.layers.Layer:
         """Create a PreserveDtypeLayer layer.

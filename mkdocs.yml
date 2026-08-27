@@ -1,6 +1,10 @@
 site_name: KDP - Keras Data Preprocessor
 site_url: https://unicolab.github.io/keras-data-processor
 docs_dir: docs
+# Contributor-facing notes about the docs tree itself, not a site page.
+# mkdocs would otherwise treat it as a second index.
+exclude_docs: |
+  README.md
 theme:
   name: "material"
   icon:
@@ -50,6 +54,7 @@ nav:
       - 📝 Text Features: features/text-features.md
       - 📅 Date Features: features/date-features.md
       - 📊 Time Series Features: features/time_series_features.md
+      - 🔮 Time Series Inference: time_series_inference.md
       - ➕ Cross Features: features/cross-features.md
       - 🔄 Passthrough Features: features/passthrough-features.md
   - 🧠 Advanced Features:
