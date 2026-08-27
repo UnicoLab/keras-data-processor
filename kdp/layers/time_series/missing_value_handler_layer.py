@@ -59,7 +59,7 @@ class MissingValueHandlerLayer(Layer):
                 f"Strategy must be one of {valid_strategies}, got {strategy}",
             )
 
-    def call(self, inputs, training=None):
+    def call(self, inputs, training=None) -> tf.Tensor:
         """Apply missing value handling strategy.
 
         Args:

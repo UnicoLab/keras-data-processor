@@ -50,7 +50,7 @@ class CallableDict(dict):
     arguments and keyword arguments to that function.
     """
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args: Any, **kwargs):
         """Call the model function with the given arguments.
 
         Args:
@@ -2896,7 +2896,7 @@ class PreprocessingModel:
 
         return True
 
-    def predict(self, data, **kwargs):
+    def predict(self, data, **kwargs) -> Any:
         """Predict using the preprocessor model.
 
         Args:
@@ -2923,7 +2923,7 @@ class SplitLayer(keras.layers.Layer):
         super().__init__(**kwargs)
         self.feature_dims = feature_dims
 
-    def call(self, inputs):
+    def call(self, inputs) -> list:
         # Handle case where feature_dims is None or empty
         if not self.feature_dims:
             # Return the input as a single feature if no dimensions are provided

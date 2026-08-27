@@ -53,7 +53,7 @@ class SeasonalDecompositionLayer(Layer):
                 f"Extrapolate_trend must be 'nearest' or 'linear', got {extrapolate_trend}",
             )
 
-    def call(self, inputs):
+    def call(self, inputs) -> tf.Tensor:
         """Apply seasonal decomposition to the input time series.
 
         Args:

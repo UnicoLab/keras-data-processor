@@ -27,6 +27,7 @@ Example usage:
 """
 
 from enum import Enum
+from typing import Any
 import tensorflow as tf
 from loguru import logger
 import inspect
@@ -592,7 +593,7 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
         i = tf.constant(0)
 
         # Use while_loop for graph compatibility
-        def loop_cond(i, *args):
+        def loop_cond(i, *args: Any):
             return tf.logical_and(tf.less(i, max_lag), tf.less(i, n // 3))
 
         def loop_body(i, acf_array):
@@ -805,7 +806,7 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
         # For other distribution types, keep the transformation from DistributionTransformLayer
         return x
 
-    def call(self, inputs, training=None):
+    def call(self, inputs, training=None) -> tf.Tensor:
         """Apply distribution-aware encoding to the inputs.
 
         This method:
@@ -1070,7 +1071,7 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
 # add those dependencies separately.
 
 
-def get_custom_objects():
+def get_custom_objects() -> dict:
     """Return custom objects dictionary needed for model loading.
 
     This function returns a dictionary of custom objects that need to be provided

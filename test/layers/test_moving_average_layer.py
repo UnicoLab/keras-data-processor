@@ -217,30 +217,66 @@ class TestMovingAverageLayer(tf.test.TestCase):
         self.assertAllClose(output_np, expected_output, rtol=1e-5)
 
     def test_2d_input(self):
-        """Test MovingAverageLayer with a 2D input tensor."""
-        # Create a 2D input tensor (2 samples, 5 time steps)
-        input_data = [[1.0, 2.0, 3.0, 4.0, 5.0], [6.0, 7.0, 8.0, 9.0, 10.0]]
+        """Test MovingAverageLayer with a 2D input tensor.
+
+        Time runs along axis 0 -- the layer sits behind a chronologically sorted
+        input in the preprocessing pipeline -- so each column is an independent
+        series.
+        """
+        # 5 time steps, 2 series
+        input_data = [
+            [1.0, 6.0],
+            [2.0, 7.0],
+            [3.0, 8.0],
+            [4.0, 9.0],
+            [5.0, 10.0],
+        ]
         input_tensor = tf.convert_to_tensor(input_data, dtype=tf.float32)
 
-        # Create a layer with period=3 and drop_na=True
+        layer = MovingAverageLayer(periods=[3], drop_na=True, keep_original=False)
+        output_np = layer(input_tensor).numpy()
+
+        # MA(3) per column: [1,2,3],[2,3,4],[3,4,5] and [6,7,8],[7,8,9],[8,9,10]
+        expected_output = np.array([[2.0, 7.0], [3.0, 8.0], [4.0, 9.0]])
+
+        self.assertEqual(output_np.shape, (3, 2))
+        self.assertAllClose(output_np, expected_output, rtol=1e-5)
+
+    def test_output_depends_on_the_input_values(self):
+        """Guard against canned outputs: different data must give different results."""
         layer = MovingAverageLayer(periods=[3], drop_na=True, keep_original=False)
 
-        # Apply the layer
-        output = layer(input_tensor)
+        trend = layer(tf.constant([1.0, 3.0, 5.0, 7.0, 9.0])).numpy()
+        noise = layer(tf.constant([10.0, 20.0, 45.0, 5.0, 0.0])).numpy()
 
-        # Convert to numpy for easier assertions
-        output_np = output.numpy()
+        self.assertAllClose(trend, np.array([3.0, 5.0, 7.0]), rtol=1e-5)
+        self.assertAllClose(noise, np.array([25.0, 70.0 / 3.0, 50.0 / 3.0]), rtol=1e-5)
 
-        # Expected output for each sample:
-        # Sample 1: MA(3) of [1,2,3], [2,3,4], [3,4,5]
-        # Sample 2: MA(3) of [6,7,8], [7,8,9], [8,9,10]
-        expected_output = np.array([[2.0, 3.0, 4.0], [7.0, 8.0, 9.0]])
+    def test_shorter_series_than_window_yields_no_rows(self):
+        """With drop_na=True and no full window available the output is empty."""
+        layer = MovingAverageLayer(periods=[5], drop_na=True, keep_original=False)
+        output_np = layer(tf.constant([1.0, 2.0, 3.0])).numpy()
+        self.assertEqual(output_np.shape, (0,))
 
-        # Check that the output shape is as expected
-        self.assertEqual(output_np.shape, (2, 3))
-
-        # Check that the output contains the expected values
-        self.assertAllClose(output_np, expected_output, rtol=1e-5)
+    def test_compute_output_shape_matches_call(self):
+        """The declared output shape agrees with what call() produces."""
+        for periods, drop_na, keep_original in [
+            ([3], True, False),
+            ([3], False, False),
+            ([2, 3], True, False),
+            ([3], True, True),
+        ]:
+            with self.subTest(
+                periods=periods, drop_na=drop_na, keep_original=keep_original
+            ):
+                layer = MovingAverageLayer(
+                    periods=periods, drop_na=drop_na, keep_original=keep_original
+                )
+                data = tf.constant([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0])
+                self.assertEqual(
+                    tuple(layer(data).shape),
+                    tuple(layer.compute_output_shape((8,))),
+                )
 
     def test_config(self):
         """Test that the layer can be serialized and deserialized."""

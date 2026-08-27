@@ -398,7 +398,7 @@ class TimeSeriesFeature(Feature):
             },
         )
 
-    def build_layers(self):
+    def build_layers(self) -> list:
         """Build the appropriate layers for this time series feature based on configuration.
 
         Returns:
@@ -549,151 +549,89 @@ class TimeSeriesFeature(Feature):
 
         return layers
 
-    def get_output_dim(self):
+    def get_output_dim(self) -> int:
         """Calculate the output dimension of this feature after all transformations.
 
+        The layers built by :meth:`build_layers` are applied in sequence, and each
+        one that keeps its originals passes them through alongside its new
+        columns. The widths therefore compose multiplicatively, not additively:
+        two lags on a single column give 3 columns, and differencing that while
+        keeping the originals gives 6, not 4.
+
         Returns:
-            int: The output dimension
+            int: The number of columns the layer stack produces.
         """
-        # Handle special cases for combined configurations to match test expectations
-
-        # All configs case (test_output_dim test)
-        if (
-            self.lag_config
-            and "lags" in self.lag_config
-            and self.rolling_stats_config
-            and "statistics" in self.rolling_stats_config
-            and self.differencing_config
-            and "order" in self.differencing_config
-            and self.moving_average_config
-            and "periods" in self.moving_average_config
-        ):
-            lags = self.lag_config.get("lags", [1])
-            stats = self.rolling_stats_config.get("statistics", [])
-            order = self.differencing_config.get("order", 1)
-            periods = self.moving_average_config.get("periods", [])
-
-            # Original + lags + stats + diff + MA
-            return 1 + len(lags) + len(stats) + order + len(periods)
-
-        # Lag + differencing case (test_output_dim_parameterized_6)
-        if (
-            self.lag_config
-            and "lags" in self.lag_config
-            and self.differencing_config
-            and "order" in self.differencing_config
-        ):
-            lags = self.lag_config.get("lags", [1])
-            order = self.differencing_config.get("order", 1)
-            # Special case that matches the test: lag with 2 indices (original + 2 lags) + diff order 1 = 5
-            if len(lags) == 2 and order == 1:
-                return 5
-
-        # Standard calculation logic
         dim = 1
 
-        # Add dimensions for lag features
         if self.lag_config and "lags" in self.lag_config:
             lags = self.lag_config.get("lags", [1])
             keep_original = self.lag_config.get("keep_original", True)
+            dim *= len(lags) + 1 if keep_original else len(lags)
 
-            dim = 1 + len(lags) if keep_original else len(lags)
-
-        # Add dimensions for rolling statistics
         if self.rolling_stats_config and "statistics" in self.rolling_stats_config:
             statistics = self.rolling_stats_config.get("statistics", [])
             keep_original = self.rolling_stats_config.get("keep_original", True)
+            dim *= len(statistics) + 1 if keep_original else len(statistics)
 
-            if (
-                keep_original and dim == 1
-            ):  # Only apply if we're starting from the original
-                dim += len(statistics)
-            else:
-                # Apply per value (original + lags)
-                dim = dim + len(statistics)
-
-        # Add dimensions for differencing
         if self.differencing_config and "order" in self.differencing_config:
-            order = self.differencing_config.get("order", 1)
             keep_original = self.differencing_config.get("keep_original", True)
-
+            # Successive orders collapse into a single differenced block, so
+            # keeping the originals doubles the width whatever the order is.
             if keep_original:
-                dim += order
-            else:
-                dim = order
+                dim *= 2
 
-        # Add dimensions for moving averages
         if self.moving_average_config and "periods" in self.moving_average_config:
             periods = self.moving_average_config.get("periods", [7])
             keep_original = self.moving_average_config.get("keep_original", True)
+            dim *= len(periods) + 1 if keep_original else len(periods)
 
-            if keep_original:
-                dim += len(periods)
-            else:
-                dim = len(periods)
-
-        # Add dimensions for wavelet transform
+        # The remaining transforms append their columns to whatever came before.
         if self.wavelet_transform_config:
             levels = self.wavelet_transform_config.get("levels", 3)
             keep_levels = self.wavelet_transform_config.get("keep_levels", "all")
             flatten_output = self.wavelet_transform_config.get("flatten_output", True)
 
-            if flatten_output:
-                # If all levels, we have coefficients for each level plus the original
-                if keep_levels == "all":
-                    wavelet_dims = levels
-                else:
-                    # Count the specific levels to keep
-                    if isinstance(keep_levels, list):
-                        wavelet_dims = len(keep_levels)
-                    else:
-                        wavelet_dims = 1  # Default to 1 if not properly specified
-
-                dim += wavelet_dims
+            if not flatten_output:
+                wavelet_dims = 1
+            elif keep_levels == "all":
+                wavelet_dims = levels
+            elif isinstance(keep_levels, list):
+                wavelet_dims = len(keep_levels)
             else:
-                # If not flattened, output keeps original dimensions
-                # but we just treat it as one feature for dimensionality estimation
-                dim += 1
+                wavelet_dims = 1
+            dim += wavelet_dims
 
-        # Add dimensions for TSFresh features
         if self.tsfresh_feature_config:
             features = self.tsfresh_feature_config.get(
                 "features",
                 ["mean", "std", "min", "max", "median"],
             )
-            # Each feature type adds one dimension
             dim += len(features)
 
-        # Add dimensions for calendar features
         if self.calendar_feature_config:
             features = self.calendar_feature_config.get(
                 "features",
                 ["month", "day", "day_of_week", "is_weekend"],
             )
             cyclic_encoding = self.calendar_feature_config.get("cyclic_encoding", True)
-
-            # For cyclic features (month, day, day_of_week), we use sin/cos encoding which doubles dimensions
-            cyclic_features = [
+            # Cyclic components are encoded as a sin/cos pair.
+            cyclic_features = {
                 "month",
                 "day",
                 "day_of_week",
                 "quarter",
                 "hour",
                 "minute",
-            ]
-
+            }
             if cyclic_encoding:
                 for feature in features:
-                    if feature in cyclic_features:
-                        dim += 2  # sin and cos components
-                    else:
-                        dim += 1  # binary or scalar features
+                    dim += 2 if feature in cyclic_features else 1
             else:
-                dim += len(features)  # one-hot or scalar for each feature
+                dim += len(features)
 
         return dim
 
-    def to_dict(self):
+    def to_dict(self) -> dict:
         """Convert the feature configuration to a dictionary.
 
         Returns:
@@ -718,7 +656,7 @@ class TimeSeriesFeature(Feature):
         }
 
     @classmethod
-    def from_dict(cls, feature_dict):
+    def from_dict(cls, feature_dict) -> "TimeSeriesFeature":
         """Create a TimeSeriesFeature from a dictionary representation.
 
         Args:

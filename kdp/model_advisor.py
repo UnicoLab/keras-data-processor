@@ -113,8 +113,6 @@ class ModelAdvisor:
                 recommendation,
                 dist_type,
                 stats,
-                skewness,
-                kurtosis,
             )
 
             # Advanced feature engineering recommendations
@@ -180,9 +178,7 @@ class ModelAdvisor:
         recommendation: dict[str, Any],
         dist_type: str,
         stats: dict[str, Any],
-        skewness: float,
-        kurtosis: float,
-    ):
+    ) -> None:
         """Recommend preprocessing steps based on distribution type."""
         if dist_type == "normal":
             recommendation["preprocessing"].append("FLOAT_NORMALIZED")
@@ -253,7 +249,7 @@ class ModelAdvisor:
         feature: str,
         stats: dict[str, Any],
         dist_type: str,
-    ):
+    ) -> None:
         """Recommend advanced feature engineering based on feature characteristics."""
         # Check for complex distribution patterns
         if abs(stats.get("skewness", 0)) > 1.5 or abs(stats.get("kurtosis", 3) - 3) > 2:
@@ -296,49 +292,22 @@ class ModelAdvisor:
         """Calculate optimal number of bins for numerical embedding."""
         return min(100, max(10, int(np.sqrt(n_samples))))
 
-    def _analyze_feature_interactions(self):
-        """Analyze interactions between features using correlation and mutual information."""
-        numeric_stats = self.features_stats.get("numeric_stats", {})
-        categorical_stats = self.features_stats.get("categorical_stats", {})
+    def _analyze_feature_interactions(self) -> None:
+        """Analyze interactions between features.
 
-        # Analyze numeric-numeric interactions
-        for feat1 in numeric_stats:
-            for feat2 in numeric_stats:
-                if feat1 < feat2:  # Avoid duplicate pairs
-                    corr = self._calculate_correlation(feat1, feat2)
-                    if abs(corr) > 0.7:  # Strong correlation threshold
-                        self.feature_interactions[feat1] = (
-                            self.feature_interactions.get(feat1, []) + [(feat2, corr)]
-                        )
-                        self.feature_interactions[feat2] = (
-                            self.feature_interactions.get(feat2, []) + [(feat1, corr)]
-                        )
+        Correlation and mutual information both need the raw column values, and
+        the advisor only receives the per-feature summary statistics produced by
+        `DatasetStatistics` (counts, moments, vocabularies). There is nothing to
+        compute from those, so no interactions are recorded.
 
-        # Analyze numeric-categorical interactions
-        for num_feat in numeric_stats:
-            for cat_feat in categorical_stats:
-                mi_score = self._calculate_mutual_information(num_feat, cat_feat)
-                if mi_score > 0.5:  # Strong mutual information threshold
-                    self.feature_interactions[num_feat] = self.feature_interactions.get(
-                        num_feat,
-                        [],
-                    ) + [(cat_feat, mi_score)]
-                    self.feature_interactions[cat_feat] = self.feature_interactions.get(
-                        cat_feat,
-                        [],
-                    ) + [(num_feat, mi_score)]
-
-    def _calculate_correlation(self, feat1: str, feat2: str) -> float:
-        """Calculate correlation between two numeric features."""
-        # Implementation would use the actual feature values from the dataset
-        # For now, return a placeholder
-        return 0.0
-
-    def _calculate_mutual_information(self, num_feat: str, cat_feat: str) -> float:
-        """Calculate mutual information between numeric and categorical features."""
-        # Implementation would use the actual feature values from the dataset
-        # For now, return a placeholder
-        return 0.0
+        This used to run an O(n^2) scan over every feature pair against two
+        helpers that returned a hard-coded 0.0, which no threshold could ever
+        pass -- the same empty result, at a cost.
+        """
+        logger.debug(
+            "Skipping feature-interaction analysis: it requires raw feature "
+            "values, which are not part of the summary statistics.",
+        )
 
     def _analyze_categorical_features(self):
         """Analyze categorical features and generate recommendations."""
@@ -534,10 +503,7 @@ class ModelAdvisor:
             ] = self._determine_text_standardization(special_char_ratio, language)
 
             # Smart embedding dimension calculation
-            embedding_dim = self._calculate_text_embedding_dim(
-                vocab_size,
-                sequence_length,
-            )
+            embedding_dim = self._calculate_text_embedding_dim(vocab_size)
             recommendation["config"]["embedding_dim"] = embedding_dim
 
             # Add advanced text processing options
@@ -564,11 +530,7 @@ class ModelAdvisor:
         """Calculate optimal sequence length for text processing."""
         return min(200, max(50, avg_length * 2))
 
-    def _calculate_text_embedding_dim(
-        self,
-        vocab_size: int,
-        sequence_length: int,
-    ) -> int:
+    def _calculate_text_embedding_dim(self, vocab_size: int) -> int:
         """Calculate optimal embedding dimension for text features."""
         return min(300, max(16, vocab_size // 100))
 

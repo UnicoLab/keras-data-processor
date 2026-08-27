@@ -33,7 +33,7 @@ class LagFeatureLayer(Layer):
     def build(self, input_shape) -> None:
         super().build(input_shape)
 
-    def call(self, inputs):
+    def call(self, inputs) -> tf.Tensor:
         """Apply the lag feature transformation.
 
         Args:

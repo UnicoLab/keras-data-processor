@@ -14,7 +14,7 @@ class CastToFloat32Layer(keras.layers.Layer):
         """Initialize the layer."""
         super().__init__(**kwargs)
 
-    def call(self, inputs, **kwargs):
+    def call(self, inputs, **kwargs) -> tf.Tensor:
         """Cast the input tensor to float32.
 
         Args:

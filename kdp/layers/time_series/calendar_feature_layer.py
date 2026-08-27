@@ -111,7 +111,7 @@ class CalendarFeatureLayer(Layer):
     def build(self, input_shape) -> None:
         super().build(input_shape)
 
-    def call(self, inputs, training=None):
+    def call(self, inputs, training=None) -> tf.Tensor:
         """Extract calendar features from date inputs.
 
         Args:

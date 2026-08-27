@@ -50,7 +50,7 @@ class WaveletTransformLayer(Layer):
     def build(self, input_shape) -> None:
         super().build(input_shape)
 
-    def call(self, inputs, training=None):
+    def call(self, inputs, training=None) -> tf.Tensor:
         """Apply simplified wavelet transform to the input time series.
 
         Args:

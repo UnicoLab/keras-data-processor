@@ -23,7 +23,7 @@ class StackFeaturesLayer(tf.keras.layers.Layer):
         """
         super().__init__(name=name, trainable=trainable, dtype=dtype, **kwargs)
 
-    def call(self, inputs):
+    def call(self, inputs) -> tf.Tensor:
         """Stack features along axis 1.
 
         Args:
@@ -81,7 +81,7 @@ class UnstackLayer(tf.keras.layers.Layer):
         super().__init__(name=name, trainable=trainable, dtype=dtype, **kwargs)
         self.axis = axis
 
-    def call(self, inputs):
+    def call(self, inputs) -> list:
         """Unstack features along specified axis.
 
         Args:
@@ -183,7 +183,7 @@ class ExpertBlock(keras.layers.Layer):
             name="expert_output",
         )
 
-    def call(self, inputs, training=None):
+    def call(self, inputs, training=None) -> tf.Tensor:
         """Forward pass through the expert network.
 
         Args:
@@ -348,9 +348,7 @@ class FeatureMoE(keras.layers.Layer):
             Routing weights of shape [batch_size, num_features, num_experts]
         """
         if self.routing == "predefined":
-            # Use fixed assignments
-            batch_size = tf.shape(inputs)[0]
-            # Expand dims for broadcasting
+            # Use fixed assignments; expand dims for broadcasting over the batch.
             return tf.expand_dims(self.assignment_matrix, 0)
         else:
             # Compute routing weights using the router network
@@ -396,7 +394,7 @@ class FeatureMoE(keras.layers.Layer):
             # Expand dims for broadcasting
             return tf.expand_dims(weights, 0)  # [1, num_features, num_experts]
 
-    def call(self, inputs, training=None):
+    def call(self, inputs, training=None) -> tf.Tensor:
         """Forward pass through the Feature-wise MoE.
 
         Args:
@@ -448,7 +446,7 @@ class FeatureMoE(keras.layers.Layer):
             axis=-2,
         )  # [batch_size, num_features, expert_dim]
 
-    def get_expert_assignments(self):
+    def get_expert_assignments(self) -> dict:
         """Get the current expert assignments for each feature.
 
         For predefined routing, this returns the predefined_assignments dictionary.

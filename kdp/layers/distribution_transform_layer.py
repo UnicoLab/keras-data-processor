@@ -702,7 +702,7 @@ class DistributionTransformLayer(tf.keras.layers.Layer):
                     f"Error in {self.transform_type} transformation: {str(e)}",
                 ) from e
 
-    def call(self, inputs, training=None):
+    def call(self, inputs, training=None) -> tf.Tensor:
         """Apply the selected transformation to the inputs.
 
         Args:

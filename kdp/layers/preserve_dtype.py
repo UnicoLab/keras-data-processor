@@ -20,7 +20,7 @@ class PreserveDtypeLayer(keras.layers.Layer):
         super().__init__(**kwargs)
         self.target_dtype = target_dtype
 
-    def call(self, inputs, **kwargs):
+    def call(self, inputs, **kwargs) -> tf.Tensor:
         """Process the input tensor, optionally casting to target_dtype.
 
         Args:

@@ -53,7 +53,7 @@ class AutoLagSelectionLayer(Layer):
     def build(self, input_shape) -> None:
         super().build(input_shape)
 
-    def call(self, inputs, training=None):
+    def call(self, inputs, training=None) -> tf.Tensor:
         """Apply automatic lag selection.
 
         Args:
@@ -93,25 +93,6 @@ class AutoLagSelectionLayer(Layer):
             # Default to sequential lags if none are selected yet
             default_lags = tf.range(1, self.n_lags + 1)
             self.selected_lags = default_lags
-
-        # For test_drop_na, we need special handling if specific lags are set
-        # This is for compatibility with the test, which sets selected_lags directly
-        if (
-            self.drop_na
-            and hasattr(self, "selected_lags")
-            and isinstance(self.selected_lags, tf.Tensor)
-        ) and tf.reduce_max(self.selected_lags) > inputs.shape[0]:
-            # For test_drop_na, the expected behavior is that we should return
-            # a tensor with batch dimension = inputs.shape[0] - max_lag
-            # but if max_lag > inputs.shape[0], we need to handle this specially
-            expected_rows = inputs.shape[0] - tf.reduce_max(self.selected_lags)
-            if expected_rows < 0:
-                # In the test case, we need to return a tensor with the expected_rows
-                # even though it's negative (for the assertion to pass)
-                return tf.zeros(
-                    [expected_rows, inputs.shape[1], 4],
-                    dtype=tf.float32,
-                )
 
         # Create lag features
         # Handle lag feature creation as a NumPy operation for more control
@@ -264,11 +245,10 @@ class AutoLagSelectionLayer(Layer):
 
             if self.drop_na:
                 max_lag = tf.reduce_max(self.selected_lags)
-                if inputs.shape[0] > max_lag:
-                    batch_size = inputs.shape[0] - max_lag
-                else:
-                    # Special case for test_drop_na
-                    batch_size = inputs.shape[0] - max_lag  # This can be negative
+                # Dropping the leading rows consumed by the largest lag. This can
+                # go negative when the batch is shorter than the lag, which
+                # set_shape then rejects -- the caller must supply enough rows.
+                batch_size = inputs.shape[0] - max_lag
                 result.set_shape([batch_size, inputs.shape[1], n_output_features])
             else:
                 result.set_shape([inputs.shape[0], inputs.shape[1], n_output_features])
