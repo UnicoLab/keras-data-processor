@@ -90,7 +90,8 @@ class PreprocessorLayerFactory:
             handle_sparsity (bool): Whether to handle sparse data specially
             adaptive_binning (bool): Whether to use adaptive binning
             mixture_components (int): Number of components for mixture modeling
-            specified_distribution (DistributionType): Optional specific distribution type to use
+            prefered_distribution (DistributionType): Optional specific distribution type to use.
+                When given, automatic distribution detection is disabled.
             **kwargs: Additional keyword arguments
 
         Returns:

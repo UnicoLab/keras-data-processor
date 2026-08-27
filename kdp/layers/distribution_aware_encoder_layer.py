@@ -149,6 +149,7 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
             mixture_components: Number of mixture components. Not used in current implementation.
             prefered_distribution: Legacy way to specify distribution_type. If provided, auto_detect
                 will be set to False and this value will be used as distribution_type.
+            **kwargs: Additional arguments forwarded to `tf.keras.layers.Layer`.
 
         Note on output dimensions:
             - If detect_periodicity=True and periodic features are detected/forced:
@@ -219,8 +220,11 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
             transform_signature = inspect.signature(DistributionTransformLayer.__init__)
             if "epsilon" in transform_signature.parameters:
                 transform_kwargs["epsilon"] = self.epsilon
-        except Exception:
-            pass  # If we can't inspect, just use default params
+        except (TypeError, ValueError) as exc:
+            logger.debug(
+                f"Could not inspect DistributionTransformLayer signature ({exc}); "
+                "falling back to its default parameters.",
+            )
 
         # The DistributionTransformLayer handles most of the distribution transformations
         self.distribution_transform = DistributionTransformLayer(

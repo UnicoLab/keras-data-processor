@@ -735,7 +735,7 @@ class DistributionTransformLayer(tf.keras.layers.Layer):
                     transform_idx = tf.cond(
                         tf.equal(best_transform, transform_type),
                         lambda i=i: tf.constant(i, dtype=tf.int32),
-                        lambda: transform_idx,
+                        lambda previous=transform_idx: previous,
                     )
 
                 # Store the selected transformation

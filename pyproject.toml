@@ -216,6 +216,10 @@ line-ending = "auto"
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
+[tool.ruff.lint.flake8-unused-arguments]
+# `layer_creator` callables and Keras hooks accept **kwargs they never read.
+ignore-variadic-names = true
+
 [tool.ruff.lint.pycodestyle]
 # The formatter wraps code at `line-length`; prose in docstrings and comments is
 # allowed to run wider before E501 fires.
@@ -230,3 +234,8 @@ max-line-length = 120
 # part of the published API surface.
 "scripts/**" = ["T20", "ANN", "D", "S603", "S607"]
 "examples/**" = ["T20", "ANN", "D"]
+# Keras fixes the signatures of `call`, `build` and `__init__`: `training` and
+# `**kwargs` must be accepted whether or not a given layer reads them, and the
+# `tf.while_loop` condition callable must accept the full loop-variable tuple.
+"kdp/layers/**" = ["ARG002"]
+"kdp/moe.py" = ["ARG002"]

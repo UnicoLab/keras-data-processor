@@ -286,7 +286,7 @@ class CalendarFeatureLayer(Layer):
                             df[feature] = np.sin(angle)
 
             # Convert to numpy array
-            return df.values.astype(np.float32)
+            return df.to_numpy().astype(np.float32)
 
         # Apply the function
         result = tf.py_function(extract_calendar_features, [inputs], tf.float32)

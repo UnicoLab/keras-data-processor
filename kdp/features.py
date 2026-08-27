@@ -165,9 +165,21 @@ class NumericalFeature(Feature):
         self.embedding_dim = embedding_dim
         self.num_bins = num_bins
 
-    def get_embedding_layer(self, input_shape: tuple) -> tf.keras.layers.Layer:
-        """Creates and returns an NumericalEmbedding layer configured for this feature."""
-        # TODO: check why to use input_shape ?
+    def get_embedding_layer(
+        self,
+        input_shape: tuple | None = None,  # noqa: ARG002 - kept for API compatibility
+    ) -> tf.keras.layers.Layer:
+        """Creates and returns a NumericalEmbedding layer configured for this feature.
+
+        Args:
+            input_shape: Unused. `NumericalEmbedding` derives the feature count
+                in its own `build`, so nothing here depends on the shape. The
+                parameter is kept, and optional, so existing callers that pass
+                it keep working.
+
+        Returns:
+            A `NumericalEmbedding` layer built from this feature's settings.
+        """
         from kdp.layers.numerical_embedding_layer import NumericalEmbedding
 
         return NumericalEmbedding(

@@ -358,6 +358,30 @@ class PreprocessingModel:
             num_bins (int): Number of bins for discretization in advanced numerical embedding.
             init_min (float): Minimum value for the embedding in advanced numerical embedding.
             init_max (float): Maximum value for the embedding in advanced numerical embedding.
+            dropout_rate (float): Dropout rate for advanced numerical embedding.
+            use_batch_norm (bool): Whether advanced numerical embedding applies batch normalization.
+            use_global_numerical_embedding (bool): Whether to embed all numeric features jointly,
+                in addition to (or instead of) per-feature embeddings.
+            global_embedding_dim (int): Dimension of the global numerical embedding.
+            global_mlp_hidden_units (int): Number of units for the MLP in the global numerical embedding.
+            global_num_bins (int): Number of bins for discretization in the global numerical embedding.
+            global_init_min (float): Minimum value for the global numerical embedding.
+            global_init_max (float): Maximum value for the global numerical embedding.
+            global_dropout_rate (float): Dropout rate for the global numerical embedding.
+            global_use_batch_norm (bool): Whether the global numerical embedding applies batch normalization.
+            global_pooling (str): Pooling applied over the global embedding (average | max).
+            use_feature_moe (bool): Whether to enable the feature-wise mixture of experts.
+            feature_moe_num_experts (int): Number of experts in the mixture.
+            feature_moe_expert_dim (int): Output dimension of each expert.
+            feature_moe_hidden_dims (list[int]): Hidden layer sizes inside each expert.
+            feature_moe_routing (str): How features are routed to experts (learned | predefined).
+            feature_moe_sparsity (int): Number of experts each feature is routed to when routing is sparse.
+            feature_moe_assignments (dict[str, int]): Explicit feature-to-expert assignments,
+                used when routing is "predefined".
+            feature_moe_dropout (float): Dropout rate applied inside the mixture of experts.
+            feature_moe_freeze_experts (bool): Whether expert weights are frozen during training.
+            feature_moe_use_residual (bool): Whether to add a residual connection around the mixture.
+            include_passthrough_in_output (bool): Whether passthrough features appear in the model output.
         """
         self.path_data = path_data
         self.batch_size = batch_size or 50_000
@@ -823,44 +847,20 @@ class PreprocessingModel:
         Returns:
             The processed tensor, possibly with feature selection applied
         """
-        apply_selection = False
-
-        # Check if feature selection should be applied based on type
-        if (
-            self.feature_selection_placement
-            == FeatureSelectionPlacementOptions.ALL_FEATURES
-        ):
-            apply_selection = True
-        elif (
-            feature_type == "numeric"
-            and self.feature_selection_placement
-            == FeatureSelectionPlacementOptions.NUMERIC
-        ):
-            apply_selection = True
-        elif (
-            feature_type == "categorical"
-            and self.feature_selection_placement
-            == FeatureSelectionPlacementOptions.CATEGORICAL
-        ):
-            apply_selection = True
-        elif (
-            feature_type == "text"
-            and self.feature_selection_placement
-            == FeatureSelectionPlacementOptions.TEXT
-        ):
-            apply_selection = True
-        elif (
-            feature_type == "date"
-            and self.feature_selection_placement
-            == FeatureSelectionPlacementOptions.DATE
-        ):
-            apply_selection = True
-        elif (
-            (feature_type == "passthrough" or feature_type == "time_series")
-            and self.feature_selection_placement
-            == FeatureSelectionPlacementOptions.ALL_FEATURES
-        ):
-            apply_selection = True
+        # Feature selection is on either for every feature, or only for the
+        # placement matching this feature's type. Passthrough and time series
+        # features have no dedicated placement, so they are covered by
+        # ALL_FEATURES alone.
+        placement_for_type = {
+            "numeric": FeatureSelectionPlacementOptions.NUMERIC,
+            "categorical": FeatureSelectionPlacementOptions.CATEGORICAL,
+            "text": FeatureSelectionPlacementOptions.TEXT,
+            "date": FeatureSelectionPlacementOptions.DATE,
+        }
+        apply_selection = self.feature_selection_placement in (
+            FeatureSelectionPlacementOptions.ALL_FEATURES,
+            placement_for_type.get(feature_type),
+        )
 
         # Apply feature selection if enabled
         if apply_selection:
@@ -2273,9 +2273,7 @@ class PreprocessingModel:
             output_dims = []
             for feature_type in ["numeric", "categorical"]:
                 if feature_type in self.processed_features_dims:
-                    for feature_name, dims in self.processed_features_dims[
-                        feature_type
-                    ].items():
+                    for dims in self.processed_features_dims[feature_type].values():
                         if dims is not None:
                             output_dims.append(dims)
 
@@ -2460,12 +2458,11 @@ class PreprocessingModel:
                                 # Final fallback based on feature type
                                 if isinstance(feature, PassthroughFeature):
                                     dtype = getattr(feature, "dtype", tf.float32)
-                                elif feature.feature_type in [
+                                elif feature.feature_type in (
                                     FeatureType.STRING_CATEGORICAL,
                                     FeatureType.TEXT,
-                                ]:
-                                    dtype = tf.string
-                                elif feature.feature_type == FeatureType.DATE:
+                                    FeatureType.DATE,
+                                ):
                                     dtype = tf.string
                                 else:
                                     dtype = tf.float32
@@ -2563,7 +2560,8 @@ class PreprocessingModel:
                             "passthrough": self.passthrough_outputs,
                         }
                         logger.info(
-                            f"Creating model with separate passthrough outputs: {list(self.passthrough_outputs.keys())}",
+                            "Creating model with separate passthrough outputs: "
+                            f"{list(self.passthrough_outputs.keys())}",
                         )
                     else:
                         # Standard concat output
@@ -2692,7 +2690,7 @@ class PreprocessingModel:
 
         # Save metadata as JSON
         metadata_path = save_path / "metadata.json"
-        with open(metadata_path, "w") as f:
+        with metadata_path.open("w") as f:
             json.dump(metadata, f, indent=2, default=str)
         logger.info(f"Model metadata saved to {metadata_path}")
 
@@ -2727,7 +2725,7 @@ class PreprocessingModel:
         logger.info(f"Model loaded from {model_path}")
 
         # Load metadata
-        with open(metadata_path) as f:
+        with metadata_path.open() as f:
             metadata = json.load(f)
         logger.info(f"Model metadata loaded from {metadata_path}")
 
@@ -2829,20 +2827,26 @@ class PreprocessingModel:
             feature = self.features_specs[feature_name]
 
             # Check grouping column exists if needed
-            if hasattr(feature, "group_by") and feature.group_by:
-                if isinstance(data, dict) and feature.group_by not in data:
-                    raise ValueError(
-                        f"Time series feature '{feature_name}' requires grouping by "
-                        f"'{feature.group_by}', but this column is not in the data.",
-                    )
+            if (
+                getattr(feature, "group_by", None)
+                and isinstance(data, dict)
+                and feature.group_by not in data
+            ):
+                raise ValueError(
+                    f"Time series feature '{feature_name}' requires grouping by "
+                    f"'{feature.group_by}', but this column is not in the data.",
+                )
 
             # Check sorting column exists if needed
-            if hasattr(feature, "sort_by") and feature.sort_by:
-                if isinstance(data, dict) and feature.sort_by not in data:
-                    raise ValueError(
-                        f"Time series feature '{feature_name}' requires sorting by "
-                        f"'{feature.sort_by}', but this column is not in the data.",
-                    )
+            if (
+                getattr(feature, "sort_by", None)
+                and isinstance(data, dict)
+                and feature.sort_by not in data
+            ):
+                raise ValueError(
+                    f"Time series feature '{feature_name}' requires sorting by "
+                    f"'{feature.sort_by}', but this column is not in the data.",
+                )
 
             # Calculate minimum required history
             min_history = 1  # Default minimum

@@ -607,9 +607,10 @@ class ModelAdvisor:
                 num_high_cardinality += 1
 
             # Check if we recommended hashing for this feature
-            if feature in self.recommendations:
-                if "HASHING" in self.recommendations[feature].get("preprocessing", []):
-                    num_hashing_recommended += 1
+            if feature in self.recommendations and "HASHING" in self.recommendations[
+                feature
+            ].get("preprocessing", []):
+                num_hashing_recommended += 1
 
         self.global_config = {
             "output_mode": "CONCAT",
@@ -628,7 +629,8 @@ class ModelAdvisor:
 
             if num_hashing_recommended > 0:
                 self.global_config["notes"].append(
-                    f"Hashing recommended for {num_hashing_recommended} features to efficiently handle high cardinality",
+                    f"Hashing recommended for {num_hashing_recommended} features "
+                    "to efficiently handle high cardinality",
                 )
 
                 # Consider memory optimization when many hash features
@@ -793,7 +795,8 @@ class ModelAdvisor:
                 f"    tabular_attention_heads={self.global_config.get('tabular_attention_heads', 4)},",
             )
             code.append(
-                f"    tabular_attention_placement=\"{self.global_config.get('tabular_attention_placement', 'multi_resolution')}\",",
+                "    tabular_attention_placement="
+                f"\"{self.global_config.get('tabular_attention_placement', 'multi_resolution')}\",",
             )
         if self.global_config.get("use_distribution_aware"):
             code.append("    use_distribution_aware=True,")

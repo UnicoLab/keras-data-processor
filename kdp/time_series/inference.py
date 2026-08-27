@@ -127,7 +127,7 @@ class TimeSeriesInferenceFormatter(InferenceFormatter):
         self,
         data: dict | pd.DataFrame,
         historical_data: dict | pd.DataFrame | None = None,
-        fill_missing: bool = True,
+        fill_missing: bool = True,  # noqa: ARG002 - inert, see docstring
         to_tensors: bool = False,
     ) -> dict | dict[str, tf.Tensor]:
         """Prepare time series data for inference based on preprocessor requirements.
@@ -135,7 +135,12 @@ class TimeSeriesInferenceFormatter(InferenceFormatter):
         Args:
             data: The new data to make predictions on
             historical_data: Optional historical data to provide context for time series
-            fill_missing: Whether to attempt to fill missing values/context
+            fill_missing: Accepted for backwards compatibility and currently
+                inert. This formatter never fabricates history: when the data is
+                too short for the configured lookback it raises so the caller can
+                supply real context. Missing *values* inside otherwise sufficient
+                history are handled in-graph by `MissingValueHandlerLayer`, via
+                the feature's `missing_value_config`.
             to_tensors: Whether to convert the output to TensorFlow tensors
 
         Returns:
@@ -250,7 +255,7 @@ class TimeSeriesInferenceFormatter(InferenceFormatter):
         sort_columns = set()
         group_columns = set()
 
-        for feature_name, requirements in self.min_history_requirements.items():
+        for requirements in self.min_history_requirements.values():
             if requirements["sort_by"]:
                 needs_sorting = True
                 sort_columns.add(requirements["sort_by"])
@@ -328,7 +333,7 @@ class TimeSeriesInferenceFormatter(InferenceFormatter):
             if reqs["sort_by"]:
                 feature_req.append(
                     f"    * Must be sorted by: {reqs['sort_by']} "
-                    + f"({'ascending' if reqs['sort_ascending'] else 'descending'})",
+                    f"({'ascending' if reqs['sort_ascending'] else 'descending'})",
                 )
 
             if reqs["group_by"]:
@@ -373,24 +378,48 @@ class TimeSeriesInferenceFormatter(InferenceFormatter):
         history: dict,
         future_dates: list,
         group_id: str | None = None,
-        steps: int = 1,
+        steps: int | None = None,
     ) -> pd.DataFrame:
-        """Generate data frames for multi-step forecasting.
+        """Generate a placeholder frame for multi-step forecasting.
 
-        This method prepares a sequence of data frames for multi-step forecasting
-        where each prediction becomes part of the history for the next step.
+        The returned frame carries one row per forecast step, with the sort
+        column filled from ``future_dates`` and every time series feature set to
+        NaN. Callers fill each row in turn with their model's prediction, so the
+        row becomes part of the history for the following step.
 
         Args:
-            history: Historical data dictionary or DataFrame
-            future_dates: List of dates for future predictions
-            group_id: Optional group identifier (e.g., store_id) if using grouped time series
-            steps: Number of steps to forecast
+            history: Historical data dictionary or DataFrame. It is validated
+                against the minimum history each configured feature needs.
+            future_dates: List of dates for future predictions.
+            group_id: Optional group identifier (e.g. store_id) if using grouped
+                time series.
+            steps: Number of steps to forecast. Defaults to every date in
+                ``future_dates``.
 
         Returns:
-            DataFrame with placeholder rows for each future step
+            DataFrame with placeholder rows for each future step.
+
+        Raises:
+            ValueError: If the preprocessor has no time series features, if the
+                feature has no sort column, if ``steps`` asks for more rows than
+                ``future_dates`` provides, or if ``history`` is too short for the
+                configured lookback.
         """
         if not self.time_series_features:
             raise ValueError("No time series features found in the preprocessor")
+
+        future_dates = list(future_dates)
+        if steps is not None:
+            if steps > len(future_dates):
+                raise ValueError(
+                    f"Requested {steps} forecast steps but only "
+                    f"{len(future_dates)} future date(s) were supplied.",
+                )
+            future_dates = future_dates[:steps]
+
+        # The history has to satisfy the same lookback the preprocessor needs,
+        # otherwise the frame built here cannot be fed back through it.
+        self._check_history_requirements(self._convert_to_dict(history))
 
         # Get the first time series feature to determine sort and group columns
         feature_name = next(iter(self.time_series_features))

@@ -255,12 +255,12 @@ class TSFreshFeatureLayer(Layer):
         """Compute statistical features for a single time series."""
         results = []
 
-        # Handle NaN values
-        if self.drop_na:
-            series = series[~np.isnan(series)]
-        else:
-            # Replace NaN with 0
-            series = np.nan_to_num(series, nan=0.0)
+        # Handle NaN values: drop them, or replace them with 0.
+        series = (
+            series[~np.isnan(series)]
+            if self.drop_na
+            else np.nan_to_num(series, nan=0.0)
+        )
 
         # Skip empty series
         if len(series) == 0:
@@ -347,11 +347,15 @@ class TSFreshFeatureLayer(Layer):
                 x = np.arange(len(series))
                 if len(x) > 1:
                     # Add a column of ones for the intercept
-                    X = np.vstack([x, np.ones(len(x))]).T
+                    design_matrix = np.vstack([x, np.ones(len(x))]).T
 
                     # Solve the least squares problem
                     try:
-                        slope, intercept = np.linalg.lstsq(X, series, rcond=None)[0]
+                        slope, intercept = np.linalg.lstsq(
+                            design_matrix,
+                            series,
+                            rcond=None,
+                        )[0]
                         results.append(np.array([slope, intercept]))
                     except np.linalg.LinAlgError:
                         results.append(np.array([0.0, 0.0]))

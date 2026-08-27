@@ -102,7 +102,7 @@ class UnstackLayer(tf.keras.layers.Layer):
             List of output shapes
         """
         shapes = []
-        for i in range(input_shape[self.axis]):
+        for _ in range(input_shape[self.axis]):
             shape = list(input_shape)
             del shape[self.axis]
             shapes.append(tuple(shape))
@@ -418,7 +418,7 @@ class FeatureMoE(keras.layers.Layer):
 
         # Apply each expert to all features
         expert_outputs = []
-        for i, expert in enumerate(self.experts):
+        for expert in self.experts:
             expert_output = (
                 expert(inputs, training=False)
                 if self.freeze_experts

@@ -86,7 +86,7 @@ class NumericalEmbedding(tf.keras.layers.Layer):
         self.dropout = (
             tf.keras.layers.Dropout(self.dropout_rate)
             if self.dropout_rate > 0
-            else lambda x, training: x
+            else lambda x, **kwargs: x  # no-op matching the Dropout call signature
         )
         if self.use_batch_norm:
             self.batch_norm = tf.keras.layers.TimeDistributed(
