@@ -197,46 +197,55 @@ class DistributionTransformLayer(tf.keras.layers.Layer):
         )
         tf.keras.layers.Layer.build(self, input_shape)
 
-    def _compute_statistics(
+    def _percentile(self, x_sorted: tf.Tensor, q: float) -> tf.Tensor:
+        """Compute a percentile of a pre-sorted tensor along its first axis.
+
+        Uses linear interpolation between the two neighbouring ranks, matching
+        NumPy's default ``percentile`` behaviour. The computation stays free of
+        Python-level branching so that it also works in graph mode, where the
+        batch size is a tensor rather than an ``int``.
+
+        Args:
+            x_sorted: Tensor already sorted along axis 0.
+            q: Percentile to compute, expressed as a fraction in [0, 1].
+
+        Returns:
+            Tensor of per-feature percentiles, with the batch axis removed.
+        """
+        n = tf.shape(x_sorted)[0]
+        position = tf.cast(q, tf.float32) * tf.cast(n - 1, tf.float32)
+        lower_idx = tf.cast(tf.floor(position), tf.int32)
+        upper_idx = tf.minimum(lower_idx + 1, n - 1)
+        fraction = position - tf.floor(position)
+
+        lower = tf.gather(x_sorted, lower_idx, axis=0)
+        upper = tf.gather(x_sorted, upper_idx, axis=0)
+        return lower + (upper - lower) * tf.cast(fraction, x_sorted.dtype)
+
+    def _compute_robust_statistics(
         self, x: KerasTensor
     ) -> tuple[KerasTensor, KerasTensor, KerasTensor, KerasTensor]:
-        """Compute statistics for the input tensor.
+        """Compute order statistics for the input tensor.
 
         Args:
             x: Input tensor
 
         Returns:
-            tuple of (min, max, median, interquartile_range)
+            tuple of (min, max, median, interquartile_range), each computed
+            per feature along the batch axis.
         """
         # Compute min and max along each feature dimension
         x_min = ops.min(x, axis=0, keepdims=True)
         x_max = ops.max(x, axis=0, keepdims=True)
 
-        # For median and IQR, we need to sort the values
-        # This is an approximation since Keras doesn't have direct percentile functions
-        x_sorted = ops.sort(x, axis=0)
-        n = ops.shape(x)[0]
-
-        # Compute median (50th percentile)
-        median_idx = n // 2
-        if n % 2 == 0:
-            # Even number of elements, average the middle two
-            median = (x_sorted[median_idx - 1] + x_sorted[median_idx]) / 2.0
-        else:
-            # Odd number of elements, take the middle one
-            median = x_sorted[median_idx]
-
-        # Compute 25th and 75th percentiles for IQR
-        q1_idx = n // 4
-        q3_idx = (3 * n) // 4
-        q1 = x_sorted[q1_idx]
-        q3 = x_sorted[q3_idx]
-
-        # Compute IQR
-        iqr = q3 - q1
+        # Median and quartiles are read off the sorted values.
+        x_sorted = tf.sort(x, axis=0)
+        median = self._percentile(x_sorted, 0.5)
+        q1 = self._percentile(x_sorted, 0.25)
+        q3 = self._percentile(x_sorted, 0.75)
 
         # Add small epsilon to IQR to avoid division by zero
-        iqr = ops.maximum(iqr, self.epsilon)
+        iqr = ops.maximum(q3 - q1, self.epsilon)
 
         return x_min, x_max, median, iqr
 
@@ -624,42 +633,24 @@ class DistributionTransformLayer(tf.keras.layers.Layer):
             return (x - min_val) / denom
 
         def apply_robust_scale():
-            # Robust scaling using median and interquartile range
-            # For TensorFlow, approximate with percentiles
-            median = tf.reduce_mean(x)
-            q1 = tf.reduce_mean(
-                tf.where(
-                    tf.argsort(x) < tf.reduce_mean(tf.shape(x)), x, tf.zeros_like(x)
-                )
-            )
-            q3 = tf.reduce_mean(
-                tf.where(
-                    tf.argsort(x) > tf.reduce_mean(tf.shape(x)), x, tf.zeros_like(x)
-                )
-            )
-            iqr = q3 - q1
+            # Robust scaling: centre on the per-feature median and divide by the
+            # per-feature interquartile range, so outliers do not dominate.
+            _, _, median, iqr = self._compute_robust_statistics(x)
 
-            # Avoid division by zero
+            # Avoid division by zero for constant features.
             iqr = tf.where(tf.abs(iqr) < self.epsilon, tf.ones_like(iqr), iqr)
 
             return (x - median) / iqr
 
         def apply_quantile():
-            # Quantile transformation (approximation)
-            # Simple quantile normalization for now
-            original_shape = tf.shape(x)
-            flattened = tf.reshape(x, [-1])
-            ranks = tf.argsort(tf.argsort(flattened))
-            n = tf.shape(flattened)[0]
+            # Rank-based quantile transformation, computed per feature so that
+            # features on different scales are not pooled into a single ranking.
+            # Ranks are mapped to [-1, 1] rather than through an exact normal
+            # inverse CDF: the order is preserved and the output stays bounded.
+            ranks = tf.argsort(tf.argsort(x, axis=0), axis=0)
+            n = tf.shape(x)[0]
             quantiles = (tf.cast(ranks, tf.float32) + 0.5) / tf.cast(n, tf.float32)
-
-            # Apply simplified normal inverse CDF approximation
-            # Instead of trying to compute exact normal inverse CDF, apply a simpler transform
-            # that preserves the rank order but has more stable shape handling
-            scaled_quantiles = 2.0 * quantiles - 1.0  # Map [0,1] to [-1,1]
-
-            # Reshape to original shape
-            return tf.reshape(scaled_quantiles, original_shape)
+            return tf.cast(2.0 * quantiles - 1.0, x.dtype)  # Map [0,1] to [-1,1]
 
         # Create a dictionary of transform types to functions
         transform_functions = {

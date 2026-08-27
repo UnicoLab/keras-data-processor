@@ -132,6 +132,26 @@ class FeaturePreprocessor:
             step = ProcessingStep(layer_creator=layer_creator, **layer_kwargs)
             self.pipeline.add_step(step=step)
 
+    def _run_dynamic(self, input_data):
+        """Run the dynamic pipeline over a single tensor and return its output.
+
+        The dynamic pipeline keys its data by layer name, so the input is handed
+        to the first layer under that layer's name and the last layer's output is
+        returned.
+
+        Args:
+            input_data: The tensor (or symbolic Keras tensor) to process.
+
+        Returns:
+            The output of the final layer, or ``input_data`` if there are no layers.
+        """
+        if not self.layers:
+            return input_data
+
+        dynamic_pipeline = DynamicPreprocessingPipeline(self.layers)
+        output_dict = dynamic_pipeline.transform({self.layers[0].name: input_data})
+        return output_dict[self.layers[-1].name]
+
     def chain(self, input_layer) -> tf.keras.layers.Layer:
         """
         Chains the processing steps starting from the given input_layer.
@@ -141,14 +161,7 @@ class FeaturePreprocessor:
         """
         if not self.use_dynamic:
             return self.pipeline.chain(input_layer)
-        else:
-            dynamic_pipeline = DynamicPreprocessingPipeline(self.layers)
-            # In the dynamic case, we use a dict for the input.
-            output_dict = dynamic_pipeline.initialize_and_transform(
-                {"input": input_layer}
-            )
-            # Return the transformed data at key "input" (or adjust as needed).
-            return output_dict.get("input", input_layer)
+        return self._run_dynamic(input_layer)
 
     def transform(self, input_data: tf.Tensor) -> tf.Tensor:
         """
@@ -163,9 +176,4 @@ class FeaturePreprocessor:
         """
         if not self.use_dynamic:
             return self.pipeline.transform(input_data)
-        else:
-            dynamic_pipeline = DynamicPreprocessingPipeline(self.layers)
-            output_dict = dynamic_pipeline.initialize_and_transform(
-                {"input": input_data}
-            )
-            return output_dict.get("input", input_data)
+        return self._run_dynamic(input_data)

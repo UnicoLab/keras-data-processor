@@ -935,10 +935,21 @@ class PreprocessingModel:
             feature: Feature object with settings
         """
         logger.info(f"Using distribution-aware encoding for {feature_name}")
-        # Check if manually specified distribution is provided
-        _prefered_distribution = feature.kwargs.get("prefered_distribution")
+        # Check if manually specified distribution is provided. `NumericalFeature`
+        # exposes it as an attribute; the two kwargs spellings are accepted so
+        # that configs written against older releases keep working.
+        _prefered_distribution = (
+            getattr(feature, "preferred_distribution", None)
+            or feature.kwargs.get("preferred_distribution")
+            or feature.kwargs.get("prefered_distribution")
+        )
         if _prefered_distribution is not None:
-            logger.info(f"Using manually specified distribution for {feature_name}")
+            if isinstance(_prefered_distribution, Enum):
+                _prefered_distribution = _prefered_distribution.value
+            logger.info(
+                f"Using manually specified distribution '{_prefered_distribution}' "
+                f"for {feature_name}"
+            )
         else:
             logger.info(f"Using automatic distribution detection for {feature_name}")
 
