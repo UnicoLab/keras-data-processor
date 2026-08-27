@@ -1,5 +1,4 @@
-"""
-Preprocessor Module for Keras Data Processor.
+"""Preprocessor Module for Keras Data Processor.
 
 This module provides a preprocessing model that can handle various types of features
 and transformations for machine learning pipelines.
@@ -14,7 +13,7 @@ from collections.abc import Callable, Generator
 from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
 from functools import wraps
-from typing import Any, List, Optional, Tuple
+from typing import Any
 from pathlib import Path
 import json
 import numpy as np
@@ -144,7 +143,8 @@ class FeatureSpaceConverter:
         self.time_series_features = []  # Add time series features list
 
     def _init_features_specs(
-        self, features_specs: dict[str, FeatureType | str]
+        self,
+        features_specs: dict[str, FeatureType | str],
     ) -> dict[str, Feature]:
         """Format the features space into a dictionary.
 
@@ -202,7 +202,8 @@ class FeatureSpaceConverter:
                     FeatureType.STRING_CATEGORICAL,
                 }:
                     feature_instance = CategoricalFeature(
-                        name=name, feature_type=feature_type
+                        name=name,
+                        feature_type=feature_type,
                     )
                 elif feature_type == FeatureType.TEXT:
                     feature_instance = TextFeature(name=name, feature_type=feature_type)
@@ -211,7 +212,8 @@ class FeatureSpaceConverter:
                 elif feature_type == FeatureType.TIME_SERIES:
                     # Create TimeSeriesFeature instance
                     feature_instance = TimeSeriesFeature(
-                        name=name, feature_type=feature_type
+                        name=name,
+                        feature_type=feature_type,
                     )
                 elif feature_type == FeatureType.PASSTHROUGH:
                     # Get dtype from kwargs if provided
@@ -221,17 +223,19 @@ class FeatureSpaceConverter:
                         else tf.float32
                     )
                     feature_instance = PassthroughFeature(
-                        name=name, feature_type=feature_type, dtype=dtype
+                        name=name,
+                        feature_type=feature_type,
+                        dtype=dtype,
                     )
                 else:
                     raise ValueError(
-                        f"Unsupported feature type for feature '{name}': {spec}"
+                        f"Unsupported feature type for feature '{name}': {spec}",
                     )
 
             # Adding custom pipelines
             if isinstance(spec, Feature):
                 logger.info(
-                    f"Adding custom preprocessors to the object: {spec.preprocessors}"
+                    f"Adding custom preprocessors to the object: {spec.preprocessors}",
                 )
                 feature_instance.preprocessors = spec.preprocessors
                 feature_instance.kwargs = spec.kwargs
@@ -526,7 +530,8 @@ class PreprocessingModel:
         return wrapper
 
     def _init_features_specs(
-        self, features_specs: dict[str, FeatureType | str]
+        self,
+        features_specs: dict[str, FeatureType | str],
     ) -> None:
         """Initialize the features specifications for the model.
 
@@ -538,7 +543,7 @@ class PreprocessingModel:
             logger.debug(f"Features specs: {features_specs}")
             fsc = FeatureSpaceConverter()
             self.features_specs = fsc._init_features_specs(
-                features_specs=features_specs
+                features_specs=features_specs,
             )
             logger.debug(f"Features specs normalized: {self.features_specs}")
             self.numeric_features = fsc.numeric_features
@@ -628,7 +633,7 @@ class PreprocessingModel:
         _feature = self.features_specs[feature_name]
         for preprocessor_step in feature.preprocessors:
             logger.info(
-                f"Adding custom {preprocessor_step} for {feature_name}, {_feature.kwargs}"
+                f"Adding custom {preprocessor_step} for {feature_name}, {_feature.kwargs}",
             )
             preprocessor.add_processing_step(
                 layer_class=preprocessor_step,
@@ -638,7 +643,9 @@ class PreprocessingModel:
         return preprocessor
 
     def _process_feature_batch(
-        self, batch: list[tuple[str, dict]], feature_type: str
+        self,
+        batch: list[tuple[str, dict]],
+        feature_type: str,
     ) -> None:
         """Process a batch of features in parallel.
 
@@ -746,7 +753,7 @@ class PreprocessingModel:
                 date_features.append((feature_name, stats))
             elif feature_name in self.time_series_features:
                 time_series_features.append(
-                    (feature_name, stats)
+                    (feature_name, stats),
                 )  # Handle time series features
             elif feature_name in self.passthrough_features:
                 passthrough_features.append((feature_name, stats))
@@ -770,7 +777,10 @@ class PreprocessingModel:
                 self._process_feature_batch(features, feature_type)
 
     def _create_feature_preprocessor(
-        self, feature_name: str, feature: Feature, preprocessor: FeaturePreprocessor
+        self,
+        feature_name: str,
+        feature: Feature,
+        preprocessor: FeaturePreprocessor,
     ) -> FeaturePreprocessor:
         """Create feature-specific preprocessor with custom steps if defined.
 
@@ -788,7 +798,7 @@ class PreprocessingModel:
         # Check if feature has specific preprocessing steps defined
         if hasattr(feature, "preprocessors") and feature.preprocessors:
             logger.info(
-                f"Custom Preprocessors detected for {feature_name}: {feature.preprocessors}"
+                f"Custom Preprocessors detected for {feature_name}: {feature.preprocessors}",
             )
             return self._add_custom_steps(
                 preprocessor=preprocessor,
@@ -798,7 +808,10 @@ class PreprocessingModel:
         return preprocessor
 
     def _apply_feature_selection(
-        self, feature_name: str, output_pipeline: tf.Tensor, feature_type: str
+        self,
+        feature_name: str,
+        output_pipeline: tf.Tensor,
+        feature_type: str,
     ) -> tf.Tensor:
         """Apply feature selection to a processed feature if enabled for its type.
 
@@ -864,7 +877,10 @@ class PreprocessingModel:
 
     @_monitor_performance
     def _add_pipeline_numeric(
-        self, feature_name: str, input_layer, stats: dict
+        self,
+        feature_name: str,
+        input_layer,
+        stats: dict,
     ) -> None:
         """Add a numeric preprocessing step to the pipeline.
 
@@ -888,7 +904,9 @@ class PreprocessingModel:
 
         # Check for custom preprocessors
         preprocessor = self._create_feature_preprocessor(
-            feature_name=feature_name, feature=_feature, preprocessor=preprocessor
+            feature_name=feature_name,
+            feature=_feature,
+            preprocessor=preprocessor,
         )
 
         # If no custom preprocessors, apply standard preprocessing based on feature type
@@ -896,17 +914,25 @@ class PreprocessingModel:
             # Check if distribution-aware encoding is enabled
             if self.use_distribution_aware:
                 self._add_distribution_aware_encoding(
-                    preprocessor, feature_name, _feature
+                    preprocessor,
+                    feature_name,
+                    _feature,
                 )
             else:
                 self._add_numeric_type_processing(
-                    preprocessor, feature_name, _feature, stats
+                    preprocessor,
+                    feature_name,
+                    _feature,
+                    stats,
                 )
 
         # Check for advanced numerical embedding.
         if self.use_advanced_numerical_embedding:
             self._add_advanced_numerical_embedding(
-                preprocessor, feature_name, _feature, input_layer
+                preprocessor,
+                feature_name,
+                _feature,
+                input_layer,
             )
 
         # Process the feature
@@ -948,7 +974,7 @@ class PreprocessingModel:
                 _prefered_distribution = _prefered_distribution.value
             logger.info(
                 f"Using manually specified distribution '{_prefered_distribution}' "
-                f"for {feature_name}"
+                f"for {feature_name}",
             )
         else:
             logger.info(f"Using automatic distribution detection for {feature_name}")
@@ -997,7 +1023,8 @@ class PreprocessingModel:
         elif feature.feature_type == FeatureType.FLOAT_RESCALED:
             logger.debug("Adding Float Rescaled Feature")
             rescaling_scale = feature.kwargs.get(
-                "scale", 1.0
+                "scale",
+                1.0,
             )  # Default scale is 1.0 if not specified
             preprocessor.add_processing_step(
                 layer_class="Rescaling",
@@ -1079,7 +1106,10 @@ class PreprocessingModel:
 
     @_monitor_performance
     def _add_pipeline_categorical(
-        self, feature_name: str, input_layer, stats: dict
+        self,
+        feature_name: str,
+        input_layer,
+        stats: dict,
     ) -> None:
         """Add a categorical preprocessing step to the pipeline.
 
@@ -1102,7 +1132,9 @@ class PreprocessingModel:
 
         # Check for custom preprocessors
         preprocessor = self._create_feature_preprocessor(
-            feature_name=feature_name, feature=_feature, preprocessor=preprocessor
+            feature_name=feature_name,
+            feature=_feature,
+            preprocessor=preprocessor,
         )
 
         # If no custom preprocessors, apply standard categorical preprocessing
@@ -1151,7 +1183,7 @@ class PreprocessingModel:
         if not vocab:
             logger.warning(
                 f"Empty vocabulary for categorical feature '{feature_name}'. "
-                "Using fallback vocabulary with placeholder values."
+                "Using fallback vocabulary with placeholder values.",
             )
             # Provide a minimal vocabulary with unknown/placeholder values
             vocab = ["<UNK>"]
@@ -1191,10 +1223,10 @@ class PreprocessingModel:
             _custom_embedding_size = feature.kwargs.get("embedding_size")
             _vocab_size = len(vocab) + 1
             logger.debug(
-                f"Custom embedding size: {_custom_embedding_size}, vocab size: {_vocab_size}"
+                f"Custom embedding size: {_custom_embedding_size}, vocab size: {_vocab_size}",
             )
             emb_size = _custom_embedding_size or feature._embedding_size_rule(
-                nr_categories=_vocab_size
+                nr_categories=_vocab_size,
             )
             logger.debug(f"Feature {feature_name} using embedding size: {emb_size}")
             preprocessor.add_processing_step(
@@ -1225,7 +1257,8 @@ class PreprocessingModel:
 
             # Get salt value from kwargs (try hash_salt first, then salt)
             salt_value = feature.kwargs.get(
-                "hash_salt", feature.kwargs.get("salt", None)
+                "hash_salt",
+                feature.kwargs.get("salt", None),
             )
 
             # Ensure salt_value is in the correct format (integer or tuple of 2 integers)
@@ -1234,7 +1267,7 @@ class PreprocessingModel:
                 salt_value = hash(salt_value)
 
             logger.debug(
-                f"Feature {feature_name} using hashing with {hash_bucket_size} buckets and salt={salt_value}"
+                f"Feature {feature_name} using hashing with {hash_bucket_size} buckets and salt={salt_value}",
             )
 
             # Add hashing layer
@@ -1369,7 +1402,8 @@ class PreprocessingModel:
             if _feature.feature_type == FeatureType.DATE:
                 logger.debug("Adding Date Parsing layer")
                 date_format = _feature.kwargs.get(
-                    "format", "YYYY-MM-DD"
+                    "format",
+                    "YYYY-MM-DD",
                 )  # Default format if not specified
                 preprocessor.add_processing_step(
                     layer_creator=PreprocessorLayerFactory.date_parsing_layer,
@@ -1442,7 +1476,10 @@ class PreprocessingModel:
             self._store_passthrough_unprocessed(feature_name, input_layer, _feature)
 
     def _process_passthrough_for_output(
-        self, feature_name: str, input_layer, _feature
+        self,
+        feature_name: str,
+        input_layer,
+        _feature,
     ) -> None:
         """Process passthrough feature minimally for inclusion in main output."""
         # initializing preprocessor
@@ -1451,7 +1488,7 @@ class PreprocessingModel:
         # Check if feature has specific preprocessing steps defined
         if hasattr(_feature, "preprocessors") and _feature.preprocessors:
             logger.info(
-                f"Custom Preprocessors detected for passthrough: {_feature.preprocessors}"
+                f"Custom Preprocessors detected for passthrough: {_feature.preprocessors}",
             )
             self._add_custom_steps(
                 preprocessor=preprocessor,
@@ -1489,11 +1526,14 @@ class PreprocessingModel:
         self.processed_features[feature_name] = _output_pipeline
 
     def _store_passthrough_unprocessed(
-        self, feature_name: str, input_layer, _feature
+        self,
+        feature_name: str,
+        input_layer,
+        _feature,
     ) -> None:
         """Store passthrough feature unprocessed for separate access."""
         logger.info(
-            f"Storing passthrough feature '{feature_name}' unprocessed for separate access"
+            f"Storing passthrough feature '{feature_name}' unprocessed for separate access",
         )
         # Store the raw input layer for this passthrough feature
         # This will be available in the model outputs but not processed by KDP
@@ -1501,7 +1541,10 @@ class PreprocessingModel:
 
     @_monitor_performance
     def _add_pipeline_time_series(
-        self, feature_name: str, input_layer, feature
+        self,
+        feature_name: str,
+        input_layer,
+        feature,
     ) -> None:
         """Add a time series preprocessing step to the pipeline.
 
@@ -1516,7 +1559,7 @@ class PreprocessingModel:
         # Check if feature has specific preprocessing steps defined
         if hasattr(feature, "preprocessors") and feature.preprocessors:
             logger.info(
-                f"Custom Preprocessors detected for time series: {feature.preprocessors}"
+                f"Custom Preprocessors detected for time series: {feature.preprocessors}",
             )
             self._add_custom_steps(
                 preprocessor=preprocessor,
@@ -1550,7 +1593,7 @@ class PreprocessingModel:
                         name=layer_name,
                     )
                     logger.info(
-                        f"Adding time series layer: {layer_name} to the pipeline"
+                        f"Adding time series layer: {layer_name} to the pipeline",
                     )
 
         # Process the feature
@@ -1698,7 +1741,9 @@ class PreprocessingModel:
         logger.info("Concatenating outputs mode enabled")
 
     def _combine_all_features(
-        self, concat_num: Optional[tf.Tensor], concat_cat: Optional[tf.Tensor]
+        self,
+        concat_num: tf.Tensor | None,
+        concat_cat: tf.Tensor | None,
     ) -> None:
         """Combine numeric and categorical features.
 
@@ -1722,13 +1767,13 @@ class PreprocessingModel:
             # Check if we have passthrough features that are stored separately
             if self.passthrough_outputs and not self.include_passthrough_in_output:
                 logger.info(
-                    "No processed features to concatenate - only passthrough features exist"
+                    "No processed features to concatenate - only passthrough features exist",
                 )
                 self.concat_all = None  # Will be handled in model building
             else:
                 raise ValueError("No features available for concatenation")
 
-    def _group_features_by_type(self) -> Tuple[List, List]:
+    def _group_features_by_type(self) -> tuple[list, list]:
         """Group processed features by type for concatenation.
 
         Returns:
@@ -1774,17 +1819,17 @@ class PreprocessingModel:
                     feature_dtype = getattr(feature_spec, "dtype", tf.float32)
                     if feature_dtype == tf.string:
                         logger.debug(
-                            f"Adding {feature_name} to string passthrough features"
+                            f"Adding {feature_name} to string passthrough features",
                         )
                         passthrough_features_string.append(feature)
                     else:
                         logger.debug(
-                            f"Adding {feature_name} to numeric passthrough features"
+                            f"Adding {feature_name} to numeric passthrough features",
                         )
                         passthrough_features_numeric.append(feature)
                 else:
                     logger.debug(
-                        f"Skipping {feature_name} from concatenation (stored separately)"
+                        f"Skipping {feature_name} from concatenation (stored separately)",
                     )
             else:
                 logger.warning(f"Unknown feature type for {feature_name}")
@@ -1801,8 +1846,9 @@ class PreprocessingModel:
         return numeric_features, categorical_features
 
     def _concatenate_numeric_features(
-        self, numeric_features: List
-    ) -> Optional[tf.Tensor]:
+        self,
+        numeric_features: list,
+    ) -> tf.Tensor | None:
         """Concatenate numeric features and apply global embedding if needed.
 
         Args:
@@ -1834,8 +1880,9 @@ class PreprocessingModel:
         return concat_num
 
     def _concatenate_categorical_features(
-        self, categorical_features: List
-    ) -> Optional[tf.Tensor]:
+        self,
+        categorical_features: list,
+    ) -> tf.Tensor | None:
         """Concatenate categorical features.
 
         Args:
@@ -1847,15 +1894,15 @@ class PreprocessingModel:
         if not categorical_features:
             return None
 
-        concat_cat = tf.keras.layers.Concatenate(
+        return tf.keras.layers.Concatenate(
             name="ConcatenateCategorical",
             axis=-1,
         )(categorical_features)
 
-        return concat_cat
-
     def _apply_multi_resolution_attention(
-        self, concat_num: tf.Tensor, concat_cat: tf.Tensor
+        self,
+        concat_num: tf.Tensor,
+        concat_cat: tf.Tensor,
     ) -> None:
         """Apply multi-resolution tabular attention to features.
 
@@ -1907,8 +1954,8 @@ class PreprocessingModel:
     def _apply_standard_attention(
         self,
         placement: str,
-        concat_num: Optional[tf.Tensor],
-        concat_cat: Optional[tf.Tensor],
+        concat_num: tf.Tensor | None,
+        concat_cat: tf.Tensor | None,
     ) -> None:
         """Apply standard tabular attention based on placement.
 
@@ -1945,7 +1992,9 @@ class PreprocessingModel:
             self._apply_categorical_attention(concat_num, concat_cat)
 
     def _apply_numeric_attention(
-        self, concat_num: Optional[tf.Tensor], concat_cat: Optional[tf.Tensor]
+        self,
+        concat_num: tf.Tensor | None,
+        concat_cat: tf.Tensor | None,
     ) -> None:
         """Apply attention to numeric features.
 
@@ -1983,7 +2032,9 @@ class PreprocessingModel:
             self.concat_all = concat_num
 
     def _apply_categorical_attention(
-        self, concat_num: Optional[tf.Tensor], concat_cat: Optional[tf.Tensor]
+        self,
+        concat_num: tf.Tensor | None,
+        concat_cat: tf.Tensor | None,
     ) -> None:
         """Apply attention to categorical features.
 
@@ -2021,7 +2072,9 @@ class PreprocessingModel:
             self.concat_all = concat_cat
 
     def _apply_tabular_attention(
-        self, concat_num: Optional[tf.Tensor], concat_cat: Optional[tf.Tensor]
+        self,
+        concat_num: tf.Tensor | None,
+        concat_cat: tf.Tensor | None,
     ) -> None:
         """Apply tabular attention based on configuration.
 
@@ -2037,7 +2090,7 @@ class PreprocessingModel:
                 self._apply_multi_resolution_attention(concat_num, concat_cat)
             else:
                 logger.warning(
-                    "Multi-resolution attention requires both numerical and categorical features"
+                    "Multi-resolution attention requires both numerical and categorical features",
                 )
                 if concat_num is not None:
                     self.concat_all = concat_num
@@ -2046,11 +2099,15 @@ class PreprocessingModel:
         else:
             # Original tabular attention logic with 3D tensor support
             self._apply_standard_attention(
-                self.tabular_attention_placement, concat_num, concat_cat
+                self.tabular_attention_placement,
+                concat_num,
+                concat_cat,
             )
 
     def _apply_transformer_blocks(
-        self, concat_num: Optional[tf.Tensor], concat_cat: Optional[tf.Tensor]
+        self,
+        concat_num: tf.Tensor | None,
+        concat_cat: tf.Tensor | None,
     ) -> None:
         """Apply transformer blocks based on configuration.
 
@@ -2067,7 +2124,9 @@ class PreprocessingModel:
             self._apply_all_features_transformer()
 
     def _apply_categorical_transformer(
-        self, concat_num: Optional[tf.Tensor], concat_cat: tf.Tensor
+        self,
+        concat_num: tf.Tensor | None,
+        concat_cat: tf.Tensor,
     ) -> None:
         """Apply transformer blocks to categorical features.
 
@@ -2076,7 +2135,7 @@ class PreprocessingModel:
             concat_cat: Concatenated categorical features
         """
         logger.info(
-            f"Adding transformer blocks to categorical features: #{self.transfo_nr_blocks}"
+            f"Adding transformer blocks to categorical features: #{self.transfo_nr_blocks}",
         )
         transformed = concat_cat
         for block_idx in range(self.transfo_nr_blocks):
@@ -2105,7 +2164,7 @@ class PreprocessingModel:
     def _apply_all_features_transformer(self) -> None:
         """Apply transformer blocks to all features."""
         logger.info(
-            f"Adding transformer blocks to all features: #{self.transfo_nr_blocks}"
+            f"Adding transformer blocks to all features: #{self.transfo_nr_blocks}",
         )
         for block_idx in range(self.transfo_nr_blocks):
             self.concat_all = PreprocessorLayerFactory.transformer_block_layer(
@@ -2123,7 +2182,7 @@ class PreprocessingModel:
             self._apply_feature_moe_dict_mode()
 
         outputs = OrderedDict(
-            [(k, None) for k in self.inputs if k in self.processed_features]
+            [(k, None) for k in self.inputs if k in self.processed_features],
         )
         outputs.update(OrderedDict(self.processed_features))
         self.outputs = outputs
@@ -2136,14 +2195,14 @@ class PreprocessingModel:
         and updates the processed_features dictionary with the enhanced versions.
         """
         logger.info(
-            f"Applying Feature-wise Mixture of Experts (dict mode) with {self.feature_moe_num_experts} experts"
+            f"Applying Feature-wise Mixture of Experts (dict mode) with {self.feature_moe_num_experts} experts",
         )
 
         # Get feature names and corresponding processed features
         feature_names = []
         individual_features = []
 
-        for feature_name in self.inputs.keys():
+        for feature_name in self.inputs:
             if feature_name in self.processed_features:
                 feature_names.append(feature_name)
                 individual_features.append(self.processed_features[feature_name])
@@ -2154,7 +2213,7 @@ class PreprocessingModel:
 
         # Stack the features along a new axis
         stacked_features = StackFeaturesLayer(name="stacked_features_for_moe_dict")(
-            individual_features
+            individual_features,
         )
 
         # Create the Feature MoE layer
@@ -2193,15 +2252,14 @@ class PreprocessingModel:
         logger.info("Feature MoE applied successfully in dict mode")
 
     def _apply_feature_moe(self):
-        """
-        Enhances the combined feature representation using Feature-wise Mixture of Experts (MoE)
+        """Enhances the combined feature representation using Feature-wise Mixture of Experts (MoE)
         in concatenated output mode.
 
         This method creates a Feature MoE layer that routes features to different experts
         based on their content, improving the overall representational power.
         """
         logger.info(
-            f"Applying Feature-wise Mixture of Experts (concat mode) with {self.feature_moe_num_experts} experts"
+            f"Applying Feature-wise Mixture of Experts (concat mode) with {self.feature_moe_num_experts} experts",
         )
 
         # Check if we have concatenated features to work with
@@ -2252,19 +2310,21 @@ class PreprocessingModel:
         if hasattr(self, "numeric_features") and self.numeric_features:
             for feature_name in self.numeric_features:
                 if hasattr(self, f"pipeline_{feature_name}") and hasattr(
-                    getattr(self, f"pipeline_{feature_name}"), "output"
+                    getattr(self, f"pipeline_{feature_name}"),
+                    "output",
                 ):
                     feature_outputs.append(
-                        getattr(self, f"pipeline_{feature_name}").output
+                        getattr(self, f"pipeline_{feature_name}").output,
                     )
 
         if hasattr(self, "categorical_features") and self.categorical_features:
             for feature_name in self.categorical_features:
                 if hasattr(self, f"pipeline_{feature_name}") and hasattr(
-                    getattr(self, f"pipeline_{feature_name}"), "output"
+                    getattr(self, f"pipeline_{feature_name}"),
+                    "output",
                 ):
                     feature_outputs.append(
-                        getattr(self, f"pipeline_{feature_name}").output
+                        getattr(self, f"pipeline_{feature_name}").output,
                     )
 
         # If we couldn't get individual features, we'll split the concatenated tensor
@@ -2281,7 +2341,7 @@ class PreprocessingModel:
 
         # Stack the features for the MoE layer
         stacked_features = StackFeaturesLayer(name="stacked_features_for_moe")(
-            feature_outputs
+            feature_outputs,
         )
 
         # Create and apply the Feature MoE layer
@@ -2297,7 +2357,7 @@ class PreprocessingModel:
 
         # Concatenate the processed features back together
         self.concat_all = keras.layers.Concatenate(axis=-1, name="concat_moe_features")(
-            unstacked_features
+            unstacked_features,
         )
 
     @_monitor_performance
@@ -2337,7 +2397,7 @@ class PreprocessingModel:
             # Validate inputs
             if not self.features_specs:
                 raise ValueError(
-                    "No features specified. Please provide features_specs."
+                    "No features specified. Please provide features_specs.",
                 )
 
             # preparing statistics if they do not exist
@@ -2345,7 +2405,7 @@ class PreprocessingModel:
                 logger.info("No input features_stats detected !")
                 if not hasattr(self, "stats_instance"):
                     raise ValueError(
-                        "stats_instance not initialized. Cannot calculate features stats."
+                        "stats_instance not initialized. Cannot calculate features stats.",
                     )
                 self.features_stats = self.stats_instance.main()
                 logger.debug(f"Features Stats were calculated: {self.features_stats}")
@@ -2370,23 +2430,28 @@ class PreprocessingModel:
                             feature_stats = None
                             if feature_name in self.numeric_features:
                                 feature_stats = self.features_stats.get(
-                                    "numeric_stats", {}
+                                    "numeric_stats",
+                                    {},
                                 ).get(feature_name, {})
                             elif feature_name in self.categorical_features:
                                 feature_stats = self.features_stats.get(
-                                    "categorical_stats", {}
+                                    "categorical_stats",
+                                    {},
                                 ).get(feature_name, {})
                             elif feature_name in self.text_features:
                                 feature_stats = self.features_stats.get("text", {}).get(
-                                    feature_name, {}
+                                    feature_name,
+                                    {},
                                 )
                             elif feature_name in self.date_features:
                                 feature_stats = self.features_stats.get("date", {}).get(
-                                    feature_name, {}
+                                    feature_name,
+                                    {},
                                 )
                             elif feature_name in self.time_series_features:
                                 feature_stats = self.features_stats.get(
-                                    "time_series", {}
+                                    "time_series",
+                                    {},
                                 ).get(feature_name, {})
 
                             if feature_stats:
@@ -2407,7 +2472,8 @@ class PreprocessingModel:
 
                         self._add_input_column(feature_name=feature_name, dtype=dtype)
                         self._add_input_signature(
-                            feature_name=feature_name, dtype=dtype
+                            feature_name=feature_name,
+                            dtype=dtype,
                         )
 
             # Process features in batches by type
@@ -2423,7 +2489,8 @@ class PreprocessingModel:
             categorical_stats = self.features_stats.get("categorical_stats", {})
             text_stats = self.features_stats.get("text", {})
             time_series_stats = self.features_stats.get(
-                "time_series", {}
+                "time_series",
+                {},
             )  # Add time series stats
 
             for f_name in self.numeric_features:
@@ -2472,7 +2539,7 @@ class PreprocessingModel:
                     and not self.include_passthrough_in_output
                 ):
                     logger.info(
-                        "Only passthrough features detected - creating passthrough-only model"
+                        "Only passthrough features detected - creating passthrough-only model",
                     )
                     self.model = tf.keras.Model(
                         inputs=self.inputs,
@@ -2482,7 +2549,7 @@ class PreprocessingModel:
                     _output_dims = "passthrough_only"
                 elif self.concat_all is None:
                     raise ValueError(
-                        "No features were concatenated. Check if features were properly processed."
+                        "No features were concatenated. Check if features were properly processed.",
                     )
                 else:
                     # Determine outputs based on passthrough settings
@@ -2496,7 +2563,7 @@ class PreprocessingModel:
                             "passthrough": self.passthrough_outputs,
                         }
                         logger.info(
-                            f"Creating model with separate passthrough outputs: {list(self.passthrough_outputs.keys())}"
+                            f"Creating model with separate passthrough outputs: {list(self.passthrough_outputs.keys())}",
                         )
                     else:
                         # Standard concat output
@@ -2516,7 +2583,7 @@ class PreprocessingModel:
             else:  # DICT mode
                 if not self.outputs and not self.passthrough_outputs:
                     raise ValueError(
-                        "No outputs were created. Check if features were properly processed."
+                        "No outputs were created. Check if features were properly processed.",
                     )
 
                 # Include passthrough outputs in dict mode if they exist
@@ -2524,13 +2591,13 @@ class PreprocessingModel:
                 if self.passthrough_outputs and not self.include_passthrough_in_output:
                     final_outputs.update(self.passthrough_outputs)
                     logger.info(
-                        f"Adding passthrough outputs to dict mode: {list(self.passthrough_outputs.keys())}"
+                        f"Adding passthrough outputs to dict mode: {list(self.passthrough_outputs.keys())}",
                     )
                 elif not final_outputs:
                     # Only passthrough features exist
                     final_outputs = self.passthrough_outputs
                     logger.info(
-                        "Only passthrough features detected - creating passthrough-only dict model"
+                        "Only passthrough features detected - creating passthrough-only dict model",
                     )
 
                 self.model = tf.keras.Model(
@@ -2553,7 +2620,8 @@ class PreprocessingModel:
                 "categorical": self.features_stats.get("categorical", {}),
                 "text": self.features_stats.get("text", {}),
                 "time_series": self.features_stats.get(
-                    "time_series", {}
+                    "time_series",
+                    {},
                 ),  # Add time series stats
             }
 
@@ -2567,7 +2635,7 @@ class PreprocessingModel:
                     "signature": self.signature,
                     "output_dims": _output_dims,
                     "feature_stats": feature_stats,
-                }
+                },
             )
 
         except Exception as e:
@@ -2589,7 +2657,7 @@ class PreprocessingModel:
         """
         if not hasattr(self, "model") or self.model is None:
             raise ValueError(
-                "Model must be built before saving. Call build_preprocessor() first."
+                "Model must be built before saving. Call build_preprocessor() first.",
             )
 
         # Create the directory if it doesn't exist
@@ -2659,7 +2727,7 @@ class PreprocessingModel:
         logger.info(f"Model loaded from {model_path}")
 
         # Load metadata
-        with open(metadata_path, "r") as f:
+        with open(metadata_path) as f:
             metadata = json.load(f)
         logger.info(f"Model metadata loaded from {metadata_path}")
 
@@ -2679,7 +2747,7 @@ class PreprocessingModel:
         """
         if not hasattr(self, "model") or self.model is None:
             raise ValueError(
-                "Model must be built before prediction. Call build_preprocessor() first."
+                "Model must be built before prediction. Call build_preprocessor() first.",
             )
 
         # Process each batch of data
@@ -2748,12 +2816,12 @@ class PreprocessingModel:
         if isinstance(data, dict):
             for key, value in data.items():
                 if (
-                    not isinstance(value, (list, np.ndarray))
+                    not isinstance(value, list | np.ndarray)
                     and key in time_series_features
                 ):
                     raise ValueError(
                         f"Time series feature '{key}' requires historical context. "
-                        f"Please provide a list or array of values, not a single value."
+                        f"Please provide a list or array of values, not a single value.",
                     )
 
         # For each time series feature, check that we have enough data
@@ -2765,7 +2833,7 @@ class PreprocessingModel:
                 if isinstance(data, dict) and feature.group_by not in data:
                     raise ValueError(
                         f"Time series feature '{feature_name}' requires grouping by "
-                        f"'{feature.group_by}', but this column is not in the data."
+                        f"'{feature.group_by}', but this column is not in the data.",
                     )
 
             # Check sorting column exists if needed
@@ -2773,7 +2841,7 @@ class PreprocessingModel:
                 if isinstance(data, dict) and feature.sort_by not in data:
                     raise ValueError(
                         f"Time series feature '{feature_name}' requires sorting by "
-                        f"'{feature.sort_by}', but this column is not in the data."
+                        f"'{feature.sort_by}', but this column is not in the data.",
                     )
 
             # Calculate minimum required history
@@ -2818,12 +2886,12 @@ class PreprocessingModel:
             # Check data size if it's a dict with lists/arrays
             if isinstance(data, dict) and feature_name in data:
                 feature_data = data[feature_name]
-                if isinstance(feature_data, (list, np.ndarray)):
+                if isinstance(feature_data, list | np.ndarray):
                     data_length = len(feature_data)
                     if data_length < min_history:
                         raise ValueError(
                             f"Time series feature '{feature_name}' requires at least {min_history} "
-                            f"historical data points, but only {data_length} were provided."
+                            f"historical data points, but only {data_length} were provided.",
                         )
 
         return True
@@ -2869,12 +2937,12 @@ class SplitLayer(keras.layers.Layer):
                 start_indices.append(start_indices[-1] + dim)
 
             # Create [(start_idx, dim), ...] format
-            split_indices = list(zip(start_indices, self.feature_dims))
+            split_indices = list(zip(start_indices, self.feature_dims, strict=False))
             return [inputs[:, i : i + dim] for i, dim in split_indices]
 
         # Handle case where feature_dims is already a list of tuples (i, dim)
         if (
-            isinstance(self.feature_dims[0], (list, tuple))
+            isinstance(self.feature_dims[0], list | tuple)
             and len(self.feature_dims[0]) == 2
         ):
             return [inputs[:, i : i + dim] for i, dim in self.feature_dims]
@@ -2882,27 +2950,27 @@ class SplitLayer(keras.layers.Layer):
         # If we get here, feature_dims is in an invalid format
         raise ValueError(
             f"Invalid feature_dims format: {self.feature_dims}. "
-            "Expected a list of integers or a list of (index, dimension) tuples."
+            "Expected a list of integers or a list of (index, dimension) tuples.",
         )
 
-    def get_config(self):
+    def get_config(self) -> dict:
         config = super().get_config()
         config.update({"feature_dims": self.feature_dims})
         return config
 
-    def compute_output_shape(self, input_shape):
+    def compute_output_shape(self, input_shape) -> tuple:
         # Return a list of shapes for each split
         if not self.feature_dims:
             return [input_shape]
         elif isinstance(self.feature_dims[0], int):
             return [(input_shape[0], dim) for dim in self.feature_dims]
         elif (
-            isinstance(self.feature_dims[0], (list, tuple))
+            isinstance(self.feature_dims[0], list | tuple)
             and len(self.feature_dims[0]) == 2
         ):
             return [(input_shape[0], dim) for _, dim in self.feature_dims]
         else:
             raise ValueError(
                 f"Invalid feature_dims format: {self.feature_dims}. "
-                "Expected a list of integers or a list of (index, dimension) tuples."
+                "Expected a list of integers or a list of (index, dimension) tuples.",
             )

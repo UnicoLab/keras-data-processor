@@ -78,9 +78,7 @@ def _assert_same_output(expected, actual) -> None:
                 np.asarray(expected[key]), np.asarray(actual[key]), atol=1e-5
             )
     else:
-        np.testing.assert_allclose(
-            np.asarray(expected), np.asarray(actual), atol=1e-5
-        )
+        np.testing.assert_allclose(np.asarray(expected), np.asarray(actual), atol=1e-5)
 
 
 @pytest.mark.parametrize(

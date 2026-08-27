@@ -1,10 +1,9 @@
-"""
-Automatic model configuration module that provides a simple interface for
+"""Automatic model configuration module that provides a simple interface for
 analyzing datasets and generating optimal preprocessing configurations.
 """
 
 from pathlib import Path
-from typing import Dict, Any, Optional, Union
+from typing import Any
 
 from loguru import logger
 
@@ -13,15 +12,14 @@ from kdp.model_advisor import ModelAdvisor
 
 
 def auto_configure(
-    data_path: Union[str, Path],
-    features_specs: Optional[Dict[str, Any]] = None,
+    data_path: str | Path,
+    features_specs: dict[str, Any] | None = None,
     batch_size: int = 50_000,
     save_stats: bool = True,
-    stats_path: Optional[Union[str, Path]] = None,
+    stats_path: str | Path | None = None,
     overwrite_stats: bool = False,
-) -> Dict[str, Any]:
-    """
-    Automatically analyze a dataset and generate optimal preprocessing configurations.
+) -> dict[str, Any]:
+    """Automatically analyze a dataset and generate optimal preprocessing configurations.
 
     This is a high-level function that handles all the complexity of analyzing your dataset
     and recommending the best preprocessing strategies. It will:
@@ -53,10 +51,7 @@ def auto_configure(
     """
     # Convert paths to Path objects
     data_path = Path(data_path)
-    if stats_path is None:
-        stats_path = Path("features_stats.json")
-    else:
-        stats_path = Path(stats_path)
+    stats_path = Path("features_stats.json") if stats_path is None else Path(stats_path)
 
     # Initialize statistics calculator
     stats_calculator = DatasetStatistics(

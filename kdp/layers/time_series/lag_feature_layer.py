@@ -17,7 +17,12 @@ class LagFeatureLayer(Layer):
     """
 
     def __init__(
-        self, lag_indices, drop_na=True, fill_value=0.0, keep_original=False, **kwargs
+        self,
+        lag_indices,
+        drop_na=True,
+        fill_value=0.0,
+        keep_original=False,
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self.lag_indices = lag_indices
@@ -25,7 +30,7 @@ class LagFeatureLayer(Layer):
         self.fill_value = fill_value
         self.keep_original = keep_original
 
-    def build(self, input_shape):
+    def build(self, input_shape) -> None:
         super().build(input_shape)
 
     def call(self, inputs):
@@ -54,7 +59,9 @@ class LagFeatureLayer(Layer):
         for lag in self.lag_indices:
             # Create a shifted version of the input tensor
             padded_inputs = tf.pad(
-                inputs, [[lag, 0], [0, 0]], constant_values=self.fill_value
+                inputs,
+                [[lag, 0], [0, 0]],
+                constant_values=self.fill_value,
             )
             lagged = padded_inputs[:-lag]
 
@@ -75,7 +82,7 @@ class LagFeatureLayer(Layer):
 
         return result
 
-    def compute_output_shape(self, input_shape):
+    def compute_output_shape(self, input_shape) -> tuple:
         output_shape = list(input_shape)
         feature_dim = 0
 
@@ -101,7 +108,7 @@ class LagFeatureLayer(Layer):
 
         return tuple(output_shape)
 
-    def get_config(self):
+    def get_config(self) -> dict:
         config = {
             "lag_indices": self.lag_indices,
             "drop_na": self.drop_na,

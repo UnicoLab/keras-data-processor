@@ -12,7 +12,7 @@ print("Testing KDP's Advanced Factory Methods\n" + "=" * 40)
 n_samples = 1000
 # Log-normal distribution (right-skewed)
 log_normal_data = np.random.lognormal(mean=0, sigma=1, size=(n_samples, 1)).astype(
-    np.float32
+    np.float32,
 )
 # Bimodal distribution
 bimodal_data = np.concatenate(
@@ -30,13 +30,17 @@ print("-" * 40)
 
 # Create distribution transform layers with different transformations
 log_transform = PreprocessorLayerFactory.distribution_transform_layer(
-    transform_type="log", name="log_transform"
+    transform_type="log",
+    name="log_transform",
 )
 box_cox_transform = PreprocessorLayerFactory.distribution_transform_layer(
-    transform_type="box-cox", lambda_param=0.5, name="box_cox_transform"
+    transform_type="box-cox",
+    lambda_param=0.5,
+    name="box_cox_transform",
 )
 auto_transform = PreprocessorLayerFactory.distribution_transform_layer(
-    transform_type="auto", name="auto_transform"
+    transform_type="auto",
+    name="auto_transform",
 )
 
 # Apply transformations
@@ -49,16 +53,16 @@ print(f"Log-transformed data shape: {log_transformed.shape}")
 print(f"Box-Cox transformed data shape: {box_cox_transformed.shape}")
 print(f"Auto-transformed data shape: {auto_transformed.shape}")
 print(
-    f"Original data range: [{np.min(log_normal_data):.2f}, {np.max(log_normal_data):.2f}]"
+    f"Original data range: [{np.min(log_normal_data):.2f}, {np.max(log_normal_data):.2f}]",
 )
 print(
-    f"Log-transformed range: [{np.min(log_transformed):.2f}, {np.max(log_transformed):.2f}]"
+    f"Log-transformed range: [{np.min(log_transformed):.2f}, {np.max(log_transformed):.2f}]",
 )
 print(
-    f"Box-Cox transformed range: [{np.min(box_cox_transformed):.2f}, {np.max(box_cox_transformed):.2f}]"
+    f"Box-Cox transformed range: [{np.min(box_cox_transformed):.2f}, {np.max(box_cox_transformed):.2f}]",
 )
 print(
-    f"Auto-transformed range: [{np.min(auto_transformed):.2f}, {np.max(auto_transformed):.2f}]"
+    f"Auto-transformed range: [{np.min(auto_transformed):.2f}, {np.max(auto_transformed):.2f}]",
 )
 
 print("\n2. Testing Numerical Embedding Layer")
@@ -86,7 +90,8 @@ print("-" * 40)
 
 # Create multi-feature data
 multi_feature_data = np.concatenate(
-    [log_normal_data, uniform_data, bimodal_data], axis=1
+    [log_normal_data, uniform_data, bimodal_data],
+    axis=1,
 )
 print(f"Multi-feature data shape: {multi_feature_data.shape}")
 
@@ -121,7 +126,9 @@ print("-" * 40)
 
 # Create gated residual network layer
 grn = PreprocessorLayerFactory.gated_residual_network_layer(
-    units=8, dropout_rate=0.2, name="grn"
+    units=8,
+    dropout_rate=0.2,
+    name="grn",
 )
 
 # Apply GRN

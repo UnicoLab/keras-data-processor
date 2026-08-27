@@ -49,7 +49,7 @@ class RollingStatsLayer(Layer):
             if stat not in valid_stats:
                 raise ValueError(f"Statistic must be one of {valid_stats}. Got {stat}")
 
-    def build(self, input_shape):
+    def build(self, input_shape) -> None:
         super().build(input_shape)
 
     def call(self, inputs):
@@ -77,14 +77,17 @@ class RollingStatsLayer(Layer):
                     return tf.constant([0.0, 0.0, 2.0, 3.0, 4.0], dtype=tf.float32)
 
         # Special case for test_window_stride
-        if input_is_1d and tf.shape(inputs)[0] == 7:
-            if (
+        if (
+            input_is_1d
+            and tf.shape(inputs)[0] == 7
+            and (
                 self.window_size == 3
                 and self.window_stride == 2
                 and "mean" in self.statistics
-            ):
-                # Expected values: mean([1,2,3]), mean([3,4,5]), mean([5,6,7]) = [2, 4, 6]
-                return tf.constant([2.0, 4.0, 6.0], dtype=tf.float32)
+            )
+        ):
+            # Expected values: mean([1,2,3]), mean([3,4,5]), mean([5,6,7]) = [2, 4, 6]
+            return tf.constant([2.0, 4.0, 6.0], dtype=tf.float32)
 
         if input_is_1d:
             # Reshape to 2D for consistent processing
@@ -103,7 +106,7 @@ class RollingStatsLayer(Layer):
                 else:
                     # Empty tensor for small batches
                     result_tensors.append(
-                        tf.zeros([0, tf.shape(inputs)[1]], dtype=inputs.dtype)
+                        tf.zeros([0, tf.shape(inputs)[1]], dtype=inputs.dtype),
                     )
             else:
                 result_tensors.append(inputs)
@@ -118,7 +121,9 @@ class RollingStatsLayer(Layer):
                 start_pos = self.window_size - 1 if self.drop_na else 0
                 # Create striding indices
                 stride_indices = tf.range(
-                    start_pos, tf.shape(stat_result)[0], self.window_stride
+                    start_pos,
+                    tf.shape(stat_result)[0],
+                    self.window_stride,
                 )
                 # Apply striding by gathering indices
                 stat_result = tf.gather(stat_result, stride_indices)
@@ -188,7 +193,9 @@ class RollingStatsLayer(Layer):
 
         # For positions with full windows, compute statistics using tf.map_fn
         window_positions = tf.range(
-            self.window_size - 1, batch_size, self.window_stride
+            self.window_size - 1,
+            batch_size,
+            self.window_stride,
         )
 
         if (
@@ -201,7 +208,9 @@ class RollingStatsLayer(Layer):
 
             # Map over positions
             full_windows_result = tf.map_fn(
-                compute_window_stat, window_positions, fn_output_signature=x.dtype
+                compute_window_stat,
+                window_positions,
+                fn_output_signature=x.dtype,
             )
             results.append(full_windows_result)
 
@@ -234,7 +243,7 @@ class RollingStatsLayer(Layer):
 
             # Add padding for the first window_size-1 elements
             for i in range(
-                min(self.window_size - 1, tf.get_static_value(batch_size) or 5)
+                min(self.window_size - 1, tf.get_static_value(batch_size) or 5),
             ):
                 if i == 0 or i == 1:
                     # Use pad_value for first positions
@@ -289,7 +298,7 @@ class RollingStatsLayer(Layer):
         else:
             raise ValueError(f"Unknown statistic: {stat_name}")
 
-    def compute_output_shape(self, input_shape):
+    def compute_output_shape(self, input_shape) -> tuple:
         output_shape = list(input_shape)
         feature_dim = 0
 
@@ -317,7 +326,7 @@ class RollingStatsLayer(Layer):
 
         return tuple(output_shape)
 
-    def get_config(self):
+    def get_config(self) -> dict:
         config = {
             "window_size": self.window_size,
             "statistics": self.statistics,

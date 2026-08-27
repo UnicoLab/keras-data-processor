@@ -90,7 +90,7 @@ def example_1_basic_pipeline():
     data = np.array([[1.0], [2.0], [3.0], [4.0], [5.0]], dtype=np.float32)
     # Input features need to have keys matching layer names for processing
     dataset = tf.data.Dataset.from_tensor_slices(
-        {"scaling": data, "normalization": data}
+        {"scaling": data, "normalization": data},
     ).batch(2)
 
     # Process the data
@@ -126,7 +126,7 @@ def example_2_dependency_pipeline():
     dataset = tf.data.Dataset.from_tensor_slices(
         {
             "scaling": data,
-        }
+        },
     ).batch(2)
 
     # Process the data
@@ -152,7 +152,9 @@ class EncodingLayer(tf.keras.layers.Layer):
     def build(self, input_shape):
         # Create a lookup table for categorical values
         self.lookup_table = tf.keras.layers.StringLookup(
-            vocabulary=self.vocabulary, mask_token=None, num_oov_indices=1
+            vocabulary=self.vocabulary,
+            mask_token=None,
+            num_oov_indices=1,
         )
         super().build(input_shape)
 
@@ -178,7 +180,8 @@ def example_3_multiple_features():
 
     # Create layers for categorical features
     categorical_encoding = EncodingLayer(
-        vocabulary=["A", "B", "C"], name="categorical_encoding"
+        vocabulary=["A", "B", "C"],
+        name="categorical_encoding",
     )
     categorical_pipeline = DynamicPreprocessingPipeline([categorical_encoding])
 
@@ -190,11 +193,11 @@ def example_3_multiple_features():
 
     # Create separate datasets for each feature type
     numeric_dataset = tf.data.Dataset.from_tensor_slices(
-        {"numeric_scaling": numeric_data}
+        {"numeric_scaling": numeric_data},
     ).batch(2)
 
     categorical_dataset = tf.data.Dataset.from_tensor_slices(
-        {"categorical_encoding": categorical_data}
+        {"categorical_encoding": categorical_data},
     ).batch(2)
 
     # Process each dataset through its respective pipeline
@@ -232,7 +235,7 @@ def example_4_keras_integration():
 
     # Create preprocessing pipeline
     preprocess_pipeline = DynamicPreprocessingPipeline(
-        [scaling_layer, normalization_layer]
+        [scaling_layer, normalization_layer],
     )
 
     # Create a simple Keras model
@@ -251,7 +254,7 @@ def example_4_keras_integration():
 
     # Create dataset and preprocess
     dataset = tf.data.Dataset.from_tensor_slices(
-        {"scaling": data, "normalization": data, "y": targets}
+        {"scaling": data, "normalization": data, "y": targets},
     ).batch(2)
 
     processed_dataset = preprocess_pipeline.process(dataset)
@@ -279,7 +282,7 @@ def example_4_keras_integration():
     # Make a prediction with preprocessing
     test_data = np.array([[6.0]], dtype=np.float32)
     test_dataset = tf.data.Dataset.from_tensor_slices(
-        {"scaling": test_data, "normalization": test_data}
+        {"scaling": test_data, "normalization": test_data},
     ).batch(1)
 
     processed_test = preprocess_pipeline.process(test_dataset)
@@ -306,7 +309,8 @@ def example_5_normalize_transform():
 
     # Create a log transform layer using our factory
     log_transform = PreprocessorLayerFactory.distribution_transform_layer(
-        transform_type="log", name="log_transform"
+        transform_type="log",
+        name="log_transform",
     )
 
     # Create our pipeline with both layers

@@ -5,8 +5,7 @@ from kdp.layers.numerical_embedding_layer import NumericalEmbedding
 
 @tf.keras.utils.register_keras_serializable(package="kdp.layers")
 class GlobalNumericalEmbedding(tf.keras.layers.Layer):
-    """
-    Global NumericalEmbedding processes concatenated numeric features.
+    """Global NumericalEmbedding processes concatenated numeric features.
     It applies an inner NumericalEmbedding over the flattened input and then
     performs global pooling (average or max) to produce a compact representation.
     """
@@ -42,19 +41,19 @@ class GlobalNumericalEmbedding(tf.keras.layers.Layer):
         self.global_num_bins = global_num_bins
 
         # Ensure initializer parameters are Python scalars, lists, or numpy arrays.
-        if not isinstance(global_init_min, (list, tuple, np.ndarray)):
+        if not isinstance(global_init_min, list | tuple | np.ndarray):
             try:
                 global_init_min = float(global_init_min)
             except Exception:
                 raise ValueError(
-                    "init_min must be a Python scalar, list, tuple or numpy array"
+                    "init_min must be a Python scalar, list, tuple or numpy array",
                 )
-        if not isinstance(global_init_max, (list, tuple, np.ndarray)):
+        if not isinstance(global_init_max, list | tuple | np.ndarray):
             try:
                 global_init_max = float(global_init_max)
             except Exception:
                 raise ValueError(
-                    "init_max must be a Python scalar, list, tuple or numpy array"
+                    "init_max must be a Python scalar, list, tuple or numpy array",
                 )
         self.global_init_min = global_init_min
         self.global_init_max = global_init_max
@@ -75,11 +74,11 @@ class GlobalNumericalEmbedding(tf.keras.layers.Layer):
         )
         if self.global_pooling == "average":
             self.global_pooling_layer = tf.keras.layers.GlobalAveragePooling1D(
-                name="global_avg_pool"
+                name="global_avg_pool",
             )
         elif self.global_pooling == "max":
             self.global_pooling_layer = tf.keras.layers.GlobalMaxPooling1D(
-                name="global_max_pool"
+                name="global_max_pool",
             )
         else:
             raise ValueError(f"Unsupported pooling method: {self.global_pooling}")
@@ -103,13 +102,12 @@ class GlobalNumericalEmbedding(tf.keras.layers.Layer):
 
         self.inner_embedding.build((input_shape[0], flat_dim))
         self.global_pooling_layer.build(
-            (input_shape[0], flat_dim, self.global_embedding_dim)
+            (input_shape[0], flat_dim, self.global_embedding_dim),
         )
         super().build(input_shape)
 
     def call(self, inputs: tf.Tensor, training: bool = False) -> tf.Tensor:
-        """
-        Expects inputs with shape (batch, ...) and flattens them (except for the batch dim).
+        """Expects inputs with shape (batch, ...) and flattens them (except for the batch dim).
         Then, the inner embedding produces a 3D output (batch, num_features, embedding_dim),
         which is finally pooled to yield (batch, embedding_dim).
         """
@@ -119,14 +117,13 @@ class GlobalNumericalEmbedding(tf.keras.layers.Layer):
         # Pass through the inner advanced embedding.
         x_embedded = self.inner_embedding(inputs, training=training)
         # Global pooling over numeric features axis.
-        x_pooled = self.global_pooling_layer(x_embedded)
-        return x_pooled
+        return self.global_pooling_layer(x_embedded)
 
-    def compute_output_shape(self, input_shape):
+    def compute_output_shape(self, input_shape) -> tuple:
         # Regardless of the input shape, the output shape is (batch_size, embedding_dim)
         return (input_shape[0], self.global_embedding_dim)
 
-    def get_config(self):
+    def get_config(self) -> dict:
         config = super().get_config()
         config.update(
             {
@@ -138,10 +135,10 @@ class GlobalNumericalEmbedding(tf.keras.layers.Layer):
                 "global_dropout_rate": self.global_dropout_rate,
                 "global_use_batch_norm": self.global_use_batch_norm,
                 "global_pooling": self.global_pooling,
-            }
+            },
         )
         return config
 
     @classmethod
-    def from_config(cls, config):
+    def from_config(cls, config) -> "GlobalNumericalEmbedding":
         return cls(**config)

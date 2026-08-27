@@ -56,7 +56,7 @@ class MissingValueHandlerLayer(Layer):
         ]
         if self.strategy not in valid_strategies:
             raise ValueError(
-                f"Strategy must be one of {valid_strategies}, got {strategy}"
+                f"Strategy must be one of {valid_strategies}, got {strategy}",
             )
 
     def call(self, inputs, training=None):
@@ -94,7 +94,7 @@ class MissingValueHandlerLayer(Layer):
                     inputs_tensor.shape[2] * 2
                 )  # Original features + indicators
                 result.set_shape(
-                    [inputs_tensor.shape[0], inputs_tensor.shape[1], feature_dim]
+                    [inputs_tensor.shape[0], inputs_tensor.shape[1], feature_dim],
                 )
             else:
                 result.set_shape(inputs_tensor.shape)
@@ -131,8 +131,7 @@ class MissingValueHandlerLayer(Layer):
         # Add indicators if requested
         if self.add_indicators:
             indicators = missing_mask.astype(np.float32)
-            result = np.stack([imputed, indicators], axis=-1)
-            return result
+            return np.stack([imputed, indicators], axis=-1)
         else:
             return imputed
 
@@ -180,8 +179,7 @@ class MissingValueHandlerLayer(Layer):
         # Add indicators if requested
         if self.add_indicators:
             indicators = missing_mask.astype(np.float32)
-            result = np.concatenate([imputed, indicators], axis=-1)
-            return result
+            return np.concatenate([imputed, indicators], axis=-1)
         else:
             return imputed
 
@@ -413,10 +411,11 @@ class MissingValueHandlerLayer(Layer):
                 else:
                     # No valid values at this phase, fall back to rolling mean
                     self._numpy_rolling_mean_imputation(
-                        data[b : b + 1], mask[b : b + 1]
+                        data[b : b + 1],
+                        mask[b : b + 1],
                     )
 
-    def compute_output_shape(self, input_shape):
+    def compute_output_shape(self, input_shape) -> tuple:
         """Compute output shape of the layer."""
         if len(input_shape) == 2:
             # (batch_size, time_steps)
@@ -432,7 +431,7 @@ class MissingValueHandlerLayer(Layer):
             else:
                 return input_shape
 
-    def get_config(self):
+    def get_config(self) -> dict:
         """Return layer configuration."""
         config = {
             "mask_value": self.mask_value,

@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
 import tensorflow as tf
-from typing import Dict, Union
 
 
 class InferenceFormatter:
@@ -23,8 +22,10 @@ class InferenceFormatter:
         self.preprocessor = preprocessor
 
     def prepare_inference_data(
-        self, data: Union[Dict, pd.DataFrame], to_tensors: bool = False
-    ) -> Union[Dict, Dict[str, tf.Tensor]]:
+        self,
+        data: dict | pd.DataFrame,
+        to_tensors: bool = False,
+    ) -> dict | dict[str, tf.Tensor]:
         """Prepare data for inference based on preprocessor requirements.
 
         Args:
@@ -43,7 +44,7 @@ class InferenceFormatter:
 
         return inference_data
 
-    def _convert_to_dict(self, data: Union[Dict, pd.DataFrame]) -> Dict:
+    def _convert_to_dict(self, data: dict | pd.DataFrame) -> dict:
         """Convert data to dictionary format required by the preprocessor.
 
         Args:
@@ -61,13 +62,13 @@ class InferenceFormatter:
         elif isinstance(data, dict):
             # Ensure all values are lists/arrays
             for key, value in data.items():
-                if not isinstance(value, (list, np.ndarray)):
+                if not isinstance(value, list | np.ndarray):
                     data[key] = [value]  # Convert single values to lists
             return data
         else:
             raise ValueError(f"Unsupported data type: {type(data)}")
 
-    def _convert_to_tensors(self, data: Dict) -> Dict[str, tf.Tensor]:
+    def _convert_to_tensors(self, data: dict) -> dict[str, tf.Tensor]:
         """Convert dictionary data to TensorFlow tensors.
 
         Args:
@@ -81,9 +82,9 @@ class InferenceFormatter:
             # Infer the type from the values
             if (
                 len(value) > 0
-                and isinstance(value[0], (int, float, np.number, type(None)))
+                and isinstance(value[0], int | float | np.number | type(None))
                 or any(
-                    isinstance(v, (int, float, np.number)) or pd.isna(v) for v in value
+                    isinstance(v, int | float | np.number) or pd.isna(v) for v in value
                 )
             ):
                 # Numerical features as float32

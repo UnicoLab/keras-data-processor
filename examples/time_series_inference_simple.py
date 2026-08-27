@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 """
 Simplified example showing how to use the TimeSeriesInferenceFormatter to prepare data for time series inference.
@@ -57,7 +56,7 @@ def generate_sample_data(num_stores=3, days_per_store=30, add_noise=True):
                     "date": date.strftime("%Y-%m-%d"),
                     "store_id": f"Store_{store_id}",
                     "sales": sales,
-                }
+                },
             )
 
     return pd.DataFrame(all_data)
@@ -85,15 +84,13 @@ def create_preprocessor(train_data):
     }
 
     # Create a preprocessor
-    preprocessor = PreprocessingModel(
+    return PreprocessingModel(
         path_data=train_data,
         features_specs=features_specs,
     )
 
     # We don't need to build the preprocessor for this simplified example
     # We just need the features_specs and validation methods
-
-    return preprocessor
 
 
 def example_single_point_inference_failure(preprocessor, formatter):
@@ -145,7 +142,7 @@ def example_with_historical_context(formatter, train_data):
     # In a real example, we would now call preprocessor.predict(formatted_data)
     # but for this simplified example, we'll just show that the data is ready for prediction
     print(
-        f"Data is ready for prediction! Last data point date: {formatted_data['date'][-1]}"
+        f"Data is ready for prediction! Last data point date: {formatted_data['date'][-1]}",
     )
 
 

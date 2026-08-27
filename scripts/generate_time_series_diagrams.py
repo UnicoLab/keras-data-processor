@@ -84,7 +84,8 @@ def main():
 
     # Basic time series
     create_simple_model(
-        "basic_time_series", tf.keras.layers.LayerNormalization(name="time_series_norm")
+        "basic_time_series",
+        tf.keras.layers.LayerNormalization(name="time_series_norm"),
     )
 
     # Time series with lag features
@@ -102,7 +103,10 @@ def main():
     create_simple_model(
         "time_series_moving_average",
         MovingAverageLayer(
-            periods=[3, 7, 14], keep_original=True, name="moving_average", drop_na=False
+            periods=[3, 7, 14],
+            keep_original=True,
+            name="moving_average",
+            drop_na=False,
         ),
     )
 
@@ -110,7 +114,10 @@ def main():
     create_simple_model(
         "time_series_differencing",
         DifferencingLayer(
-            order=1, keep_original=True, name="differencing", drop_na=False
+            order=1,
+            keep_original=True,
+            name="differencing",
+            drop_na=False,
         ),
     )
 
@@ -137,10 +144,16 @@ def main():
                 drop_na=False,
             ),
             MovingAverageLayer(
-                periods=[7], keep_original=True, name="moving_average", drop_na=False
+                periods=[7],
+                keep_original=True,
+                name="moving_average",
+                drop_na=False,
             ),
             DifferencingLayer(
-                order=1, keep_original=True, name="differencing", drop_na=False
+                order=1,
+                keep_original=True,
+                name="differencing",
+                drop_na=False,
             ),
             RollingStatsLayer(
                 window_size=5,

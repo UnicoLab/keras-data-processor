@@ -102,18 +102,19 @@ class CategoricalAccumulator:
             self.values.assign(updated_values)
         elif new_values.dtype == tf.int32:
             updated_values = tf.unique(
-                tf.concat([self.int_values, new_values], axis=0)
+                tf.concat([self.int_values, new_values], axis=0),
             )[0]
             self.int_values.assign(updated_values)
         else:
             raise ValueError(
-                f"Unsupported data type for categorical features: {new_values.dtype}"
+                f"Unsupported data type for categorical features: {new_values.dtype}",
             )
 
     def get_unique_values(self) -> list:
         """Returns the unique categorical values accumulated so far."""
         all_values = tf.concat(
-            [self.values, tf.strings.as_string(self.int_values)], axis=0
+            [self.values, tf.strings.as_string(self.int_values)],
+            axis=0,
         )
         return tf.unique(all_values)[0].numpy().tolist()
 
@@ -146,7 +147,7 @@ class TextAccumulator:
         """
         if new_texts.dtype != tf.string:
             raise ValueError(
-                f"Unsupported data type for text features: {new_texts.dtype}"
+                f"Unsupported data type for text features: {new_texts.dtype}",
             )
 
         # Split each string into words and flatten the list
@@ -204,7 +205,7 @@ class DateAccumulator:
                 raise ValueError(
                     "Parsed date tensors must have shape [batch_size, >=4] with "
                     "columns [year, month, day_of_month, day_of_week], got shape "
-                    f"{parsed.shape}."
+                    f"{parsed.shape}.",
                 )
 
         parsed = tf.cast(parsed, tf.float32)
@@ -416,13 +417,13 @@ class DatasetStatistics:
 
             if not has_feature:
                 logger.warning(
-                    f"Feature '{feature_name}' not found in the dataset. Skipping statistics calculation."
+                    f"Feature '{feature_name}' not found in the dataset. Skipping statistics calculation.",
                 )
                 continue
 
             # Prepare for grouped processing if grouping is specified
             if feature.group_by and feature.group_by in list(
-                dataset.element_spec.keys()
+                dataset.element_spec.keys(),
             ):
                 # Process data by groups
                 group_data = {}
@@ -450,11 +451,11 @@ class DatasetStatistics:
 
                             if sort_keys is not None:
                                 group_data[group_key].append(
-                                    (sort_keys[i], feature_values[i])
+                                    (sort_keys[i], feature_values[i]),
                                 )
                             else:
                                 group_data[group_key].append(
-                                    (i, feature_values[i])
+                                    (i, feature_values[i]),
                                 )  # Use index as sort key
 
                 # Create a separate accumulator for each group and process them
@@ -464,7 +465,8 @@ class DatasetStatistics:
                     # Sort if sort_by is specified
                     if feature.sort_by:
                         pairs.sort(
-                            key=lambda x: x[0], reverse=not feature.sort_ascending
+                            key=lambda x: x[0],
+                            reverse=not feature.sort_ascending,
                         )
 
                     # Extract sorted values
@@ -502,7 +504,7 @@ class DatasetStatistics:
                         "count": int(
                             sum(
                                 acc.count.numpy() for acc in group_accumulators.values()
-                            )
+                            ),
                         ),
                         "dtype": feature.dtype.name
                         if hasattr(feature.dtype, "name")
@@ -519,7 +521,7 @@ class DatasetStatistics:
                 accumulator = WelfordAccumulator()
 
                 if feature.sort_by and feature.sort_by in list(
-                    dataset.element_spec.keys()
+                    dataset.element_spec.keys(),
                 ):
                     # Process in a streaming fashion to avoid memory issues
                     # Create buffer for sorting that can be processed in chunks
@@ -546,7 +548,8 @@ class DatasetStatistics:
                                 # Extract values and update accumulator
                                 sorted_values = [pair[1] for pair in buffer]
                                 sorted_tensor = tf.constant(
-                                    sorted_values, dtype=tf.float32
+                                    sorted_values,
+                                    dtype=tf.float32,
                                 )
                                 accumulator.update(sorted_tensor)
 
@@ -556,7 +559,8 @@ class DatasetStatistics:
                     # Process any remaining items in buffer
                     if buffer:
                         buffer.sort(
-                            key=lambda x: x[0], reverse=not feature.sort_ascending
+                            key=lambda x: x[0],
+                            reverse=not feature.sort_ascending,
                         )
                         sorted_values = [pair[1] for pair in buffer]
                         sorted_tensor = tf.constant(sorted_values, dtype=tf.float32)
@@ -631,7 +635,9 @@ class DatasetStatistics:
                     raise
 
     def _compute_feature_stats_parallel(
-        self, feature_type: str, features: list[str]
+        self,
+        feature_type: str,
+        features: list[str],
     ) -> dict[str, Any]:
         """Compute statistics for a group of features in parallel.
 
@@ -732,25 +738,29 @@ class DatasetStatistics:
         # Compute numeric statistics
         if self.numeric_features:
             stats["numeric_stats"] = self._compute_feature_stats_parallel(
-                "numeric", self.numeric_features
+                "numeric",
+                self.numeric_features,
             )
 
         # Compute categorical statistics
         if self.categorical_features:
             stats["categorical_stats"] = self._compute_feature_stats_parallel(
-                "categorical", self.categorical_features
+                "categorical",
+                self.categorical_features,
             )
 
         # Compute text statistics
         if self.text_features:
             stats["text"] = self._compute_feature_stats_parallel(
-                "text", self.text_features
+                "text",
+                self.text_features,
             )
 
         # Compute date statistics
         if self.date_features:
             stats["date"] = self._compute_feature_stats_parallel(
-                "date", self.date_features
+                "date",
+                self.date_features,
             )
 
         # Compute time series statistics
@@ -819,7 +829,7 @@ class DatasetStatistics:
         stats_path = Path(self.features_stats_path)
         if stats_path.is_file():
             logger.info(
-                f"Found columns statistics, loading as features_stats: {self.features_stats_path}"
+                f"Found columns statistics, loading as features_stats: {self.features_stats_path}",
             )
             with stats_path.open() as f:
                 self.features_stats = json.load(f)
@@ -831,7 +841,7 @@ class DatasetStatistics:
                 for _, feature_stats in stats_type.items():
                     if "dtype" in feature_stats:
                         feature_stats["dtype"] = tf.dtypes.as_dtype(
-                            feature_stats["dtype"]
+                            feature_stats["dtype"],
                         )
             logger.info("features_stats loaded ")
         else:
@@ -851,8 +861,7 @@ class DatasetStatistics:
         return stats
 
     def recommend_model_configuration(self) -> dict:
-        """
-        Analyze the computed dataset statistics and provide recommendations for optimal preprocessing.
+        """Analyze the computed dataset statistics and provide recommendations for optimal preprocessing.
 
         This method leverages the ModelAdvisor to analyze feature characteristics and suggest
         the best preprocessing strategies, layer configurations, and model parameters.
@@ -873,10 +882,10 @@ class DatasetStatistics:
         recommendations = recommend_model_configuration(self.features_stats)
 
         logger.info(
-            "Generated model configuration recommendations based on dataset statistics"
+            "Generated model configuration recommendations based on dataset statistics",
         )
         logger.info(
-            f"Recommended configuration for {len(recommendations.get('features', {}))} features"
+            f"Recommended configuration for {len(recommendations.get('features', {}))} features",
         )
 
         return recommendations

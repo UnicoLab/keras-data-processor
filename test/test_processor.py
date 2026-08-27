@@ -47,7 +47,12 @@ def generate_fake_data(features_specs: dict, num_rows: int = 10) -> pd.DataFrame
             "feat1": FeatureType.FLOAT_NORMALIZED,
             "feat2": FeatureType.STRING_CATEGORICAL,
             "feat3": NumericalFeature(name="feat1", feature_type=FeatureType.FLOAT),
-            "feat4": DateFeature(name="date", feature_type=FeatureType.DATE, date_format="%Y-%m-%d", output_format="year"),
+            "feat4": DateFeature(
+                name="date",
+                feature_type=FeatureType.DATE,
+                date_format="%Y-%m-%d",
+                output_format="year",
+            ),
             # Other features...
         }
         df = generate_fake_data(features_specs, num_rows=100)

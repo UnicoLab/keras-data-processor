@@ -9,7 +9,9 @@ from kdp.dynamic_pipeline import DynamicPreprocessingPipeline
 
 class ProcessingStep:
     def __init__(
-        self, layer_creator: Callable[..., tf.keras.layers.Layer], **layer_kwargs
+        self,
+        layer_creator: Callable[..., tf.keras.layers.Layer],
+        **layer_kwargs,
     ) -> None:
         """Initialize a processing step.
 
@@ -89,8 +91,7 @@ class Pipeline:
 
 class FeaturePreprocessor:
     def __init__(self, name: str, use_dynamic: bool = False) -> None:
-        """
-        Initializes a feature preprocessor.
+        """Initializes a feature preprocessor.
 
         Args:
             name (str): The name of the feature preprocessor.
@@ -107,10 +108,11 @@ class FeaturePreprocessor:
         self.processing_steps = []
 
     def add_processing_step(
-        self, layer_creator: Callable[..., tf.keras.layers.Layer] = None, **layer_kwargs
+        self,
+        layer_creator: Callable[..., tf.keras.layers.Layer] = None,
+        **layer_kwargs,
     ) -> None:
-        """
-        Add a preprocessing layer to the feature preprocessor pipeline.
+        """Add a preprocessing layer to the feature preprocessor pipeline.
         If using the standard pipeline, a ProcessingStep is added.
         Otherwise, the layer is added to a list for dynamic handling.
 
@@ -153,8 +155,7 @@ class FeaturePreprocessor:
         return output_dict[self.layers[-1].name]
 
     def chain(self, input_layer) -> tf.keras.layers.Layer:
-        """
-        Chains the processing steps starting from the given input_layer.
+        """Chains the processing steps starting from the given input_layer.
 
         For a static pipeline, this delegates to the internal Pipeline's chain() method.
         For the dynamic pipeline, it constructs the dynamic pipeline on the fly.
@@ -164,8 +165,7 @@ class FeaturePreprocessor:
         return self._run_dynamic(input_layer)
 
     def transform(self, input_data: tf.Tensor) -> tf.Tensor:
-        """
-        Process the input data through the pipeline.
+        """Process the input data through the pipeline.
         For the dynamic pipeline, wrap input in a dictionary and extract final output.
 
         Args:

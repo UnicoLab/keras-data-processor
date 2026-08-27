@@ -65,20 +65,20 @@ class NumericalEmbedding(tf.keras.layers.Layer):
 
         if self.num_bins is None:
             raise ValueError(
-                "num_bins must be provided to activate the discrete branch."
+                "num_bins must be provided to activate the discrete branch.",
             )
 
-    def build(self, input_shape):
+    def build(self, input_shape) -> None:
         # input_shape: (batch, num_features)
         self.num_features = input_shape[-1]
         # Continuous branch: process each feature independently using TimeDistributed MLP.
         self.cont_mlp = tf.keras.Sequential(
             [
                 tf.keras.layers.TimeDistributed(
-                    tf.keras.layers.Dense(self.mlp_hidden_units, activation="relu")
+                    tf.keras.layers.Dense(self.mlp_hidden_units, activation="relu"),
                 ),
                 tf.keras.layers.TimeDistributed(
-                    tf.keras.layers.Dense(self.embedding_dim)
+                    tf.keras.layers.Dense(self.embedding_dim),
                 ),
             ],
             name="cont_mlp",
@@ -90,7 +90,8 @@ class NumericalEmbedding(tf.keras.layers.Layer):
         )
         if self.use_batch_norm:
             self.batch_norm = tf.keras.layers.TimeDistributed(
-                tf.keras.layers.BatchNormalization(), name="cont_batch_norm"
+                tf.keras.layers.BatchNormalization(),
+                name="cont_batch_norm",
             )
         # Residual projection to match embedding_dim.
         self.residual_proj = tf.keras.layers.TimeDistributed(
@@ -190,7 +191,7 @@ class NumericalEmbedding(tf.keras.layers.Layer):
         for i in range(self.num_features):
             feat_bins = bin_indices[:, i]  # (batch,)
             feat_embed = self.bin_embeddings[i](
-                feat_bins
+                feat_bins,
             )  # i is a Python integer here.
             disc_embeddings.append(feat_embed)
         disc = tf.stack(disc_embeddings, axis=1)  # (batch, num_features, embedding_dim)
@@ -203,7 +204,7 @@ class NumericalEmbedding(tf.keras.layers.Layer):
             return tf.squeeze(output, axis=1)  # New shape: (batch, embedding_dim)
         return output
 
-    def get_config(self):
+    def get_config(self) -> dict:
         config = super().get_config()
         config.update(
             {
@@ -214,10 +215,10 @@ class NumericalEmbedding(tf.keras.layers.Layer):
                 "init_max": self.init_max,
                 "dropout_rate": self.dropout_rate,
                 "use_batch_norm": self.use_batch_norm,
-            }
+            },
         )
         return config
 
     @classmethod
-    def from_config(cls, config):
+    def from_config(cls, config) -> "NumericalEmbedding":
         return cls(**config)

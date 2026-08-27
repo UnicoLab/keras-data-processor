@@ -131,7 +131,7 @@ exclude_lines = [
 
 [tool.isort]
 profile = "black"
-line_length = 120
+line_length = 88
 multi_line_output = 3
 include_trailing_comma = true
 force_grid_wrap = 0
@@ -139,7 +139,8 @@ use_parentheses = true
 ensure_newline_before_comments = true
 
 [tool.ruff]
-line-length = 120
+# Matches the formatter default the codebase is written against.
+line-length = 88
 indent-width = 4
 target-version = "py311"
 extend-unsafe-fixes = ["D"]
@@ -245,5 +246,17 @@ line-ending = "auto"
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
+[tool.ruff.lint.pycodestyle]
+# The formatter wraps code at `line-length`; prose in docstrings and comments is
+# allowed to run wider before E501 fires.
+max-line-length = 120
+
 [tool.ruff.lint.per-file-ignores]
-"**/{test,docs}/*" = ["ALL"]
+# `*` does not cross directory separators, so the previous "**/{test,docs}/*"
+# pattern silently missed everything under test/layers/ and friends.
+"test/**" = ["ALL"]
+"docs/**" = ["ALL"]
+# Developer entry points: printing to stdout is the point, and they are not
+# part of the published API surface.
+"scripts/**" = ["T20", "ANN", "D", "S603", "S607"]
+"examples/**" = ["T20", "ANN", "D"]

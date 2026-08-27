@@ -223,7 +223,10 @@ class TextFeature(Feature):
     """TextFeature with dynamic kwargs passing."""
 
     def __init__(
-        self, name: str, feature_type: FeatureType = FeatureType.TEXT, **kwargs
+        self,
+        name: str,
+        feature_type: FeatureType = FeatureType.TEXT,
+        **kwargs,
     ) -> None:
         """Initializes a TextFeature instance.
 
@@ -241,7 +244,10 @@ class DateFeature(Feature):
     """TextFeature with dynamic kwargs passing."""
 
     def __init__(
-        self, name: str, feature_type: FeatureType = FeatureType.DATE, **kwargs
+        self,
+        name: str,
+        feature_type: FeatureType = FeatureType.DATE,
+        **kwargs,
     ) -> None:
         """Initializes a DateFeature instance.
 
@@ -389,7 +395,7 @@ class TimeSeriesFeature(Feature):
                 "is_target": self.is_target,
                 "exclude_from_input": self.exclude_from_input,
                 "input_type": self.input_type,
-            }
+            },
         )
 
     def build_layers(self):
@@ -422,7 +428,7 @@ class TimeSeriesFeature(Feature):
                     keep_original=keep_original,
                     fill_value=fill_value,
                     name=f"{self.name}_lag",
-                )
+                ),
             )
 
         # Add rolling stats layer if configured
@@ -443,7 +449,7 @@ class TimeSeriesFeature(Feature):
                     keep_original=keep_original,
                     pad_value=pad_value,
                     name=f"{self.name}_rolling_stats",
-                )
+                ),
             )
 
         # Add differencing layer if configured
@@ -460,7 +466,7 @@ class TimeSeriesFeature(Feature):
                     keep_original=keep_original,
                     fill_value=fill_value,
                     name=f"{self.name}_differencing",
-                )
+                ),
             )
 
         # Add moving average layer if configured
@@ -477,7 +483,7 @@ class TimeSeriesFeature(Feature):
                     keep_original=keep_original,
                     pad_value=pad_value,
                     name=f"{self.name}_moving_average",
-                )
+                ),
             )
 
         # Add wavelet transform layer if configured
@@ -496,13 +502,14 @@ class TimeSeriesFeature(Feature):
                     flatten_output=flatten_output,
                     drop_na=drop_na,
                     name=f"{self.name}_wavelet",
-                )
+                ),
             )
 
         # Add TSFresh feature layer if configured
         if self.tsfresh_feature_config:
             features = self.tsfresh_feature_config.get(
-                "features", ["mean", "std", "min", "max", "median"]
+                "features",
+                ["mean", "std", "min", "max", "median"],
             )
             window_size = self.tsfresh_feature_config.get("window_size", None)
             stride = self.tsfresh_feature_config.get("stride", 1)
@@ -517,13 +524,14 @@ class TimeSeriesFeature(Feature):
                     drop_na=drop_na,
                     normalize=normalize,
                     name=f"{self.name}_tsfresh",
-                )
+                ),
             )
 
         # Add calendar feature layer if configured
         if self.calendar_feature_config:
             features = self.calendar_feature_config.get(
-                "features", ["month", "day", "day_of_week", "is_weekend"]
+                "features",
+                ["month", "day", "day_of_week", "is_weekend"],
             )
             cyclic_encoding = self.calendar_feature_config.get("cyclic_encoding", True)
             input_format = self.calendar_feature_config.get("input_format", "%Y-%m-%d")
@@ -536,7 +544,7 @@ class TimeSeriesFeature(Feature):
                     input_format=input_format,
                     normalize=normalize,
                     name=f"{self.name}_calendar",
-                )
+                ),
             )
 
         return layers
@@ -589,10 +597,7 @@ class TimeSeriesFeature(Feature):
             lags = self.lag_config.get("lags", [1])
             keep_original = self.lag_config.get("keep_original", True)
 
-            if keep_original:
-                dim = 1 + len(lags)
-            else:
-                dim = len(lags)
+            dim = 1 + len(lags) if keep_original else len(lags)
 
         # Add dimensions for rolling statistics
         if self.rolling_stats_config and "statistics" in self.rolling_stats_config:
@@ -653,7 +658,8 @@ class TimeSeriesFeature(Feature):
         # Add dimensions for TSFresh features
         if self.tsfresh_feature_config:
             features = self.tsfresh_feature_config.get(
-                "features", ["mean", "std", "min", "max", "median"]
+                "features",
+                ["mean", "std", "min", "max", "median"],
             )
             # Each feature type adds one dimension
             dim += len(features)
@@ -661,7 +667,8 @@ class TimeSeriesFeature(Feature):
         # Add dimensions for calendar features
         if self.calendar_feature_config:
             features = self.calendar_feature_config.get(
-                "features", ["month", "day", "day_of_week", "is_weekend"]
+                "features",
+                ["month", "day", "day_of_week", "is_weekend"],
             )
             cyclic_encoding = self.calendar_feature_config.get("cyclic_encoding", True)
 

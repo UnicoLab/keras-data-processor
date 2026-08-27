@@ -17,7 +17,7 @@ class TextPreprocessingLayer(tf.keras.layers.Layer):
         # Define punctuation and stop words patterns as part of the configuration
         self.punctuation_pattern = re.escape(string.punctuation)
         self.stop_words_pattern = r"|".join(
-            [re.escape(word) for word in self.stop_words]
+            [re.escape(word) for word in self.stop_words],
         )
 
     def call(self, x: tf.Tensor) -> tf.Tensor:
@@ -33,8 +33,7 @@ class TextPreprocessingLayer(tf.keras.layers.Layer):
         x = tf.strings.regex_replace(x, f"[{self.punctuation_pattern}]", " ")
         stop_words_regex = rf"\b({self.stop_words_pattern})\b\s?"
         x = tf.strings.regex_replace(x, stop_words_regex, " ")
-        x = tf.strings.regex_replace(x, r"\s+", " ")
-        return x
+        return tf.strings.regex_replace(x, r"\s+", " ")
 
     def get_config(self) -> dict:
         """Returns the configuration of the layer as a dictionary.

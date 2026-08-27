@@ -119,7 +119,7 @@ class TSFreshFeatureLayer(Layer):
             ):
                 raise ValueError(f"Invalid feature: {feature}")
 
-    def build(self, input_shape):
+    def build(self, input_shape) -> None:
         super().build(input_shape)
 
     def call(self, inputs, training=None):
@@ -163,7 +163,8 @@ class TSFreshFeatureLayer(Layer):
 
             # Initialize output array
             result = np.zeros(
-                (batch_size, n_windows, n_output_features), dtype=np.float32
+                (batch_size, n_windows, n_output_features),
+                dtype=np.float32,
             )
 
             # Process each sample in the batch
@@ -245,7 +246,7 @@ class TSFreshFeatureLayer(Layer):
             else:
                 # Multi-feature input
                 result.set_shape(
-                    [inputs.shape[0], n_windows, inputs.shape[2] * n_output_features]
+                    [inputs.shape[0], n_windows, inputs.shape[2] * n_output_features],
                 )
 
         return result
@@ -362,7 +363,7 @@ class TSFreshFeatureLayer(Layer):
                 if len(series) > 2:
                     # A point is a peak if it's greater than both neighbors
                     peaks = np.where(
-                        (series[1:-1] > series[:-2]) & (series[1:-1] > series[2:])
+                        (series[1:-1] > series[:-2]) & (series[1:-1] > series[2:]),
                     )[0]
                     results.append(len(peaks) / len(series))
                 else:
@@ -373,7 +374,7 @@ class TSFreshFeatureLayer(Layer):
                 if len(series) > 2:
                     # A point is a valley if it's less than both neighbors
                     valleys = np.where(
-                        (series[1:-1] < series[:-2]) & (series[1:-1] < series[2:])
+                        (series[1:-1] < series[:-2]) & (series[1:-1] < series[2:]),
                     )[0]
                     results.append(len(valleys) / len(series))
                 else:
@@ -432,7 +433,7 @@ class TSFreshFeatureLayer(Layer):
 
         return n_features
 
-    def compute_output_shape(self, input_shape):
+    def compute_output_shape(self, input_shape) -> tuple:
         """Compute the output shape of the layer."""
         n_output_features = self._get_n_output_features()
 
@@ -453,7 +454,7 @@ class TSFreshFeatureLayer(Layer):
             n_windows = (time_steps - window_size) // self.stride + 1
             return (batch_size, n_windows, n_output_features)
 
-    def get_config(self):
+    def get_config(self) -> dict:
         """Return the configuration of the layer."""
         config = {
             "features": self.features,

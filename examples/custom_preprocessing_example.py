@@ -101,9 +101,7 @@ class StringCleaningLayer(tf.keras.layers.Layer):
 
         # Trim whitespace and replace multiple spaces with a single space
         text = tf.strings.regex_replace(text, r"\s+", " ")
-        text = tf.strings.strip(text)
-
-        return text
+        return tf.strings.strip(text)
 
     def get_config(self):
         config = super().get_config()
@@ -127,7 +125,8 @@ def generate_sample_data(n_samples=1000):
 
     # Categorical features
     education = np.random.choice(
-        ["High School", "Bachelor's", "Master's", "PhD", "Other"], n_samples
+        ["High School", "Bachelor's", "Master's", "PhD", "Other"],
+        n_samples,
     )
     job_sector = np.random.choice(
         ["Technology", "Finance", "Healthcare", "Education", "Manufacturing", "Other"],
@@ -143,7 +142,7 @@ def generate_sample_data(n_samples=1000):
         skill1, skill2 = np.random.choice(skills, 2, replace=False)
         job_descriptions.append(
             f"This job in {sector} requires skills in {skill1} and {skill2}. "
-            f"Experience level: {np.random.randint(1, 10)} years."
+            f"Experience level: {np.random.randint(1, 10)} years.",
         )
 
     # Target variable: synthetic credit score
@@ -161,7 +160,7 @@ def generate_sample_data(n_samples=1000):
     credit_score = np.clip(credit_score, 300, 850)
 
     # Create DataFrame
-    data = pd.DataFrame(
+    return pd.DataFrame(
         {
             "age": age,
             "salary": salary,
@@ -171,10 +170,8 @@ def generate_sample_data(n_samples=1000):
             "job_sector": job_sector,
             "job_description": job_descriptions,
             "credit_score": credit_score,
-        }
+        },
     )
-
-    return data
 
 
 #################################################
@@ -185,7 +182,7 @@ def generate_sample_data(n_samples=1000):
 def define_features():
     """Define features with custom preprocessing pipelines."""
 
-    features = {
+    return {
         # Age: Standard numerical feature with normalization
         "age": NumericalFeature(name="age", feature_type=FeatureType.FLOAT_NORMALIZED),
         # Salary: Log-transform to handle skewness, then normalize
@@ -249,8 +246,6 @@ def define_features():
         ),
     }
 
-    return features
-
 
 #################################################
 # Main Execution
@@ -299,7 +294,7 @@ def main():
             tf.keras.layers.Dropout(0.2),
             tf.keras.layers.Dense(32, activation="relu"),
             tf.keras.layers.Dense(1),
-        ]
+        ],
     )
 
     # Compile the model
@@ -330,7 +325,7 @@ def main():
     model.save("credit_score_prediction_model")
 
     print(
-        "Done! The preprocessor with custom pipelines and prediction model are saved."
+        "Done! The preprocessor with custom pipelines and prediction model are saved.",
     )
 
     # Example of how to use the saved models for inference
@@ -344,9 +339,9 @@ def main():
             "education": ["Master's"],
             "job_sector": ["Technology"],
             "job_description": [
-                "This job in tech requires skills in programming and management."
+                "This job in tech requires skills in programming and management.",
             ],
-        }
+        },
     )
 
     # Preprocess the new sample

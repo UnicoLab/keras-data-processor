@@ -55,8 +55,7 @@ class GatedResidualNetwork(tf.keras.layers.Layer):
         if inputs.shape[-1] != self.units:
             inputs = self.project(inputs)
         x = inputs + self.gated_linear_unit(x)
-        x = self.layer_norm(x)
-        return x
+        return self.layer_norm(x)
 
     def get_config(self) -> dict:
         """Get layer configuration.

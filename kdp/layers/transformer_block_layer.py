@@ -30,7 +30,8 @@ class TransformerBlock(tf.keras.layers.Layer):
 
         # Define layers
         self.multihead_attention = tf.keras.layers.MultiHeadAttention(
-            num_heads=num_heads, key_dim=dim_model
+            num_heads=num_heads,
+            key_dim=dim_model,
         )
         self.dropout1 = tf.keras.layers.Dropout(dropout_rate)
         self.add1 = tf.keras.layers.Add()
@@ -66,6 +67,4 @@ class TransformerBlock(tf.keras.layers.Layer):
         ff = self.dropout2(ff)
         ff = self.ff2(ff)
         ff = self.add2([attention_norm, ff])
-        ff_norm = self.layer_norm2(ff)
-
-        return ff_norm
+        return self.layer_norm2(ff)

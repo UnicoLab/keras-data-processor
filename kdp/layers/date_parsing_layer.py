@@ -92,15 +92,18 @@ class DateParsingLayer(tf.keras.layers.Layer):
                 day_of_month + ((13 * (m + 1)) // 5) + k + (k // 4) + (j // 4) - (2 * j)
             ) % 7
             day_of_week = tf.where(
-                h == 0, 6, h - 1
+                h == 0,
+                6,
+                h - 1,
             )  # Adjust to 0-6 range where 0 is Sunday
 
             return tf.stack([year, month, day_of_month, day_of_week])
 
-        parsed_dates = tf.map_fn(
-            parse_date, tf.squeeze(inputs), fn_output_signature=tf.int32
+        return tf.map_fn(
+            parse_date,
+            tf.squeeze(inputs),
+            fn_output_signature=tf.int32,
         )
-        return parsed_dates
 
     def compute_output_shape(self, input_shape: int) -> int:
         """Getting output shape."""

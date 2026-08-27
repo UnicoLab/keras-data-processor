@@ -1,5 +1,4 @@
-"""
-This module implements a DistributionTransformLayer that applies various transformations
+"""This module implements a DistributionTransformLayer that applies various transformations
 to make data more normally distributed or to handle specific distribution types better.
 It's particularly useful for preprocessing data before anomaly detection or other statistical analyses.
 """
@@ -65,7 +64,9 @@ class DistributionTransformLayer(tf.keras.layers.Layer):
         a = arcsinh_transform(x)
 
         # Apply min-max scaling to range [0, 1]
-        min_max = DistributionTransformLayer(transform_type="min-max", min_value=0.0, max_value=1.0)
+        min_max = DistributionTransformLayer(
+            transform_type="min-max", min_value=0.0, max_value=1.0
+        )
         b = min_max(x)
 
         # Use automatic transformation selection
@@ -142,7 +143,7 @@ class DistributionTransformLayer(tf.keras.layers.Layer):
         if self.transform_type not in self._valid_transforms:
             raise ValueError(
                 f"transform_type must be one of {self._valid_transforms}, "
-                f"got {self.transform_type}"
+                f"got {self.transform_type}",
             )
 
         if self.epsilon <= 0:
@@ -151,7 +152,7 @@ class DistributionTransformLayer(tf.keras.layers.Layer):
         if self.min_value >= self.max_value:
             raise ValueError(
                 f"min_value must be less than max_value, got min_value={self.min_value}, "
-                f"max_value={self.max_value}"
+                f"max_value={self.max_value}",
             )
 
         if self.transform_type == "auto" and self.auto_candidates:
@@ -162,7 +163,7 @@ class DistributionTransformLayer(tf.keras.layers.Layer):
                 ]:
                     raise ValueError(
                         f"Invalid transformation candidate: {candidate}. "
-                        f"Candidates must be valid transformations excluding 'auto' and 'none'."
+                        f"Candidates must be valid transformations excluding 'auto' and 'none'.",
                     )
 
     def build(self, input_shape: tuple[int, ...]) -> None:
@@ -193,7 +194,7 @@ class DistributionTransformLayer(tf.keras.layers.Layer):
 
         logger.debug(
             f"DistributionTransformLayer built with transform_type={self.transform_type}, "
-            f"lambda_param={self.lambda_param}"
+            f"lambda_param={self.lambda_param}",
         )
         tf.keras.layers.Layer.build(self, input_shape)
 
@@ -223,7 +224,8 @@ class DistributionTransformLayer(tf.keras.layers.Layer):
         return lower + (upper - lower) * tf.cast(fraction, x_sorted.dtype)
 
     def _compute_robust_statistics(
-        self, x: KerasTensor
+        self,
+        x: KerasTensor,
     ) -> tuple[KerasTensor, KerasTensor, KerasTensor, KerasTensor]:
         """Compute order statistics for the input tensor.
 
@@ -584,7 +586,9 @@ class DistributionTransformLayer(tf.keras.layers.Layer):
 
             # Combine results
             return tf.where(
-                pos_mask, pos_values, tf.where(neg_mask, neg_values, tf.zeros_like(x))
+                pos_mask,
+                pos_values,
+                tf.where(neg_mask, neg_values, tf.zeros_like(x)),
             )
 
         def apply_arcsinh():
@@ -606,7 +610,9 @@ class DistributionTransformLayer(tf.keras.layers.Layer):
 
             # Combine results
             return tf.where(
-                pos_mask, pos_values, tf.where(neg_mask, neg_values, tf.zeros_like(x))
+                pos_mask,
+                pos_values,
+                tf.where(neg_mask, neg_values, tf.zeros_like(x)),
             )
 
         def apply_logit():
@@ -688,12 +694,12 @@ class DistributionTransformLayer(tf.keras.layers.Layer):
                 else:
                     # This should never happen due to validation in __init__
                     raise ValueError(
-                        f"Unknown transformation type: {self.transform_type}"
+                        f"Unknown transformation type: {self.transform_type}",
                     )
             except Exception as e:
                 # Add more context to the error
                 raise type(e)(
-                    f"Error in {self.transform_type} transformation: {str(e)}"
+                    f"Error in {self.transform_type} transformation: {str(e)}",
                 ) from e
 
     def call(self, inputs, training=None):
@@ -719,7 +725,8 @@ class DistributionTransformLayer(tf.keras.layers.Layer):
                 # For graph mode compatibility, we need to handle the index computation differently
                 # Map the transform types to indices using a series of tf.cond operations
                 transform_idx = tf.constant(
-                    0, dtype=tf.int32
+                    0,
+                    dtype=tf.int32,
                 )  # Default to first transform
 
                 # For graph mode, we need to compare the best_transform with each valid transform
@@ -770,7 +777,8 @@ class DistributionTransformLayer(tf.keras.layers.Layer):
                     lambda_param = self._selected_lambda[0]
                     # Map the index to the transform type using tf.gather
                     transform_type = tf.gather(
-                        tf.constant(self._valid_transforms), transform_idx
+                        tf.constant(self._valid_transforms),
+                        transform_idx,
                     )
 
                 # Set the transformation type and lambda for this forward pass
@@ -809,11 +817,11 @@ class DistributionTransformLayer(tf.keras.layers.Layer):
                 "max_value": float(self.max_value),
                 "clip_values": self.clip_values,
                 "auto_candidates": self.auto_candidates,
-            }
+            },
         )
         return config
 
-    def compute_output_shape(self, input_shape):
+    def compute_output_shape(self, input_shape) -> tuple:
         """Compute the output shape of the layer.
 
         Args:

@@ -34,7 +34,7 @@ class PreserveDtypeLayer(keras.layers.Layer):
             return tf.cast(inputs, self.target_dtype)
         return inputs
 
-    def get_config(self):
+    def get_config(self) -> dict:
         """Return the config dictionary for serialization.
 
         Returns:
@@ -45,7 +45,7 @@ class PreserveDtypeLayer(keras.layers.Layer):
         return config
 
     @classmethod
-    def from_config(cls, config):
+    def from_config(cls, config) -> "PreserveDtypeLayer":
         """Create a new instance from the serialized configuration.
 
         Args:

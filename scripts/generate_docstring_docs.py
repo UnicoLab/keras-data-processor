@@ -42,7 +42,7 @@ def docstring_to_markdown(docstring):
         # Remove this indentation from all lines
         docstring = "\n".join(
             [lines[0]]
-            + [line[min_indent:] if line.strip() else line for line in lines[1:]]
+            + [line[min_indent:] if line.strip() else line for line in lines[1:]],
         )
 
     # Replace reST/Google-style formatting with Markdown equivalents
@@ -57,22 +57,30 @@ def docstring_to_markdown(docstring):
 
     # Convert Returns: section to Markdown
     markdown = re.sub(
-        r"Returns:\s*\n(\s+[^\n]*\n(?:\s+[^\n]*\n)*)", r"### Returns\n\n\1", markdown
+        r"Returns:\s*\n(\s+[^\n]*\n(?:\s+[^\n]*\n)*)",
+        r"### Returns\n\n\1",
+        markdown,
     )
 
     # Convert Raises: section to Markdown
     markdown = re.sub(
-        r"Raises:\s*\n(\s+[^\n]*\n(?:\s+[^\n]*\n)*)", r"### Raises\n\n\1", markdown
+        r"Raises:\s*\n(\s+[^\n]*\n(?:\s+[^\n]*\n)*)",
+        r"### Raises\n\n\1",
+        markdown,
     )
 
     # Convert Examples: section to Markdown
     markdown = re.sub(
-        r"Examples?:\s*\n(\s+[^\n]*\n(?:\s+[^\n]*\n)*)", r"### Examples\n\n\1", markdown
+        r"Examples?:\s*\n(\s+[^\n]*\n(?:\s+[^\n]*\n)*)",
+        r"### Examples\n\n\1",
+        markdown,
     )
 
     # Convert Note: section to Markdown
     markdown = re.sub(
-        r"Note:\s*\n(\s+[^\n]*\n(?:\s+[^\n]*\n)*)", r"### Notes\n\n\1", markdown
+        r"Note:\s*\n(\s+[^\n]*\n(?:\s+[^\n]*\n)*)",
+        r"### Notes\n\n\1",
+        markdown,
     )
 
     # Convert parameter descriptions to bullet points
@@ -89,9 +97,7 @@ def docstring_to_markdown(docstring):
     )
 
     # Remove trailing spaces
-    markdown = "\n".join(line.rstrip() for line in markdown.split("\n"))
-
-    return markdown
+    return "\n".join(line.rstrip() for line in markdown.split("\n"))
 
 
 def extract_class_docs(cls):
@@ -177,7 +183,7 @@ def generate_module_index(modules, output_dir):
     with open(output_file, "w") as f:
         f.write("# API Reference\n\n")
         f.write(
-            "This section provides detailed API documentation extracted directly from the codebase.\n\n"
+            "This section provides detailed API documentation extracted directly from the codebase.\n\n",
         )
 
         for module in modules:

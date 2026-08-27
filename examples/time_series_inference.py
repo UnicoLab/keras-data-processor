@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 """
 Example script showing how to use the InferenceDataFormatter to prepare data for time series inference.
@@ -58,7 +57,7 @@ def generate_sample_data(num_stores=3, days_per_store=30, add_noise=True):
                     "date": date.strftime("%Y-%m-%d"),
                     "store_id": f"Store_{store_id}",
                     "sales": sales,
-                }
+                },
             )
 
     return pd.DataFrame(all_data)
@@ -193,10 +192,9 @@ def example_multi_step_forecast(preprocessor, formatter, train_data):
         prediction = preprocessor.predict(formatted_data)
 
         # Extract the prediction value (last value in the sales array)
-        if isinstance(prediction, dict):
-            predicted_value = prediction["sales"][-1]
-        else:
-            predicted_value = prediction[-1]
+        predicted_value = (
+            prediction["sales"][-1] if isinstance(prediction, dict) else prediction[-1]
+        )
 
         # Create a result row for the forecast
         forecast_row = {
@@ -297,11 +295,12 @@ def example_batch_inference(preprocessor, formatter, train_data):
             if store_indices[store]:
                 last_idx = store_indices[store][-1]
                 print(
-                    f"Predicted sales for {store}: {prediction['sales'][last_idx].numpy()}"
+                    f"Predicted sales for {store}: {prediction['sales'][last_idx].numpy()}",
                 )
     else:
         print(
-            "Prediction result:", prediction[-3:]
+            "Prediction result:",
+            prediction[-3:],
         )  # Last 3 values are the predictions
 
 

@@ -60,7 +60,7 @@ class DynamicPreprocessingPipeline:
             if layer.name in dependencies:
                 raise ValueError(
                     f"Duplicate layer name {layer.name!r} in pipeline. Each layer "
-                    "needs a unique name because names are used as data keys."
+                    "needs a unique name because names are used as data keys.",
                 )
             # The key is only known at run time (it depends on what the data
             # actually contains), so record both candidates in priority order.
@@ -93,7 +93,7 @@ class DynamicPreprocessingPipeline:
                 raise KeyError(
                     f"Layer {layer.name!r} has no input: none of {list(candidates)} "
                     f"is present in the data (available keys: "
-                    f"{sorted(current_data)})."
+                    f"{sorted(current_data)}).",
                 )
             current_data[layer.name] = layer(current_data[source])
         return current_data

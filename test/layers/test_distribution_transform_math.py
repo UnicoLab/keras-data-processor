@@ -47,9 +47,7 @@ class TestRobustScale(unittest.TestCase):
         """Output equals (x - median) / IQR computed per column."""
         data = _multi_scale_data()
         actual = np.asarray(
-            DistributionTransformLayer(transform_type="robust-scale")(
-                tf.constant(data)
-            )
+            DistributionTransformLayer(transform_type="robust-scale")(tf.constant(data))
         )
 
         median = np.median(data, axis=0)
@@ -60,9 +58,7 @@ class TestRobustScale(unittest.TestCase):
         """Each transformed column has median ~0 and IQR ~1."""
         data = _multi_scale_data(seed=7)
         actual = np.asarray(
-            DistributionTransformLayer(transform_type="robust-scale")(
-                tf.constant(data)
-            )
+            DistributionTransformLayer(transform_type="robust-scale")(tf.constant(data))
         )
 
         np.testing.assert_allclose(np.median(actual, axis=0), 0.0, atol=1e-4)
@@ -73,13 +69,11 @@ class TestRobustScale(unittest.TestCase):
 
     def test_constant_feature_does_not_divide_by_zero(self):
         """A column with zero IQR yields finite output."""
-        data = np.stack(
-            [np.full(50, 3.0), np.linspace(0, 1, 50)], axis=1
-        ).astype("float32")
+        data = np.stack([np.full(50, 3.0), np.linspace(0, 1, 50)], axis=1).astype(
+            "float32"
+        )
         actual = np.asarray(
-            DistributionTransformLayer(transform_type="robust-scale")(
-                tf.constant(data)
-            )
+            DistributionTransformLayer(transform_type="robust-scale")(tf.constant(data))
         )
         self.assertTrue(np.all(np.isfinite(actual)))
         np.testing.assert_allclose(actual[:, 0], 0.0, atol=1e-6)
@@ -191,9 +185,7 @@ class TestStatisticsHelpers(unittest.TestCase):
         np.testing.assert_allclose(
             np.asarray(median), np.median(data, axis=0), rtol=1e-4
         )
-        expected_iqr = np.percentile(data, 75, axis=0) - np.percentile(
-            data, 25, axis=0
-        )
+        expected_iqr = np.percentile(data, 75, axis=0) - np.percentile(data, 25, axis=0)
         np.testing.assert_allclose(np.asarray(iqr), expected_iqr, rtol=1e-4)
 
 

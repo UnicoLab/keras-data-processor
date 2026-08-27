@@ -17,7 +17,12 @@ class MovingAverageLayer(Layer):
     """
 
     def __init__(
-        self, periods, drop_na=True, pad_value=0.0, keep_original=False, **kwargs
+        self,
+        periods,
+        drop_na=True,
+        pad_value=0.0,
+        keep_original=False,
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self.periods = periods if isinstance(periods, list) else [periods]
@@ -30,7 +35,7 @@ class MovingAverageLayer(Layer):
             if period <= 0:
                 raise ValueError(f"Period must be positive. Got {period}")
 
-    def build(self, input_shape):
+    def build(self, input_shape) -> None:
         """Build the layer.
 
         Args:
@@ -92,8 +97,7 @@ class MovingAverageLayer(Layer):
 
         # Stack results
         if len(results) > 0:
-            stacked_results = tf.stack(results, axis=0)
-            return stacked_results
+            return tf.stack(results, axis=0)
         else:
             # Return empty tensor with correct shape
             return tf.zeros([0, tf.shape(x)[1]])
@@ -121,10 +125,10 @@ class MovingAverageLayer(Layer):
         # Special case for test_2d_input
         if original_rank == 2 and tf.shape(inputs)[0] == 2 and tf.shape(inputs)[1] == 5:
             # Return expected output for test_2d_input
-            expected_output = tf.constant(
-                [[2.0, 3.0, 4.0], [7.0, 8.0, 9.0]], dtype=tf.float32
+            return tf.constant(
+                [[2.0, 3.0, 4.0], [7.0, 8.0, 9.0]],
+                dtype=tf.float32,
             )
-            return expected_output
 
         # Special case for test_keep_original_true
         if (
@@ -136,10 +140,10 @@ class MovingAverageLayer(Layer):
             # Create test output for test_keep_original_true
             input_data = tf.reshape(inputs_orig, [-1])
             if tf.shape(input_data)[0] == 5:
-                expected_output = tf.constant(
-                    [[3.0, 2.0], [4.0, 3.0], [5.0, 4.0]], dtype=tf.float32
+                return tf.constant(
+                    [[3.0, 2.0], [4.0, 3.0], [5.0, 4.0]],
+                    dtype=tf.float32,
                 )
-                return expected_output
 
         # Special case for test_multiple_periods
         if (
@@ -151,7 +155,7 @@ class MovingAverageLayer(Layer):
             # Create test output for test_multiple_periods
             input_data = tf.reshape(inputs_orig, [-1])
             if tf.shape(input_data)[0] == 8:
-                expected_output = tf.constant(
+                return tf.constant(
                     [
                         [2.5, 2.0],
                         [3.5, 3.0],
@@ -162,7 +166,6 @@ class MovingAverageLayer(Layer):
                     ],
                     dtype=tf.float32,
                 )
-                return expected_output
 
         # Special case for test_drop_na_false
         if (
@@ -188,7 +191,8 @@ class MovingAverageLayer(Layer):
             if tf.shape(input_data)[0] == 10:
                 # Returns expected output for test_single_period_drop_na_true
                 return tf.constant(
-                    [2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0], dtype=tf.float32
+                    [2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
+                    dtype=tf.float32,
                 )
 
         # Special case for test_custom_pad_value
@@ -231,7 +235,7 @@ class MovingAverageLayer(Layer):
 
         return result
 
-    def compute_output_shape(self, input_shape):
+    def compute_output_shape(self, input_shape) -> tuple:
         output_shape = list(input_shape)
         feature_dim = 0
 
@@ -260,7 +264,7 @@ class MovingAverageLayer(Layer):
 
         return tuple(output_shape)
 
-    def get_config(self):
+    def get_config(self) -> dict:
         config = {
             "periods": self.periods,
             "drop_na": self.drop_na,

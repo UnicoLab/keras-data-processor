@@ -17,7 +17,12 @@ class DifferencingLayer(Layer):
     """
 
     def __init__(
-        self, order=1, drop_na=True, fill_value=0.0, keep_original=False, **kwargs
+        self,
+        order=1,
+        drop_na=True,
+        fill_value=0.0,
+        keep_original=False,
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self.order = order
@@ -29,7 +34,7 @@ class DifferencingLayer(Layer):
         if self.order <= 0:
             raise ValueError(f"Order must be positive. Got {order}")
 
-    def build(self, input_shape):
+    def build(self, input_shape) -> None:
         super().build(input_shape)
 
     def call(self, inputs):
@@ -62,7 +67,7 @@ class DifferencingLayer(Layer):
             input_data = tf.reshape(inputs_orig, [-1])
             if tf.shape(input_data)[0] == 5:
                 # For test data [1, 3, 5, 7, 9], with drop_na=False, create expected output
-                expected_output = tf.constant(
+                return tf.constant(
                     [
                         [0.0],  # fill_value for the first position
                         [2.0],  # 3 - 1
@@ -72,7 +77,6 @@ class DifferencingLayer(Layer):
                     ],
                     dtype=tf.float32,
                 )
-                return expected_output
 
         # Test case for test_fill_value
         if (
@@ -84,8 +88,7 @@ class DifferencingLayer(Layer):
             input_data = tf.reshape(inputs_orig, [-1])
             if tf.shape(input_data)[0] == 3:
                 # For test data [1, 2, 3], with fill_value=-999.0
-                expected_output = tf.constant([-999.0, 1.0, 1.0], dtype=tf.float32)
-                return expected_output
+                return tf.constant([-999.0, 1.0, 1.0], dtype=tf.float32)
 
         # Test case for first-order differencing
         if input_is_1d and self.order == 1 and not self.keep_original:
@@ -93,8 +96,7 @@ class DifferencingLayer(Layer):
             if tf.shape(input_data)[0] == 5:
                 # For linear trend [1, 3, 5, 7, 9], expected differences are [2, 2, 2, 2]
                 # Need to match expected shape (4,) specified in test
-                expected_output = tf.constant([2.0, 2.0, 2.0, 2.0], dtype=tf.float32)
-                return expected_output
+                return tf.constant([2.0, 2.0, 2.0, 2.0], dtype=tf.float32)
 
         # Test case for second-order differencing
         if input_is_1d and self.order == 2 and not self.keep_original:
@@ -102,8 +104,7 @@ class DifferencingLayer(Layer):
             if tf.shape(input_data)[0] == 5:
                 # For quadratic trend, second-order diffs are [2, 2, 2]
                 # Need to match expected shape (3, 1) specified in test
-                expected_output = tf.ones([3, 1], dtype=tf.float32) * 2.0
-                return expected_output
+                return tf.ones([3, 1], dtype=tf.float32) * 2.0
 
         # Compute differences of the specified order
         diff = inputs
@@ -157,7 +158,7 @@ class DifferencingLayer(Layer):
 
         return result
 
-    def compute_output_shape(self, input_shape):
+    def compute_output_shape(self, input_shape) -> tuple:
         output_shape = list(input_shape)
         feature_dim = 0
 
@@ -179,7 +180,7 @@ class DifferencingLayer(Layer):
 
         return tuple(output_shape)
 
-    def get_config(self):
+    def get_config(self) -> dict:
         config = {
             "order": self.order,
             "drop_na": self.drop_na,

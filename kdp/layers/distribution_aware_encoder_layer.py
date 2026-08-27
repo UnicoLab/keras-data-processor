@@ -1,5 +1,4 @@
-"""
-Distribution-aware encoder layer for TensorFlow models.
+"""Distribution-aware encoder layer for TensorFlow models.
 
 This implementation automatically detects various data distributions and applies
 appropriate transformations for better model performance. It is built on Keras
@@ -40,7 +39,7 @@ except ImportError:
         from ..distribution_transform_layer import DistributionTransformLayer
     except ImportError:
         raise ImportError(
-            "Could not import DistributionTransformLayer. Please ensure it's in the correct path."
+            "Could not import DistributionTransformLayer. Please ensure it's in the correct path.",
         )
 
 
@@ -173,7 +172,7 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
             self.distribution_type = prefered_distribution
             self.auto_detect = False
             logger.info(
-                f"Using specified distribution type: {prefered_distribution} (legacy parameter)"
+                f"Using specified distribution type: {prefered_distribution} (legacy parameter)",
             )
         else:
             self.distribution_type = distribution_type
@@ -202,7 +201,7 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
             and self.distribution_type != "unknown"
         ):
             logger.warning(
-                f"Unknown distribution type: {self.distribution_type}. Defaulting to 'normal'"
+                f"Unknown distribution type: {self.distribution_type}. Defaulting to 'normal'",
             )
             self.distribution_type = "normal"
 
@@ -224,18 +223,21 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
 
         # The DistributionTransformLayer handles most of the distribution transformations
         self.distribution_transform = DistributionTransformLayer(
-            **transform_kwargs, name=f"{self.name}_transform"
+            **transform_kwargs,
+            name=f"{self.name}_transform",
         )
 
         # Projection layer for embedding dimension if specified
         if self.embedding_dim is not None:
             self.projection = tf.keras.layers.Dense(
-                self.embedding_dim, activation="relu", name=f"{self.name}_projection"
+                self.embedding_dim,
+                activation="relu",
+                name=f"{self.name}_projection",
             )
         else:
             self.projection = None
 
-    def build(self, input_shape):
+    def build(self, input_shape) -> None:
         """Build the layer.
 
         Args:
@@ -285,7 +287,7 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
         # Build the projection layer if needed
         if self.projection is not None:
             transformed_shape = self.distribution_transform.compute_output_shape(
-                input_shape
+                input_shape,
             )
             self.projection.build(transformed_shape)
 
@@ -326,7 +328,8 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
         # Check for discreteness
         unique_values, _ = tf.unique(tf.reshape(x, [-1]))
         unique_ratio = tf.cast(tf.size(unique_values), tf.float32) / tf.cast(
-            tf.size(x), tf.float32
+            tf.size(x),
+            tf.float32,
         )
 
         return {
@@ -341,7 +344,8 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
             "unique_ratio": unique_ratio,
             "has_negative": tf.reduce_any(x < 0),
             "is_bounded_01": tf.logical_and(
-                tf.reduce_all(x >= 0), tf.reduce_all(x <= 1)
+                tf.reduce_all(x >= 0),
+                tf.reduce_all(x <= 1),
             ),
         }
 
@@ -381,33 +385,44 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
 
         # Sparse score - Use tf.cond
         dist_scores["sparse"] = tf.cond(
-            zero_ratio > 0.5, lambda: tf.constant(100.0), lambda: tf.constant(0.0)
+            zero_ratio > 0.5,
+            lambda: tf.constant(100.0),
+            lambda: tf.constant(0.0),
         )
 
         # Periodic score - Use tf.cond for tensor values
         dist_scores["periodic"] = tf.cond(
-            is_periodic, lambda: tf.constant(90.0), lambda: tf.constant(0.0)
+            is_periodic,
+            lambda: tf.constant(90.0),
+            lambda: tf.constant(0.0),
         )
 
         # Discrete score - Use tf.cond
         dist_scores["discrete"] = tf.cond(
-            unique_ratio < 0.1, lambda: tf.constant(80.0), lambda: tf.constant(0.0)
+            unique_ratio < 0.1,
+            lambda: tf.constant(80.0),
+            lambda: tf.constant(0.0),
         )
 
         # Beta score
         bounded_and_skewed = tf.logical_and(is_bounded_01, skewness > 0.5)
         dist_scores["beta"] = tf.cond(
-            bounded_and_skewed, lambda: tf.constant(75.0), lambda: tf.constant(0.0)
+            bounded_and_skewed,
+            lambda: tf.constant(75.0),
+            lambda: tf.constant(0.0),
         )
 
         # Uniform score
         dist_scores["uniform"] = tf.cond(
-            is_bounded_01, lambda: tf.constant(70.0), lambda: tf.constant(0.0)
+            is_bounded_01,
+            lambda: tf.constant(70.0),
+            lambda: tf.constant(0.0),
         )
 
         # Log-normal score
         positive_and_very_skewed = tf.logical_and(
-            tf.logical_not(has_negative), skewness > 2.0
+            tf.logical_not(has_negative),
+            skewness > 2.0,
         )
         dist_scores["log_normal"] = tf.cond(
             positive_and_very_skewed,
@@ -417,39 +432,53 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
 
         # Exponential score
         positive_and_skewed = tf.logical_and(
-            tf.logical_not(has_negative), skewness > 1.0
+            tf.logical_not(has_negative),
+            skewness > 1.0,
         )
         dist_scores["exponential"] = tf.cond(
-            positive_and_skewed, lambda: tf.constant(60.0), lambda: tf.constant(0.0)
+            positive_and_skewed,
+            lambda: tf.constant(60.0),
+            lambda: tf.constant(0.0),
         )
 
         # Gamma score
         positive_and_mild_skew = tf.logical_and(
-            tf.logical_not(has_negative), skewness > 0.5
+            tf.logical_not(has_negative),
+            skewness > 0.5,
         )
         dist_scores["gamma"] = tf.cond(
-            positive_and_mild_skew, lambda: tf.constant(55.0), lambda: tf.constant(0.0)
+            positive_and_mild_skew,
+            lambda: tf.constant(55.0),
+            lambda: tf.constant(0.0),
         )
 
         # Cauchy score
         dist_scores["cauchy"] = tf.cond(
-            kurtosis > 10.0, lambda: tf.constant(50.0), lambda: tf.constant(0.0)
+            kurtosis > 10.0,
+            lambda: tf.constant(50.0),
+            lambda: tf.constant(0.0),
         )
 
         # Heavy-tailed score
         dist_scores["heavy_tailed"] = tf.cond(
-            kurtosis > 4.0, lambda: tf.constant(45.0), lambda: tf.constant(0.0)
+            kurtosis > 4.0,
+            lambda: tf.constant(45.0),
+            lambda: tf.constant(0.0),
         )
 
         # Multimodal score - Use tf.cond for tensor values
         dist_scores["multimodal"] = tf.cond(
-            is_multimodal, lambda: tf.constant(40.0), lambda: tf.constant(0.0)
+            is_multimodal,
+            lambda: tf.constant(40.0),
+            lambda: tf.constant(0.0),
         )
 
         # Zero-inflated score
         moderate_zeros = tf.logical_and(zero_ratio > 0.3, zero_ratio <= 0.5)
         dist_scores["zero_inflated"] = tf.cond(
-            moderate_zeros, lambda: tf.constant(35.0), lambda: tf.constant(0.0)
+            moderate_zeros,
+            lambda: tf.constant(35.0),
+            lambda: tf.constant(0.0),
         )
 
         # Normal score - default option if nothing else fits well
@@ -458,7 +487,7 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
             normal_like,
             lambda: tf.constant(30.0),
             lambda: tf.constant(
-                20.0
+                20.0,
             ),  # Give some baseline score to normal distribution
         )
 
@@ -494,7 +523,7 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
             logger.debug(
                 f"Detected distribution: {selected_dist} with "
                 f"skewness={skewness.numpy():.2f}, kurtosis={kurtosis.numpy():.2f}, "
-                f"zero_ratio={zero_ratio.numpy():.2f}, unique_ratio={unique_ratio.numpy():.2f}"
+                f"zero_ratio={zero_ratio.numpy():.2f}, unique_ratio={unique_ratio.numpy():.2f}",
             )
 
         return dist_idx
@@ -546,7 +575,11 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
             tf.less(variance, self.epsilon),
             lambda: tf.constant(False),
             lambda: self._compute_autocorrelation(
-                x_centered, n, max_lag, variance, threshold
+                x_centered,
+                n,
+                max_lag,
+                variance,
+                threshold,
             ),
         )
 
@@ -642,7 +675,9 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
 
         # Create histogram
         hist = tf.histogram_fixed_width(
-            x_flat, [stats["min"], stats["max"] + self.epsilon], nbins=num_bins
+            x_flat,
+            [stats["min"], stats["max"] + self.epsilon],
+            nbins=num_bins,
         )
 
         # Smooth the histogram with a simple average filter
@@ -666,10 +701,12 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
         # Find peaks (local maxima)
         # A peak is where the value is greater than its neighbors
         is_greater_left = tf.concat(
-            [[True], smoothed_hist[1:] > smoothed_hist[:-1]], axis=0
+            [[True], smoothed_hist[1:] > smoothed_hist[:-1]],
+            axis=0,
         )
         is_greater_right = tf.concat(
-            [smoothed_hist[:-1] > smoothed_hist[1:], [True]], axis=0
+            [smoothed_hist[:-1] > smoothed_hist[1:], [True]],
+            axis=0,
         )
         is_peak = tf.logical_and(is_greater_left, is_greater_right)
 
@@ -827,7 +864,8 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
                 else:
                     # Default to normal if no stored distribution
                     dist_idx = tf.constant(
-                        self._valid_distributions.index("normal"), dtype=tf.int32
+                        self._valid_distributions.index("normal"),
+                        dtype=tf.int32,
                     )
                 return tf.cast(dist_idx, tf.int32)  # Ensure consistent type
 
@@ -841,7 +879,9 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
             )
 
             dist_idx = tf.cond(
-                should_detect, detect_distribution_fn, use_stored_distribution_fn
+                should_detect,
+                detect_distribution_fn,
+                use_stored_distribution_fn,
             )
 
             # Mark as initialized
@@ -856,7 +896,8 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
             dist_type = self.distribution_type
             # Get the index for consistency - ensure it's int32
             dist_idx = tf.constant(
-                self._valid_distributions.index(dist_type), dtype=tf.int32
+                self._valid_distributions.index(dist_type),
+                dtype=tf.int32,
             )
 
         # Store the current distribution type for use in compute_output_shape
@@ -893,7 +934,8 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
 
                     # Concat along feature dimension
                     transformed = tf.concat(
-                        [transformed, sin_feature, cos_feature], axis=-1
+                        [transformed, sin_feature, cos_feature],
+                        axis=-1,
                     )
             else:
                 # In graph mode, use tf.cond with carefully managed shapes
@@ -939,7 +981,7 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
 
         return transformed
 
-    def compute_output_shape(self, input_shape):
+    def compute_output_shape(self, input_shape) -> tuple:
         """Compute the output shape of the layer based on input shape and layer configuration.
 
         Args:
@@ -981,7 +1023,7 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
 
         return output_shape
 
-    def get_config(self):
+    def get_config(self) -> dict:
         """Get the layer configuration for serialization.
 
         This method enables serialization and deserialization of the layer via
@@ -997,7 +1039,9 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
             ```python
             model.save("my_model.keras")
             custom_objects = get_custom_objects()
-            loaded_model = tf.keras.models.load_model("my_model", custom_objects=custom_objects)
+            loaded_model = tf.keras.models.load_model(
+                "my_model", custom_objects=custom_objects
+            )
             ```
         """
         config = tf.keras.layers.Layer.get_config(self)
@@ -1016,7 +1060,7 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
                 "adaptive_binning": self.adaptive_binning,
                 "mixture_components": self.mixture_components,
                 "prefered_distribution": self.prefered_distribution,
-            }
+            },
         )
         return config
 
@@ -1048,8 +1092,7 @@ def get_custom_objects():
         loaded_model = tf.keras.models.load_model("my_model", custom_objects=custom_objects)
         ```
     """
-    custom_objects = {
+    return {
         "DistributionAwareEncoder": DistributionAwareEncoder,
         "DistributionTransformLayer": DistributionTransformLayer,
     }
-    return custom_objects

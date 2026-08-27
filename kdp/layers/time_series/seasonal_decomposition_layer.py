@@ -46,11 +46,11 @@ class SeasonalDecompositionLayer(Layer):
         # Validate parameters
         if self.method not in ["additive", "multiplicative"]:
             raise ValueError(
-                f"Method must be 'additive' or 'multiplicative', got {method}"
+                f"Method must be 'additive' or 'multiplicative', got {method}",
             )
         if self.extrapolate_trend not in ["nearest", "linear"]:
             raise ValueError(
-                f"Extrapolate_trend must be 'nearest' or 'linear', got {extrapolate_trend}"
+                f"Extrapolate_trend must be 'nearest' or 'linear', got {extrapolate_trend}",
             )
 
     def call(self, inputs):
@@ -98,7 +98,9 @@ class SeasonalDecompositionLayer(Layer):
             detrended = inputs / safe_trend
             # Replace NaNs and Infs
             detrended = tf.where(
-                tf.math.is_finite(detrended), detrended, tf.zeros_like(detrended)
+                tf.math.is_finite(detrended),
+                detrended,
+                tf.zeros_like(detrended),
             )
 
         # Calculate seasonal component
@@ -116,7 +118,9 @@ class SeasonalDecompositionLayer(Layer):
             residual = inputs / (safe_trend * safe_seasonal)
             # Replace NaNs and Infs
             residual = tf.where(
-                tf.math.is_finite(residual), residual, tf.zeros_like(residual)
+                tf.math.is_finite(residual),
+                residual,
+                tf.zeros_like(residual),
             )
 
         # Stack components
@@ -210,10 +214,11 @@ class SeasonalDecompositionLayer(Layer):
                     # Calculate mean of seasonal component
                     seasonal_mean = np.nanmean(seasonal)
                     # Avoid division by zero
-                    if abs(seasonal_mean) > 1e-10:
-                        seasonal = seasonal / seasonal_mean
-                    else:
-                        seasonal = np.ones_like(seasonal)
+                    seasonal = (
+                        seasonal / seasonal_mean
+                        if abs(seasonal_mean) > 1e-10
+                        else np.ones_like(seasonal)
+                    )
 
                 result[b] = seasonal
 
@@ -226,7 +231,7 @@ class SeasonalDecompositionLayer(Layer):
         seasonal.set_shape(detrended.shape)
         return seasonal
 
-    def compute_output_shape(self, input_shape):
+    def compute_output_shape(self, input_shape) -> tuple:
         """Compute output shape of the layer."""
         if len(input_shape) == 2:
             # (batch_size, time_steps) -> (batch_size, time_steps, n_components)
@@ -251,7 +256,7 @@ class SeasonalDecompositionLayer(Layer):
 
             return (batch_size, time_steps, features * n_components)
 
-    def get_config(self):
+    def get_config(self) -> dict:
         """Return layer configuration."""
         config = {
             "period": self.period,

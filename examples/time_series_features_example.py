@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 """
 Example of using the new time series feature layers in keras-data-processor.
@@ -73,7 +72,9 @@ def build_model_with_feature_layers(input_shape):
 
     # 1. Extract wavelet transform features
     wavelet_features = WaveletTransformLayer(
-        levels=3, window_sizes=[4, 8, 16], flatten_output=True
+        levels=3,
+        window_sizes=[4, 8, 16],
+        flatten_output=True,
     )(inputs)
 
     # 2. Extract statistical features using TSFreshFeatureLayer
@@ -90,7 +91,7 @@ def build_model_with_feature_layers(input_shape):
 
     # Combine all features
     combined_features = Concatenate()(
-        [wavelet_features, tsfresh_features, lag_features]
+        [wavelet_features, tsfresh_features, lag_features],
     )
 
     # Dense layers for prediction
@@ -108,7 +109,8 @@ def main():
     """Run the example."""
     # Generate sample data
     X_train, y_train, X_test, y_test = generate_sample_data(
-        n_samples=1000, n_features=2
+        n_samples=1000,
+        n_features=2,
     )
 
     print(f"X_train shape: {X_train.shape}")

@@ -44,15 +44,15 @@ class FFTFeatureLayer(Layer):
         # Validate parameters
         if self.feature_type not in ["power", "dominant", "full", "stats"]:
             raise ValueError(
-                f"Feature type must be 'power', 'dominant', 'full', or 'stats', got {feature_type}"
+                f"Feature type must be 'power', 'dominant', 'full', or 'stats', got {feature_type}",
             )
 
         if self.window_function not in ["none", "hann", "hamming"]:
             raise ValueError(
-                f"Window function must be 'none', 'hann', or 'hamming', got {window_function}"
+                f"Window function must be 'none', 'hann', or 'hamming', got {window_function}",
             )
 
-    def build(self, input_shape):
+    def build(self, input_shape) -> None:
         super().build(input_shape)
 
     def call(self, inputs, training=None):
@@ -96,10 +96,11 @@ class FFTFeatureLayer(Layer):
             series_flat = tf.reshape(series, [-1, time_steps])
 
             # Apply window function if specified
-            if self.window_function != "none":
-                windowed_series = self._apply_window(series_flat)
-            else:
-                windowed_series = series_flat
+            windowed_series = (
+                self._apply_window(series_flat)
+                if self.window_function != "none"
+                else series_flat
+            )
 
             # Compute FFT
             fft_features = self._compute_fft_features(windowed_series)
@@ -108,10 +109,9 @@ class FFTFeatureLayer(Layer):
             fft_features = tf.reshape(fft_features, [batch_size, -1])
         else:
             # Apply window function if specified
-            if self.window_function != "none":
-                windowed_series = self._apply_window(series)
-            else:
-                windowed_series = series
+            windowed_series = (
+                self._apply_window(series) if self.window_function != "none" else series
+            )
 
             # Compute FFT
             fft_features = self._compute_fft_features(windowed_series)
@@ -144,7 +144,7 @@ class FFTFeatureLayer(Layer):
             # Hamming window: w(n) = 0.54 - 0.46 * cos(2πn/(N-1))
             n = tf.range(0, time_steps, dtype=tf.float32)
             window = 0.54 - 0.46 * tf.cos(
-                2.0 * np.pi * n / tf.cast(time_steps - 1, tf.float32)
+                2.0 * np.pi * n / tf.cast(time_steps - 1, tf.float32),
             )
         else:
             # No window function
@@ -164,7 +164,9 @@ class FFTFeatureLayer(Layer):
         # Normalize if requested
         if self.normalize:
             power_spectrum = power_spectrum / tf.reduce_max(
-                power_spectrum, axis=1, keepdims=True
+                power_spectrum,
+                axis=1,
+                keepdims=True,
             )
 
         # Extract features based on feature_type
@@ -189,14 +191,14 @@ class FFTFeatureLayer(Layer):
 
         # Calculate indices for evenly spaced frequencies
         indices = tf.linspace(
-            0.0, tf.cast(spectrum_length - 1, tf.float32), self.num_features
+            0.0,
+            tf.cast(spectrum_length - 1, tf.float32),
+            self.num_features,
         )
         indices = tf.cast(indices, tf.int32)
 
         # Gather power at selected indices
-        selected_powers = tf.gather(power_spectrum, indices, axis=1)
-
-        return selected_powers
+        return tf.gather(power_spectrum, indices, axis=1)
 
     def _extract_dominant_features(self, power_spectrum, fft_result):
         """Extract dominant frequencies and their power."""
@@ -218,12 +220,14 @@ class FFTFeatureLayer(Layer):
 
         # Combine powers and normalized frequency indices
         freq_indices_norm = tf.cast(indices, tf.float32) / tf.cast(
-            tf.shape(power_spectrum)[1], tf.float32
+            tf.shape(power_spectrum)[1],
+            tf.float32,
         )
 
         # Stack powers, normalized frequencies, and phases
         features = tf.stack(
-            [dominant_powers, freq_indices_norm, dominant_phases], axis=2
+            [dominant_powers, freq_indices_norm, dominant_phases],
+            axis=2,
         )
 
         # Flatten the features
@@ -263,12 +267,14 @@ class FFTFeatureLayer(Layer):
         # Energy in each band
         low_energy = tf.reduce_sum(power_spectrum[:, :low_band], axis=1, keepdims=True)
         mid_energy = tf.reduce_sum(
-            power_spectrum[:, low_band:mid_band], axis=1, keepdims=True
+            power_spectrum[:, low_band:mid_band],
+            axis=1,
+            keepdims=True,
         )
         high_energy = tf.reduce_sum(power_spectrum[:, mid_band:], axis=1, keepdims=True)
 
         # Concatenate all statistical features
-        stats = tf.concat(
+        return tf.concat(
             [
                 mean_power,
                 median_power,
@@ -282,9 +288,7 @@ class FFTFeatureLayer(Layer):
             axis=1,
         )
 
-        return stats
-
-    def compute_output_shape(self, input_shape):
+    def compute_output_shape(self, input_shape) -> tuple:
         """Compute output shape of the layer."""
         # Calculate number of output features
         if self.feature_type == "power" or self.feature_type == "full":
@@ -326,7 +330,7 @@ class FFTFeatureLayer(Layer):
                 # Only frequency features
                 return (batch_size, n_freq_features * n_features)
 
-    def get_config(self):
+    def get_config(self) -> dict:
         """Return layer configuration."""
         config = {
             "num_features": self.num_features,
