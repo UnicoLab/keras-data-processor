@@ -47,6 +47,7 @@ nav:
       - 🎯 Quick Start: getting-started/quick-start.md
       - 🌍 Why KDP?: getting-started/motivation.md
       - 🧩 Architecture Overview: getting-started/architecture.md
+      - ⬆️ Upgrading from 1.11.x: getting-started/upgrading.md
   - 📚 Feature Types:
       - 🛠️ Features Overview: features/overview.md
       - 🔢 Numerical Features: features/numerical-features.md
