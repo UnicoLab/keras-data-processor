@@ -762,3 +762,134 @@ class TimeSeriesFeature(Feature):
 
         # Create and return the feature
         return cls(**constructor_args)
+
+
+class FeatureSpaceConverter:
+    def __init__(self) -> None:
+        """Initialize a feature space converter."""
+        self.features_space = {}
+        self.numeric_features = []
+        self.categorical_features = []
+        self.text_features = []
+        self.date_features = []
+        self.passthrough_features = []
+        self.time_series_features = []  # Add time series features list
+
+    def _init_features_specs(
+        self,
+        features_specs: dict[str, FeatureType | str],
+    ) -> dict[str, Feature]:
+        """Format the features space into a dictionary.
+
+        Args:
+            features_specs: A dictionary with the features and their types,
+                            where types can be specified as either FeatureType enums,
+                            class instances (NumericalFeature, CategoricalFeature, TextFeature, DateFeature),
+                            or strings.
+
+        Returns:
+            A dictionary with feature names as keys and Feature objects as values.
+        """
+        for name, spec in features_specs.items():
+            # Direct instance check for standard pipelines
+            if isinstance(
+                spec,
+                NumericalFeature
+                | CategoricalFeature
+                | TextFeature
+                | DateFeature
+                | PassthroughFeature
+                | TimeSeriesFeature,  # Add TimeSeriesFeature to direct instance check
+            ):
+                feature_instance = spec
+            else:
+                # handling custom features pipelines
+                if isinstance(spec, Feature):
+                    feature_type = spec.feature_type
+                else:
+                    # Convert string to FeatureType if necessary
+                    feature_type = (
+                        FeatureType[spec.upper()] if isinstance(spec, str) else spec
+                    )
+
+                # Creating feature objects based on type
+                if feature_type in {
+                    FeatureType.FLOAT,
+                    FeatureType.FLOAT_NORMALIZED,
+                    FeatureType.FLOAT_RESCALED,
+                    FeatureType.FLOAT_DISCRETIZED,
+                }:
+                    # Get preferred_distribution from kwargs if provided
+                    preferred_distribution = (
+                        spec.kwargs.get("preferred_distribution")
+                        if isinstance(spec, Feature)
+                        else None
+                    )
+                    feature_instance = NumericalFeature(
+                        name=name,
+                        feature_type=feature_type,
+                        preferred_distribution=preferred_distribution,
+                    )
+                elif feature_type in {
+                    FeatureType.INTEGER_CATEGORICAL,
+                    FeatureType.STRING_CATEGORICAL,
+                }:
+                    feature_instance = CategoricalFeature(
+                        name=name,
+                        feature_type=feature_type,
+                    )
+                elif feature_type == FeatureType.TEXT:
+                    feature_instance = TextFeature(name=name, feature_type=feature_type)
+                elif feature_type == FeatureType.DATE:
+                    feature_instance = DateFeature(name=name, feature_type=feature_type)
+                elif feature_type == FeatureType.TIME_SERIES:
+                    # Create TimeSeriesFeature instance
+                    feature_instance = TimeSeriesFeature(
+                        name=name,
+                        feature_type=feature_type,
+                    )
+                elif feature_type == FeatureType.PASSTHROUGH:
+                    # Get dtype from kwargs if provided
+                    dtype = (
+                        spec.kwargs.get("dtype", tf.float32)
+                        if isinstance(spec, Feature)
+                        else tf.float32
+                    )
+                    feature_instance = PassthroughFeature(
+                        name=name,
+                        feature_type=feature_type,
+                        dtype=dtype,
+                    )
+                else:
+                    raise ValueError(
+                        f"Unsupported feature type for feature '{name}': {spec}",
+                    )
+
+            # Adding custom pipelines
+            if isinstance(spec, Feature):
+                logger.info(
+                    f"Adding custom preprocessors to the object: {spec.preprocessors}",
+                )
+                feature_instance.preprocessors = spec.preprocessors
+                feature_instance.kwargs = spec.kwargs
+
+            # Categorize feature based on its class
+            if isinstance(feature_instance, NumericalFeature):
+                self.numeric_features.append(name)
+            elif isinstance(feature_instance, CategoricalFeature):
+                self.categorical_features.append(name)
+            elif isinstance(feature_instance, TextFeature):
+                self.text_features.append(name)
+            elif isinstance(feature_instance, DateFeature):
+                self.date_features.append(name)
+            elif isinstance(feature_instance, TimeSeriesFeature):
+                # Add to time series features
+                self.time_series_features.append(name)
+            elif isinstance(feature_instance, PassthroughFeature):
+                # Add to passthrough features
+                self.passthrough_features.append(name)
+
+            # Adding formatted spec to the features_space dictionary
+            self.features_space[name] = feature_instance
+
+        return self.features_space

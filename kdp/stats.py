@@ -11,6 +11,7 @@ from loguru import logger
 
 from kdp.features import (
     CategoricalFeature,
+    FeatureSpaceConverter,
     FeatureType,
     NumericalFeature,
     TimeSeriesFeature,
@@ -284,6 +285,27 @@ class DatasetStatistics:
         self.date_features = date_features or []
         self.time_series_features = time_series_features or []
         self.features_specs = features_specs or {}
+
+        # `features_specs` is documented as the easier alternative to listing the
+        # features by type, but nothing derived those lists from it: an instance
+        # built that way created no accumulators and `main()` returned {}, which
+        # is what made `auto_configure` produce empty recommendations.
+        if self.features_specs and not any(
+            (
+                self.numeric_features,
+                self.categorical_features,
+                self.text_features,
+                self.date_features,
+                self.time_series_features,
+            ),
+        ):
+            converter = FeatureSpaceConverter()
+            self.features_specs = converter._init_features_specs(self.features_specs)
+            self.numeric_features = converter.numeric_features
+            self.categorical_features = converter.categorical_features
+            self.text_features = converter.text_features
+            self.date_features = converter.date_features
+            self.time_series_features = converter.time_series_features
         self.features_stats_path = features_stats_path or "features_stats.json"
         self.overwrite_stats = overwrite_stats
         self.batch_size = batch_size
