@@ -99,9 +99,12 @@ class DateParsingLayer(tf.keras.layers.Layer):
 
             return tf.stack([year, month, day_of_month, day_of_week])
 
+        # `tf.reshape(..., [-1])` rather than `tf.squeeze`: squeezing a
+        # single-row batch of shape (1, 1) collapses it to a scalar, which
+        # `tf.map_fn` cannot map over -- so predicting on one row raised.
         return tf.map_fn(
             parse_date,
-            tf.squeeze(inputs),
+            tf.reshape(inputs, [-1]),
             fn_output_signature=tf.int32,
         )
 

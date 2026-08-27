@@ -685,10 +685,20 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
         # Flatten the input
         x_flat = tf.reshape(x, [-1])
 
-        # Create histogram
+        # `histogram_fixed_width` requires value_range[0] < value_range[1]. A
+        # constant batch -- every single-row prediction, and any feature with no
+        # spread -- makes min == max, and a fixed epsilon vanishes into float32
+        # rounding at large magnitudes (50000 + 1e-6 == 50000). Widen the upper
+        # bound by an epsilon scaled to the magnitude so the range is always
+        # representable.
+        lower = tf.cast(stats["min"], tf.float32)
+        upper = tf.cast(stats["max"], tf.float32)
+        min_span = tf.maximum(tf.abs(lower) * 1e-5, self.epsilon)
+        upper = tf.maximum(upper, lower + min_span)
+
         hist = tf.histogram_fixed_width(
             x_flat,
-            [stats["min"], stats["max"] + self.epsilon],
+            [lower, upper],
             nbins=num_bins,
         )
 

@@ -1033,24 +1033,25 @@ class PreprocessingModel:
             )
         elif feature.feature_type == FeatureType.FLOAT_DISCRETIZED:
             logger.debug("Adding Float Discretized Feature")
-            # Use an empty list as the default value instead of 1.0.
-            boundaries = feature.kwargs.get("bin_boundaries", [])
+            boundaries = list(feature.kwargs.get("bin_boundaries") or [])
+            if not boundaries:
+                # Keras' Discretization needs either explicit boundaries or a
+                # call to adapt(); passing only `num_bins` leaves it unbuilt, so
+                # the model raised the moment it was called. KDP makes a single
+                # statistics pass and never adapts, so derive equal-width
+                # boundaries from the statistics that pass already produced.
+                boundaries = self._derive_bin_boundaries(feature.num_bins, stats)
             _out_dims = len(boundaries) + 1
 
             # Create a dictionary of parameters to pass to the Discretization layer
-            discretization_params = {"name": f"discretize_{feature_name}"}
-
-            # Either pass bin_boundaries if available in kwargs or num_bins from the feature
-            if "bin_boundaries" in feature.kwargs:
-                discretization_params["bin_boundaries"] = feature.kwargs[
-                    "bin_boundaries"
-                ]
-            else:
-                discretization_params["num_bins"] = feature.num_bins
+            discretization_params = {
+                "name": f"discretize_{feature_name}",
+                "bin_boundaries": boundaries,
+            }
 
             # Add any additional kwargs
             for key, value in feature.kwargs.items():
-                if key not in ["bin_boundaries"]:  # Avoid duplicating parameters
+                if key not in ("bin_boundaries", "num_bins"):
                     discretization_params[key] = value
 
             preprocessor.add_processing_step(
@@ -1060,7 +1061,7 @@ class PreprocessingModel:
 
             preprocessor.add_processing_step(
                 layer_class="CategoryEncoding",
-                num_tokens=_out_dims if boundaries else feature.num_bins + 1,
+                num_tokens=_out_dims,
                 output_mode="one_hot",
                 name=f"one_hot_{feature_name}",
             )
@@ -1072,6 +1073,37 @@ class PreprocessingModel:
                 variance=stats["var"],
                 name=f"norm_{feature_name}",
             )
+
+    @staticmethod
+    def _derive_bin_boundaries(num_bins: int, stats: dict) -> list[float]:
+        """Derive equal-width discretization boundaries from feature statistics.
+
+        The boundaries span mean +/- 3 standard deviations, which covers
+        essentially the whole range of a roughly normal feature while staying
+        robust to the extreme values a min/max range would stretch to.
+
+        Args:
+            num_bins: Number of buckets wanted.
+            stats: Feature statistics holding at least "mean" and "var".
+
+        Returns:
+            The interior boundaries, i.e. ``num_bins - 1`` values, which
+            Discretization turns into ``num_bins`` buckets. Empty when a single
+            bucket is requested.
+        """
+        if not num_bins or num_bins < 2:
+            return []
+
+        mean = float(stats.get("mean", 0.0))
+        variance = float(stats.get("var", 1.0))
+        std = float(np.sqrt(variance)) if variance > 0 else 0.0
+        if std <= 0:
+            # A constant feature has no spread to bin across; fall back to a
+            # unit window so the boundaries stay strictly increasing.
+            std = 1.0
+
+        edges = np.linspace(mean - 3.0 * std, mean + 3.0 * std, num_bins + 1)
+        return [float(edge) for edge in edges[1:-1]]
 
     def _add_advanced_numerical_embedding(
         self,
@@ -1535,9 +1567,15 @@ class PreprocessingModel:
         logger.info(
             f"Storing passthrough feature '{feature_name}' unprocessed for separate access",
         )
-        # Store the raw input layer for this passthrough feature
-        # This will be available in the model outputs but not processed by KDP
-        self.passthrough_outputs[feature_name] = input_layer
+        # The values are passed through untouched, but a Keras functional model
+        # rejects an Input handed straight back as an output ("`inputs` not
+        # connected to `outputs`"). Routing through PreserveDtypeLayer connects
+        # the tensor to the graph while leaving the values alone.
+        passthrough_layer = PreprocessorLayerFactory.preserve_dtype_layer(
+            name=f"passthrough_{feature_name}",
+            target_dtype=getattr(_feature, "dtype", None),
+        )
+        self.passthrough_outputs[feature_name] = passthrough_layer(input_layer)
 
     @_monitor_performance
     def _add_pipeline_time_series(
