@@ -1,3 +1,4 @@
+import keras
 import tempfile
 import unittest
 from pathlib import Path
@@ -47,7 +48,12 @@ def generate_fake_data(features_specs: dict, num_rows: int = 10) -> pd.DataFrame
             "feat1": FeatureType.FLOAT_NORMALIZED,
             "feat2": FeatureType.STRING_CATEGORICAL,
             "feat3": NumericalFeature(name="feat1", feature_type=FeatureType.FLOAT),
-            "feat4": DateFeature(name="date", feature_type=FeatureType.DATE, date_format="%Y-%m-%d", output_format="year"),
+            "feat4": DateFeature(
+                name="date",
+                feature_type=FeatureType.DATE,
+                date_format="%Y-%m-%d",
+                output_format="year",
+            ),
             # Other features...
         }
         df = generate_fake_data(features_specs, num_rows=100)
@@ -389,8 +395,8 @@ class TestPreprocessingModel(unittest.TestCase):
                 name="feat9",
                 feature_type=FeatureType.FLOAT_NORMALIZED,
                 preprocessors=[
-                    tf.keras.layers.Rescaling,
-                    tf.keras.layers.Normalization,
+                    keras.layers.Rescaling,
+                    keras.layers.Normalization,
                 ],
                 # leyers required kwargs
                 scale=1,
@@ -428,7 +434,7 @@ class TestPreprocessingModel(unittest.TestCase):
         result = ppr.build_preprocessor()
 
         # checking if we have model as output
-        self.assertIsInstance(result["model"], tf.keras.Model)
+        self.assertIsInstance(result["model"], keras.Model)
 
     def test_build_preprocessor_with_crosses(self):
         """Test building the preprocessor model."""
@@ -812,7 +818,7 @@ class TestPreprocessingModel(unittest.TestCase):
 
         # Build and verify preprocessor
         result = ppr.build_preprocessor()
-        self.assertIsInstance(result["model"], tf.keras.Model)
+        self.assertIsInstance(result["model"], keras.Model)
 
         # Verify TabularAttention layer is present
         self.assertTrue(
@@ -871,7 +877,7 @@ class TestPreprocessingModel(unittest.TestCase):
 
         # Build and verify preprocessor
         result = ppr.build_preprocessor()
-        self.assertIsInstance(result["model"], tf.keras.Model)
+        self.assertIsInstance(result["model"], keras.Model)
 
         # Verify MultiResolutionTabularAttention layer is present
         self.assertTrue(
@@ -926,7 +932,7 @@ class TestPreprocessingModel(unittest.TestCase):
 
         # Build and verify preprocessor
         result = ppr.build_preprocessor()
-        self.assertIsInstance(result["model"], tf.keras.Model)
+        self.assertIsInstance(result["model"], keras.Model)
 
         # Test with a small batch
         test_data = generate_fake_data(features_specs, num_rows=5)
@@ -1840,7 +1846,7 @@ class TestPreprocessingModel_Combinations(unittest.TestCase):
         result = ppr.build_preprocessor()
 
         # Check if the model was created
-        self.assertIsInstance(result["model"], tf.keras.Model)
+        self.assertIsInstance(result["model"], keras.Model)
 
         # Check if both features are in the inputs
         input_names = [input_layer.name for input_layer in result["model"].inputs]

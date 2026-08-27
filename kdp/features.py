@@ -1,6 +1,7 @@
 from enum import Enum, auto
 from typing import Any
 
+import keras
 import tensorflow as tf
 from loguru import logger
 
@@ -165,9 +166,21 @@ class NumericalFeature(Feature):
         self.embedding_dim = embedding_dim
         self.num_bins = num_bins
 
-    def get_embedding_layer(self, input_shape: tuple) -> tf.keras.layers.Layer:
-        """Creates and returns an NumericalEmbedding layer configured for this feature."""
-        # TODO: check why to use input_shape ?
+    def get_embedding_layer(
+        self,
+        input_shape: tuple | None = None,  # noqa: ARG002 - kept for API compatibility
+    ) -> keras.layers.Layer:
+        """Creates and returns a NumericalEmbedding layer configured for this feature.
+
+        Args:
+            input_shape: Unused. `NumericalEmbedding` derives the feature count
+                in its own `build`, so nothing here depends on the shape. The
+                parameter is kept, and optional, so existing callers that pass
+                it keep working.
+
+        Returns:
+            A `NumericalEmbedding` layer built from this feature's settings.
+        """
         from kdp.layers.numerical_embedding_layer import NumericalEmbedding
 
         return NumericalEmbedding(
@@ -223,7 +236,10 @@ class TextFeature(Feature):
     """TextFeature with dynamic kwargs passing."""
 
     def __init__(
-        self, name: str, feature_type: FeatureType = FeatureType.TEXT, **kwargs
+        self,
+        name: str,
+        feature_type: FeatureType = FeatureType.TEXT,
+        **kwargs,
     ) -> None:
         """Initializes a TextFeature instance.
 
@@ -241,7 +257,10 @@ class DateFeature(Feature):
     """TextFeature with dynamic kwargs passing."""
 
     def __init__(
-        self, name: str, feature_type: FeatureType = FeatureType.DATE, **kwargs
+        self,
+        name: str,
+        feature_type: FeatureType = FeatureType.DATE,
+        **kwargs,
     ) -> None:
         """Initializes a DateFeature instance.
 
@@ -389,11 +408,48 @@ class TimeSeriesFeature(Feature):
                 "is_target": self.is_target,
                 "exclude_from_input": self.exclude_from_input,
                 "input_type": self.input_type,
-            }
+            },
         )
 
-    def build_layers(self):
+    def _resolve_drop_na(
+        self,
+        config: dict,
+        config_name: str,
+        row_preserving: bool,
+    ) -> bool:
+        """Decide whether a transform may drop its warm-up rows.
+
+        Args:
+            config: The transform's configuration dictionary.
+            config_name: Name of the configuration, used in the warning.
+            row_preserving: Whether the caller needs the row count preserved.
+
+        Returns:
+            The drop_na value the layer should be built with.
+        """
+        drop_na = config.get("drop_na", True)
+        if row_preserving and drop_na:
+            if "drop_na" in config:
+                logger.warning(
+                    f"{config_name} for feature '{self.name}' requested "
+                    "drop_na=True, but a preprocessing model must keep one output "
+                    "row per input row or the features cannot be concatenated. "
+                    "Building with drop_na=False; the warm-up rows are padded "
+                    "instead, and can be discarded downstream.",
+                )
+            return False
+        return drop_na
+
+    def build_layers(self, row_preserving: bool = True) -> list:
         """Build the appropriate layers for this time series feature based on configuration.
+
+        Args:
+            row_preserving: When True (the default) the layers keep every input
+                row, padding the warm-up positions instead of dropping them.
+                A preprocessing model lays features out side by side, so a layer
+                that removes its feature's leading rows leaves that column
+                shorter than every other one and the concatenation fails. Pass
+                False only when driving the returned layers directly.
 
         Returns:
             list: List of TensorFlow layers for time series preprocessing
@@ -411,7 +467,11 @@ class TimeSeriesFeature(Feature):
         # Add lag layer if configured
         if self.lag_config and "lags" in self.lag_config:
             lags = self.lag_config.get("lags", [1])
-            drop_na = self.lag_config.get("drop_na", True)
+            drop_na = self._resolve_drop_na(
+                self.lag_config,
+                "lag_config",
+                row_preserving,
+            )
             keep_original = self.lag_config.get("keep_original", True)
             fill_value = self.lag_config.get("fill_value", 0.0)
 
@@ -422,7 +482,7 @@ class TimeSeriesFeature(Feature):
                     keep_original=keep_original,
                     fill_value=fill_value,
                     name=f"{self.name}_lag",
-                )
+                ),
             )
 
         # Add rolling stats layer if configured
@@ -430,7 +490,11 @@ class TimeSeriesFeature(Feature):
             window_size = self.rolling_stats_config.get("window_size")
             statistics = self.rolling_stats_config.get("statistics")
             window_stride = self.rolling_stats_config.get("window_stride", 1)
-            drop_na = self.rolling_stats_config.get("drop_na", True)
+            drop_na = self._resolve_drop_na(
+                self.rolling_stats_config,
+                "rolling_stats_config",
+                row_preserving,
+            )
             keep_original = self.rolling_stats_config.get("keep_original", True)
             pad_value = self.rolling_stats_config.get("pad_value", 0.0)
 
@@ -443,13 +507,17 @@ class TimeSeriesFeature(Feature):
                     keep_original=keep_original,
                     pad_value=pad_value,
                     name=f"{self.name}_rolling_stats",
-                )
+                ),
             )
 
         # Add differencing layer if configured
         if self.differencing_config and "order" in self.differencing_config:
             order = self.differencing_config.get("order", 1)
-            drop_na = self.differencing_config.get("drop_na", True)
+            drop_na = self._resolve_drop_na(
+                self.differencing_config,
+                "differencing_config",
+                row_preserving,
+            )
             keep_original = self.differencing_config.get("keep_original", True)
             fill_value = self.differencing_config.get("fill_value", 0.0)
 
@@ -460,13 +528,17 @@ class TimeSeriesFeature(Feature):
                     keep_original=keep_original,
                     fill_value=fill_value,
                     name=f"{self.name}_differencing",
-                )
+                ),
             )
 
         # Add moving average layer if configured
         if self.moving_average_config and "periods" in self.moving_average_config:
             periods = self.moving_average_config.get("periods", [7])
-            drop_na = self.moving_average_config.get("drop_na", True)
+            drop_na = self._resolve_drop_na(
+                self.moving_average_config,
+                "moving_average_config",
+                row_preserving,
+            )
             keep_original = self.moving_average_config.get("keep_original", True)
             pad_value = self.moving_average_config.get("pad_value", 0.0)
 
@@ -477,7 +549,7 @@ class TimeSeriesFeature(Feature):
                     keep_original=keep_original,
                     pad_value=pad_value,
                     name=f"{self.name}_moving_average",
-                )
+                ),
             )
 
         # Add wavelet transform layer if configured
@@ -486,7 +558,11 @@ class TimeSeriesFeature(Feature):
             window_sizes = self.wavelet_transform_config.get("window_sizes", None)
             keep_levels = self.wavelet_transform_config.get("keep_levels", "all")
             flatten_output = self.wavelet_transform_config.get("flatten_output", True)
-            drop_na = self.wavelet_transform_config.get("drop_na", True)
+            drop_na = self._resolve_drop_na(
+                self.wavelet_transform_config,
+                "wavelet_transform_config",
+                row_preserving,
+            )
 
             layers.append(
                 WaveletTransformLayer(
@@ -496,17 +572,22 @@ class TimeSeriesFeature(Feature):
                     flatten_output=flatten_output,
                     drop_na=drop_na,
                     name=f"{self.name}_wavelet",
-                )
+                ),
             )
 
         # Add TSFresh feature layer if configured
         if self.tsfresh_feature_config:
             features = self.tsfresh_feature_config.get(
-                "features", ["mean", "std", "min", "max", "median"]
+                "features",
+                ["mean", "std", "min", "max", "median"],
             )
             window_size = self.tsfresh_feature_config.get("window_size", None)
             stride = self.tsfresh_feature_config.get("stride", 1)
-            drop_na = self.tsfresh_feature_config.get("drop_na", True)
+            drop_na = self._resolve_drop_na(
+                self.tsfresh_feature_config,
+                "tsfresh_feature_config",
+                row_preserving,
+            )
             normalize = self.tsfresh_feature_config.get("normalize", False)
 
             layers.append(
@@ -517,13 +598,14 @@ class TimeSeriesFeature(Feature):
                     drop_na=drop_na,
                     normalize=normalize,
                     name=f"{self.name}_tsfresh",
-                )
+                ),
             )
 
         # Add calendar feature layer if configured
         if self.calendar_feature_config:
             features = self.calendar_feature_config.get(
-                "features", ["month", "day", "day_of_week", "is_weekend"]
+                "features",
+                ["month", "day", "day_of_week", "is_weekend"],
             )
             cyclic_encoding = self.calendar_feature_config.get("cyclic_encoding", True)
             input_format = self.calendar_feature_config.get("input_format", "%Y-%m-%d")
@@ -536,157 +618,94 @@ class TimeSeriesFeature(Feature):
                     input_format=input_format,
                     normalize=normalize,
                     name=f"{self.name}_calendar",
-                )
+                ),
             )
 
         return layers
 
-    def get_output_dim(self):
+    def get_output_dim(self) -> int:
         """Calculate the output dimension of this feature after all transformations.
 
+        The layers built by :meth:`build_layers` are applied in sequence, and each
+        one that keeps its originals passes them through alongside its new
+        columns. The widths therefore compose multiplicatively, not additively:
+        two lags on a single column give 3 columns, and differencing that while
+        keeping the originals gives 6, not 4.
+
         Returns:
-            int: The output dimension
+            int: The number of columns the layer stack produces.
         """
-        # Handle special cases for combined configurations to match test expectations
-
-        # All configs case (test_output_dim test)
-        if (
-            self.lag_config
-            and "lags" in self.lag_config
-            and self.rolling_stats_config
-            and "statistics" in self.rolling_stats_config
-            and self.differencing_config
-            and "order" in self.differencing_config
-            and self.moving_average_config
-            and "periods" in self.moving_average_config
-        ):
-            lags = self.lag_config.get("lags", [1])
-            stats = self.rolling_stats_config.get("statistics", [])
-            order = self.differencing_config.get("order", 1)
-            periods = self.moving_average_config.get("periods", [])
-
-            # Original + lags + stats + diff + MA
-            return 1 + len(lags) + len(stats) + order + len(periods)
-
-        # Lag + differencing case (test_output_dim_parameterized_6)
-        if (
-            self.lag_config
-            and "lags" in self.lag_config
-            and self.differencing_config
-            and "order" in self.differencing_config
-        ):
-            lags = self.lag_config.get("lags", [1])
-            order = self.differencing_config.get("order", 1)
-            # Special case that matches the test: lag with 2 indices (original + 2 lags) + diff order 1 = 5
-            if len(lags) == 2 and order == 1:
-                return 5
-
-        # Standard calculation logic
         dim = 1
 
-        # Add dimensions for lag features
         if self.lag_config and "lags" in self.lag_config:
             lags = self.lag_config.get("lags", [1])
             keep_original = self.lag_config.get("keep_original", True)
+            dim *= len(lags) + 1 if keep_original else len(lags)
 
-            if keep_original:
-                dim = 1 + len(lags)
-            else:
-                dim = len(lags)
-
-        # Add dimensions for rolling statistics
         if self.rolling_stats_config and "statistics" in self.rolling_stats_config:
             statistics = self.rolling_stats_config.get("statistics", [])
             keep_original = self.rolling_stats_config.get("keep_original", True)
+            dim *= len(statistics) + 1 if keep_original else len(statistics)
 
-            if (
-                keep_original and dim == 1
-            ):  # Only apply if we're starting from the original
-                dim += len(statistics)
-            else:
-                # Apply per value (original + lags)
-                dim = dim + len(statistics)
-
-        # Add dimensions for differencing
         if self.differencing_config and "order" in self.differencing_config:
-            order = self.differencing_config.get("order", 1)
             keep_original = self.differencing_config.get("keep_original", True)
-
+            # Successive orders collapse into a single differenced block, so
+            # keeping the originals doubles the width whatever the order is.
             if keep_original:
-                dim += order
-            else:
-                dim = order
+                dim *= 2
 
-        # Add dimensions for moving averages
         if self.moving_average_config and "periods" in self.moving_average_config:
             periods = self.moving_average_config.get("periods", [7])
             keep_original = self.moving_average_config.get("keep_original", True)
+            dim *= len(periods) + 1 if keep_original else len(periods)
 
-            if keep_original:
-                dim += len(periods)
-            else:
-                dim = len(periods)
-
-        # Add dimensions for wavelet transform
+        # The remaining transforms append their columns to whatever came before.
         if self.wavelet_transform_config:
             levels = self.wavelet_transform_config.get("levels", 3)
             keep_levels = self.wavelet_transform_config.get("keep_levels", "all")
             flatten_output = self.wavelet_transform_config.get("flatten_output", True)
 
-            if flatten_output:
-                # If all levels, we have coefficients for each level plus the original
-                if keep_levels == "all":
-                    wavelet_dims = levels
-                else:
-                    # Count the specific levels to keep
-                    if isinstance(keep_levels, list):
-                        wavelet_dims = len(keep_levels)
-                    else:
-                        wavelet_dims = 1  # Default to 1 if not properly specified
-
-                dim += wavelet_dims
+            if not flatten_output:
+                wavelet_dims = 1
+            elif keep_levels == "all":
+                wavelet_dims = levels
+            elif isinstance(keep_levels, list):
+                wavelet_dims = len(keep_levels)
             else:
-                # If not flattened, output keeps original dimensions
-                # but we just treat it as one feature for dimensionality estimation
-                dim += 1
+                wavelet_dims = 1
+            dim += wavelet_dims
 
-        # Add dimensions for TSFresh features
         if self.tsfresh_feature_config:
             features = self.tsfresh_feature_config.get(
-                "features", ["mean", "std", "min", "max", "median"]
+                "features",
+                ["mean", "std", "min", "max", "median"],
             )
-            # Each feature type adds one dimension
             dim += len(features)
 
-        # Add dimensions for calendar features
         if self.calendar_feature_config:
             features = self.calendar_feature_config.get(
-                "features", ["month", "day", "day_of_week", "is_weekend"]
+                "features",
+                ["month", "day", "day_of_week", "is_weekend"],
             )
             cyclic_encoding = self.calendar_feature_config.get("cyclic_encoding", True)
-
-            # For cyclic features (month, day, day_of_week), we use sin/cos encoding which doubles dimensions
-            cyclic_features = [
+            # Cyclic components are encoded as a sin/cos pair.
+            cyclic_features = {
                 "month",
                 "day",
                 "day_of_week",
                 "quarter",
                 "hour",
                 "minute",
-            ]
-
+            }
             if cyclic_encoding:
                 for feature in features:
-                    if feature in cyclic_features:
-                        dim += 2  # sin and cos components
-                    else:
-                        dim += 1  # binary or scalar features
+                    dim += 2 if feature in cyclic_features else 1
             else:
-                dim += len(features)  # one-hot or scalar for each feature
+                dim += len(features)
 
         return dim
 
-    def to_dict(self):
+    def to_dict(self) -> dict:
         """Convert the feature configuration to a dictionary.
 
         Returns:
@@ -711,7 +730,7 @@ class TimeSeriesFeature(Feature):
         }
 
     @classmethod
-    def from_dict(cls, feature_dict):
+    def from_dict(cls, feature_dict) -> "TimeSeriesFeature":
         """Create a TimeSeriesFeature from a dictionary representation.
 
         Args:
@@ -743,3 +762,134 @@ class TimeSeriesFeature(Feature):
 
         # Create and return the feature
         return cls(**constructor_args)
+
+
+class FeatureSpaceConverter:
+    def __init__(self) -> None:
+        """Initialize a feature space converter."""
+        self.features_space = {}
+        self.numeric_features = []
+        self.categorical_features = []
+        self.text_features = []
+        self.date_features = []
+        self.passthrough_features = []
+        self.time_series_features = []  # Add time series features list
+
+    def _init_features_specs(
+        self,
+        features_specs: dict[str, FeatureType | str],
+    ) -> dict[str, Feature]:
+        """Format the features space into a dictionary.
+
+        Args:
+            features_specs: A dictionary with the features and their types,
+                            where types can be specified as either FeatureType enums,
+                            class instances (NumericalFeature, CategoricalFeature, TextFeature, DateFeature),
+                            or strings.
+
+        Returns:
+            A dictionary with feature names as keys and Feature objects as values.
+        """
+        for name, spec in features_specs.items():
+            # Direct instance check for standard pipelines
+            if isinstance(
+                spec,
+                NumericalFeature
+                | CategoricalFeature
+                | TextFeature
+                | DateFeature
+                | PassthroughFeature
+                | TimeSeriesFeature,  # Add TimeSeriesFeature to direct instance check
+            ):
+                feature_instance = spec
+            else:
+                # handling custom features pipelines
+                if isinstance(spec, Feature):
+                    feature_type = spec.feature_type
+                else:
+                    # Convert string to FeatureType if necessary
+                    feature_type = (
+                        FeatureType[spec.upper()] if isinstance(spec, str) else spec
+                    )
+
+                # Creating feature objects based on type
+                if feature_type in {
+                    FeatureType.FLOAT,
+                    FeatureType.FLOAT_NORMALIZED,
+                    FeatureType.FLOAT_RESCALED,
+                    FeatureType.FLOAT_DISCRETIZED,
+                }:
+                    # Get preferred_distribution from kwargs if provided
+                    preferred_distribution = (
+                        spec.kwargs.get("preferred_distribution")
+                        if isinstance(spec, Feature)
+                        else None
+                    )
+                    feature_instance = NumericalFeature(
+                        name=name,
+                        feature_type=feature_type,
+                        preferred_distribution=preferred_distribution,
+                    )
+                elif feature_type in {
+                    FeatureType.INTEGER_CATEGORICAL,
+                    FeatureType.STRING_CATEGORICAL,
+                }:
+                    feature_instance = CategoricalFeature(
+                        name=name,
+                        feature_type=feature_type,
+                    )
+                elif feature_type == FeatureType.TEXT:
+                    feature_instance = TextFeature(name=name, feature_type=feature_type)
+                elif feature_type == FeatureType.DATE:
+                    feature_instance = DateFeature(name=name, feature_type=feature_type)
+                elif feature_type == FeatureType.TIME_SERIES:
+                    # Create TimeSeriesFeature instance
+                    feature_instance = TimeSeriesFeature(
+                        name=name,
+                        feature_type=feature_type,
+                    )
+                elif feature_type == FeatureType.PASSTHROUGH:
+                    # Get dtype from kwargs if provided
+                    dtype = (
+                        spec.kwargs.get("dtype", tf.float32)
+                        if isinstance(spec, Feature)
+                        else tf.float32
+                    )
+                    feature_instance = PassthroughFeature(
+                        name=name,
+                        feature_type=feature_type,
+                        dtype=dtype,
+                    )
+                else:
+                    raise ValueError(
+                        f"Unsupported feature type for feature '{name}': {spec}",
+                    )
+
+            # Adding custom pipelines
+            if isinstance(spec, Feature):
+                logger.info(
+                    f"Adding custom preprocessors to the object: {spec.preprocessors}",
+                )
+                feature_instance.preprocessors = spec.preprocessors
+                feature_instance.kwargs = spec.kwargs
+
+            # Categorize feature based on its class
+            if isinstance(feature_instance, NumericalFeature):
+                self.numeric_features.append(name)
+            elif isinstance(feature_instance, CategoricalFeature):
+                self.categorical_features.append(name)
+            elif isinstance(feature_instance, TextFeature):
+                self.text_features.append(name)
+            elif isinstance(feature_instance, DateFeature):
+                self.date_features.append(name)
+            elif isinstance(feature_instance, TimeSeriesFeature):
+                # Add to time series features
+                self.time_series_features.append(name)
+            elif isinstance(feature_instance, PassthroughFeature):
+                # Add to passthrough features
+                self.passthrough_features.append(name)
+
+            # Adding formatted spec to the features_space dictionary
+            self.features_space[name] = feature_instance
+
+        return self.features_space

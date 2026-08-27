@@ -1,8 +1,10 @@
+import keras
 import tensorflow as tf
-from tensorflow.keras.layers import Layer
+from keras.layers import Layer
 import numpy as np
 
 
+@keras.saving.register_keras_serializable(package="kdp.layers")
 class FFTFeatureLayer(Layer):
     """Layer for extracting frequency domain features using Fast Fourier Transform.
 
@@ -33,6 +35,11 @@ class FFTFeatureLayer(Layer):
         normalize=True,
         **kwargs,
     ):
+        """Initialize the FFTFeatureLayer.
+
+        See the class docstring for the accepted arguments and what
+        each one controls.
+        """
         super().__init__(**kwargs)
         self.num_features = num_features
         self.feature_type = feature_type
@@ -43,18 +50,23 @@ class FFTFeatureLayer(Layer):
         # Validate parameters
         if self.feature_type not in ["power", "dominant", "full", "stats"]:
             raise ValueError(
-                f"Feature type must be 'power', 'dominant', 'full', or 'stats', got {feature_type}"
+                f"Feature type must be 'power', 'dominant', 'full', or 'stats', got {feature_type}",
             )
 
         if self.window_function not in ["none", "hann", "hamming"]:
             raise ValueError(
-                f"Window function must be 'none', 'hann', or 'hamming', got {window_function}"
+                f"Window function must be 'none', 'hann', or 'hamming', got {window_function}",
             )
 
-    def build(self, input_shape):
+    def build(self, input_shape) -> None:
+        """Build the layer's weights for a given input shape.
+
+        Args:
+            input_shape: Shape of the input tensor.
+        """
         super().build(input_shape)
 
-    def call(self, inputs, training=None):
+    def call(self, inputs, training=None) -> tf.Tensor:
         """Apply FFT feature extraction.
 
         Args:
@@ -95,10 +107,11 @@ class FFTFeatureLayer(Layer):
             series_flat = tf.reshape(series, [-1, time_steps])
 
             # Apply window function if specified
-            if self.window_function != "none":
-                windowed_series = self._apply_window(series_flat)
-            else:
-                windowed_series = series_flat
+            windowed_series = (
+                self._apply_window(series_flat)
+                if self.window_function != "none"
+                else series_flat
+            )
 
             # Compute FFT
             fft_features = self._compute_fft_features(windowed_series)
@@ -107,10 +120,9 @@ class FFTFeatureLayer(Layer):
             fft_features = tf.reshape(fft_features, [batch_size, -1])
         else:
             # Apply window function if specified
-            if self.window_function != "none":
-                windowed_series = self._apply_window(series)
-            else:
-                windowed_series = series
+            windowed_series = (
+                self._apply_window(series) if self.window_function != "none" else series
+            )
 
             # Compute FFT
             fft_features = self._compute_fft_features(windowed_series)
@@ -129,7 +141,7 @@ class FFTFeatureLayer(Layer):
 
         return result
 
-    def _apply_window(self, series):
+    def _apply_window(self, series) -> tf.Tensor:
         """Apply window function to the time series."""
         time_steps = tf.shape(series)[1]
 
@@ -143,7 +155,7 @@ class FFTFeatureLayer(Layer):
             # Hamming window: w(n) = 0.54 - 0.46 * cos(2πn/(N-1))
             n = tf.range(0, time_steps, dtype=tf.float32)
             window = 0.54 - 0.46 * tf.cos(
-                2.0 * np.pi * n / tf.cast(time_steps - 1, tf.float32)
+                2.0 * np.pi * n / tf.cast(time_steps - 1, tf.float32),
             )
         else:
             # No window function
@@ -152,7 +164,7 @@ class FFTFeatureLayer(Layer):
         # Apply window function (broadcast window across batches)
         return series * window
 
-    def _compute_fft_features(self, series):
+    def _compute_fft_features(self, series) -> tf.Tensor:
         """Compute FFT features based on the selected feature type."""
         # Compute FFT
         fft_result = tf.signal.rfft(series)
@@ -163,7 +175,9 @@ class FFTFeatureLayer(Layer):
         # Normalize if requested
         if self.normalize:
             power_spectrum = power_spectrum / tf.reduce_max(
-                power_spectrum, axis=1, keepdims=True
+                power_spectrum,
+                axis=1,
+                keepdims=True,
             )
 
         # Extract features based on feature_type
@@ -181,23 +195,23 @@ class FFTFeatureLayer(Layer):
             # Extract statistical features from frequency domain
             return self._extract_statistical_features(power_spectrum)
 
-    def _extract_power_features(self, power_spectrum):
+    def _extract_power_features(self, power_spectrum) -> tf.Tensor:
         """Extract power at evenly spaced frequencies."""
         # Get dimensions
         spectrum_length = tf.shape(power_spectrum)[1]
 
         # Calculate indices for evenly spaced frequencies
         indices = tf.linspace(
-            0.0, tf.cast(spectrum_length - 1, tf.float32), self.num_features
+            0.0,
+            tf.cast(spectrum_length - 1, tf.float32),
+            self.num_features,
         )
         indices = tf.cast(indices, tf.int32)
 
         # Gather power at selected indices
-        selected_powers = tf.gather(power_spectrum, indices, axis=1)
+        return tf.gather(power_spectrum, indices, axis=1)
 
-        return selected_powers
-
-    def _extract_dominant_features(self, power_spectrum, fft_result):
+    def _extract_dominant_features(self, power_spectrum, fft_result) -> tf.Tensor:
         """Extract dominant frequencies and their power."""
         # Get top K frequencies by power
         _, indices = tf.math.top_k(power_spectrum, k=self.num_features)
@@ -217,18 +231,20 @@ class FFTFeatureLayer(Layer):
 
         # Combine powers and normalized frequency indices
         freq_indices_norm = tf.cast(indices, tf.float32) / tf.cast(
-            tf.shape(power_spectrum)[1], tf.float32
+            tf.shape(power_spectrum)[1],
+            tf.float32,
         )
 
         # Stack powers, normalized frequencies, and phases
         features = tf.stack(
-            [dominant_powers, freq_indices_norm, dominant_phases], axis=2
+            [dominant_powers, freq_indices_norm, dominant_phases],
+            axis=2,
         )
 
         # Flatten the features
         return tf.reshape(features, [tf.shape(power_spectrum)[0], -1])
 
-    def _extract_statistical_features(self, power_spectrum):
+    def _extract_statistical_features(self, power_spectrum) -> tf.Tensor:
         """Extract statistical features from the power spectrum."""
         # Mean power
         mean_power = tf.reduce_mean(power_spectrum, axis=1, keepdims=True)
@@ -262,12 +278,14 @@ class FFTFeatureLayer(Layer):
         # Energy in each band
         low_energy = tf.reduce_sum(power_spectrum[:, :low_band], axis=1, keepdims=True)
         mid_energy = tf.reduce_sum(
-            power_spectrum[:, low_band:mid_band], axis=1, keepdims=True
+            power_spectrum[:, low_band:mid_band],
+            axis=1,
+            keepdims=True,
         )
         high_energy = tf.reduce_sum(power_spectrum[:, mid_band:], axis=1, keepdims=True)
 
         # Concatenate all statistical features
-        stats = tf.concat(
+        return tf.concat(
             [
                 mean_power,
                 median_power,
@@ -281,9 +299,7 @@ class FFTFeatureLayer(Layer):
             axis=1,
         )
 
-        return stats
-
-    def compute_output_shape(self, input_shape):
+    def compute_output_shape(self, input_shape) -> tuple:
         """Compute output shape of the layer."""
         # Calculate number of output features
         if self.feature_type == "power" or self.feature_type == "full":
@@ -325,7 +341,7 @@ class FFTFeatureLayer(Layer):
                 # Only frequency features
                 return (batch_size, n_freq_features * n_features)
 
-    def get_config(self):
+    def get_config(self) -> dict:
         """Return layer configuration."""
         config = {
             "num_features": self.num_features,

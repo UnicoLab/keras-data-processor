@@ -1,8 +1,10 @@
+import keras
 import tensorflow as tf
-from tensorflow.keras.layers import Layer
+from keras.layers import Layer
 import numpy as np
 
 
+@keras.saving.register_keras_serializable(package="kdp.layers")
 class TSFreshFeatureLayer(Layer):
     """Layer for extracting statistical features from time series data.
 
@@ -54,6 +56,11 @@ class TSFreshFeatureLayer(Layer):
         normalize=False,
         **kwargs,
     ):
+        """Initialize the TSFreshFeatureLayer.
+
+        See the class docstring for the accepted arguments and what
+        each one controls.
+        """
         super().__init__(**kwargs)
 
         # Default features if none provided
@@ -118,10 +125,15 @@ class TSFreshFeatureLayer(Layer):
             ):
                 raise ValueError(f"Invalid feature: {feature}")
 
-    def build(self, input_shape):
+    def build(self, input_shape) -> None:
+        """Build the layer's weights for a given input shape.
+
+        Args:
+            input_shape: Shape of the input tensor.
+        """
         super().build(input_shape)
 
-    def call(self, inputs, training=None):
+    def call(self, inputs, training=None) -> tf.Tensor:
         """Extract statistical features from time series data.
 
         Args:
@@ -133,7 +145,7 @@ class TSFreshFeatureLayer(Layer):
         """
 
         # Process the input tensor using NumPy for more control over feature extraction
-        def extract_tsfresh_features(inputs_tensor):
+        def extract_tsfresh_features(inputs_tensor) -> np.ndarray:
             # Convert to NumPy
             inputs_np = inputs_tensor.numpy()
 
@@ -162,7 +174,8 @@ class TSFreshFeatureLayer(Layer):
 
             # Initialize output array
             result = np.zeros(
-                (batch_size, n_windows, n_output_features), dtype=np.float32
+                (batch_size, n_windows, n_output_features),
+                dtype=np.float32,
             )
 
             # Process each sample in the batch
@@ -244,21 +257,21 @@ class TSFreshFeatureLayer(Layer):
             else:
                 # Multi-feature input
                 result.set_shape(
-                    [inputs.shape[0], n_windows, inputs.shape[2] * n_output_features]
+                    [inputs.shape[0], n_windows, inputs.shape[2] * n_output_features],
                 )
 
         return result
 
-    def _compute_features(self, series):
+    def _compute_features(self, series) -> list:
         """Compute statistical features for a single time series."""
         results = []
 
-        # Handle NaN values
-        if self.drop_na:
-            series = series[~np.isnan(series)]
-        else:
-            # Replace NaN with 0
-            series = np.nan_to_num(series, nan=0.0)
+        # Handle NaN values: drop them, or replace them with 0.
+        series = (
+            series[~np.isnan(series)]
+            if self.drop_na
+            else np.nan_to_num(series, nan=0.0)
+        )
 
         # Skip empty series
         if len(series) == 0:
@@ -345,11 +358,15 @@ class TSFreshFeatureLayer(Layer):
                 x = np.arange(len(series))
                 if len(x) > 1:
                     # Add a column of ones for the intercept
-                    X = np.vstack([x, np.ones(len(x))]).T
+                    design_matrix = np.vstack([x, np.ones(len(x))]).T
 
                     # Solve the least squares problem
                     try:
-                        slope, intercept = np.linalg.lstsq(X, series, rcond=None)[0]
+                        slope, intercept = np.linalg.lstsq(
+                            design_matrix,
+                            series,
+                            rcond=None,
+                        )[0]
                         results.append(np.array([slope, intercept]))
                     except np.linalg.LinAlgError:
                         results.append(np.array([0.0, 0.0]))
@@ -361,7 +378,7 @@ class TSFreshFeatureLayer(Layer):
                 if len(series) > 2:
                     # A point is a peak if it's greater than both neighbors
                     peaks = np.where(
-                        (series[1:-1] > series[:-2]) & (series[1:-1] > series[2:])
+                        (series[1:-1] > series[:-2]) & (series[1:-1] > series[2:]),
                     )[0]
                     results.append(len(peaks) / len(series))
                 else:
@@ -372,7 +389,7 @@ class TSFreshFeatureLayer(Layer):
                 if len(series) > 2:
                     # A point is a valley if it's less than both neighbors
                     valleys = np.where(
-                        (series[1:-1] < series[:-2]) & (series[1:-1] < series[2:])
+                        (series[1:-1] < series[:-2]) & (series[1:-1] < series[2:]),
                     )[0]
                     results.append(len(valleys) / len(series))
                 else:
@@ -416,7 +433,7 @@ class TSFreshFeatureLayer(Layer):
 
         return results
 
-    def _get_n_output_features(self):
+    def _get_n_output_features(self) -> int:
         """Calculate the number of output features."""
         n_features = 0
 
@@ -431,7 +448,7 @@ class TSFreshFeatureLayer(Layer):
 
         return n_features
 
-    def compute_output_shape(self, input_shape):
+    def compute_output_shape(self, input_shape) -> tuple:
         """Compute the output shape of the layer."""
         n_output_features = self._get_n_output_features()
 
@@ -452,7 +469,7 @@ class TSFreshFeatureLayer(Layer):
             n_windows = (time_steps - window_size) // self.stride + 1
             return (batch_size, n_windows, n_output_features)
 
-    def get_config(self):
+    def get_config(self) -> dict:
         """Return the configuration of the layer."""
         config = {
             "features": self.features,

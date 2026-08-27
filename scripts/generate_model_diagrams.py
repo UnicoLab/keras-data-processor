@@ -20,6 +20,7 @@ The script can also be run through the Makefile:
     make generate_doc_content
 """
 
+import keras
 import os
 import tempfile
 from pathlib import Path
@@ -52,10 +53,9 @@ def generate_fake_data(features_specs, num_rows=20):
     """Generate fake data for testing various feature types."""
     data = {}
     for feature_name, spec in features_specs.items():
-        if isinstance(spec, FeatureType) or isinstance(spec, str):
-            feature_type = spec
-        else:
-            feature_type = spec.feature_type
+        feature_type = (
+            spec if isinstance(spec, FeatureType | str) else spec.feature_type
+        )
 
         if (
             feature_type == FeatureType.FLOAT
@@ -72,7 +72,7 @@ def generate_fake_data(features_specs, num_rows=20):
         elif feature_type == FeatureType.STRING_CATEGORICAL:
             categories = ["A", "B", "C", "D", "E"]
             data[feature_name] = pd.Series(
-                [categories[np.random.randint(0, 5)] for _ in range(num_rows)]
+                [categories[np.random.randint(0, 5)] for _ in range(num_rows)],
             )
         elif feature_type == FeatureType.TEXT:
             texts = [
@@ -83,12 +83,12 @@ def generate_fake_data(features_specs, num_rows=20):
                 "Natural language processing",
             ]
             data[feature_name] = pd.Series(
-                [texts[np.random.randint(0, 5)] for _ in range(num_rows)]
+                [texts[np.random.randint(0, 5)] for _ in range(num_rows)],
             )
         elif feature_type == FeatureType.DATE:
             dates = pd.date_range(start="1/1/2020", periods=10)
             data[feature_name] = pd.Series(
-                [dates[np.random.randint(0, 10)] for _ in range(num_rows)]
+                [dates[np.random.randint(0, 10)] for _ in range(num_rows)],
             )
         elif feature_type == FeatureType.PASSTHROUGH:
             # For passthrough features, use a simple array of random values
@@ -103,7 +103,7 @@ def generate_fake_data(features_specs, num_rows=20):
                     date = pd.Timestamp("2022-01-01") + pd.Timedelta(days=i)
                     value = base_value + i * 2 + np.random.normal(0, 1)
                     all_data.append(
-                        {feature_name: value, "date": date, "group_id": group}
+                        {feature_name: value, "date": date, "group_id": group},
                     )
             # If this is a time series feature, we need to create other columns too
             if "date" not in data:
@@ -147,7 +147,7 @@ def generate_model_diagram(name, features_specs, **kwargs):
         output_path = OUTPUT_DIR / filename
 
         # Use TensorFlow's plot_model to generate the image
-        tf.keras.utils.plot_model(
+        keras.utils.plot_model(
             model,
             to_file=str(output_path),
             show_shapes=True,
@@ -297,7 +297,7 @@ def main():
                 feature_type=FeatureType.FLOAT_RESCALED,
                 use_embedding=True,
                 embedding_dim=32,
-            )
+            ),
         },
     )
 
@@ -309,7 +309,7 @@ def main():
                 feature_type=FeatureType.STRING_CATEGORICAL,
                 max_tokens=1000,
                 embedding_dim=64,
-            )
+            ),
         },
     )
 
@@ -322,7 +322,7 @@ def main():
                 max_tokens=5000,
                 embedding_dim=64,
                 sequence_length=128,
-            )
+            ),
         },
     )
 
@@ -335,7 +335,7 @@ def main():
                 add_day_of_week=True,
                 add_month=True,
                 cyclical_encoding=True,
-            )
+            ),
         },
     )
 
@@ -343,8 +343,10 @@ def main():
         "custom_passthrough_feature",
         {
             "embedding": PassthroughFeature(
-                name="embedding", feature_type=FeatureType.PASSTHROUGH, dtype=tf.float32
-            )
+                name="embedding",
+                feature_type=FeatureType.PASSTHROUGH,
+                dtype=tf.float32,
+            ),
         },
     )
 

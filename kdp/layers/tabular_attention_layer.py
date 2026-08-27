@@ -1,7 +1,9 @@
+import keras
 import tensorflow as tf
 
 
-class TabularAttention(tf.keras.layers.Layer):
+@keras.saving.register_keras_serializable(package="kdp.layers")
+class TabularAttention(keras.layers.Layer):
     """Custom layer to apply inter-feature and inter-sample attention for tabular data.
 
     This layer implements a dual attention mechanism:
@@ -13,7 +15,11 @@ class TabularAttention(tf.keras.layers.Layer):
     """
 
     def __init__(
-        self, num_heads: int, d_model: int, dropout_rate: float = 0.1, **kwargs
+        self,
+        num_heads: int,
+        d_model: int,
+        dropout_rate: float = 0.1,
+        **kwargs,
     ):
         """Initialize the TabularAttention layer.
 
@@ -29,36 +35,36 @@ class TabularAttention(tf.keras.layers.Layer):
         self.dropout_rate = dropout_rate
 
         # Attention layers
-        self.feature_attention = tf.keras.layers.MultiHeadAttention(
+        self.feature_attention = keras.layers.MultiHeadAttention(
             num_heads=num_heads,
             key_dim=d_model,
         )
-        self.sample_attention = tf.keras.layers.MultiHeadAttention(
+        self.sample_attention = keras.layers.MultiHeadAttention(
             num_heads=num_heads,
             key_dim=d_model,
         )
 
         # Feed-forward network
-        self.ffn = tf.keras.Sequential(
+        self.ffn = keras.Sequential(
             [
-                tf.keras.layers.Dense(d_model, activation="relu"),
-                tf.keras.layers.Dense(d_model),
+                keras.layers.Dense(d_model, activation="relu"),
+                keras.layers.Dense(d_model),
             ],
         )
 
         # Normalization and dropout
-        self.layernorm1 = tf.keras.layers.LayerNormalization()
-        self.layernorm2 = tf.keras.layers.LayerNormalization()
-        self.dropout = tf.keras.layers.Dropout(dropout_rate)
-        self.feature_layernorm = tf.keras.layers.LayerNormalization()
-        self.feature_layernorm2 = tf.keras.layers.LayerNormalization()
-        self.feature_dropout = tf.keras.layers.Dropout(dropout_rate)
-        self.feature_dropout2 = tf.keras.layers.Dropout(dropout_rate)
-        self.sample_layernorm = tf.keras.layers.LayerNormalization()
-        self.sample_layernorm2 = tf.keras.layers.LayerNormalization()
-        self.sample_dropout = tf.keras.layers.Dropout(dropout_rate)
-        self.sample_dropout2 = tf.keras.layers.Dropout(dropout_rate)
-        self.output_projection = tf.keras.layers.Dense(d_model)
+        self.layernorm1 = keras.layers.LayerNormalization()
+        self.layernorm2 = keras.layers.LayerNormalization()
+        self.dropout = keras.layers.Dropout(dropout_rate)
+        self.feature_layernorm = keras.layers.LayerNormalization()
+        self.feature_layernorm2 = keras.layers.LayerNormalization()
+        self.feature_dropout = keras.layers.Dropout(dropout_rate)
+        self.feature_dropout2 = keras.layers.Dropout(dropout_rate)
+        self.sample_layernorm = keras.layers.LayerNormalization()
+        self.sample_layernorm2 = keras.layers.LayerNormalization()
+        self.sample_dropout = keras.layers.Dropout(dropout_rate)
+        self.sample_dropout2 = keras.layers.Dropout(dropout_rate)
+        self.output_projection = keras.layers.Dense(d_model)
 
     def build(self, input_shape: int) -> None:
         """Build the layer.
@@ -67,7 +73,7 @@ class TabularAttention(tf.keras.layers.Layer):
             input_shape: Shape tuple (tuple of integers) or list of shape tuples
         """
         self.input_dim = input_shape[-1]
-        self.input_projection = tf.keras.layers.Dense(self.d_model)
+        self.input_projection = keras.layers.Dense(self.d_model)
 
     def call(self, inputs: tf.Tensor, training: bool = False) -> tf.Tensor:
         """Forward pass for TabularAttention.
@@ -84,7 +90,7 @@ class TabularAttention(tf.keras.layers.Layer):
         """
         if len(inputs.shape) != 3:
             raise ValueError(
-                "Input tensor must be 3-dimensional (batch_size, num_samples, num_features)"
+                "Input tensor must be 3-dimensional (batch_size, num_samples, num_features)",
             )
 
         # Project inputs to d_model dimension
@@ -92,31 +98,33 @@ class TabularAttention(tf.keras.layers.Layer):
 
         # Inter-feature attention: across columns (features)
         features = self.feature_attention(
-            projected, projected, projected, training=training
+            projected,
+            projected,
+            projected,
+            training=training,
         )
         features = self.feature_layernorm(
-            projected + self.feature_dropout(features, training=training)
+            projected + self.feature_dropout(features, training=training),
         )
         features_ffn = self.ffn(features)
         features = self.feature_layernorm2(
-            features + self.feature_dropout2(features_ffn, training=training)
+            features + self.feature_dropout2(features_ffn, training=training),
         )
 
         # Inter-sample attention: across rows (samples)
         samples = tf.transpose(
-            features, perm=[0, 2, 1]
+            features,
+            perm=[0, 2, 1],
         )  # Transpose for sample attention
         samples = self.sample_attention(samples, samples, samples, training=training)
         samples = tf.transpose(samples, perm=[0, 2, 1])  # Transpose back
         samples = self.sample_layernorm(
-            features + self.sample_dropout(samples, training=training)
+            features + self.sample_dropout(samples, training=training),
         )
         samples_ffn = self.ffn(samples)
-        outputs = self.sample_layernorm2(
-            samples + self.sample_dropout2(samples_ffn, training=training)
+        return self.sample_layernorm2(
+            samples + self.sample_dropout2(samples_ffn, training=training),
         )
-
-        return outputs
 
     def get_config(self) -> dict:
         """Returns the configuration of the layer.

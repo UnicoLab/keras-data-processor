@@ -1,7 +1,9 @@
+import keras
 import tensorflow as tf
 
 
-class MultiResolutionTabularAttention(tf.keras.layers.Layer):
+@keras.saving.register_keras_serializable(package="kdp.layers")
+class MultiResolutionTabularAttention(keras.layers.Layer):
     """Multi-resolution attention layer for tabular data.
 
     This layer implements separate attention mechanisms for numerical and categorical features,
@@ -48,54 +50,54 @@ class MultiResolutionTabularAttention(tf.keras.layers.Layer):
         self.dropout_rate = dropout_rate
 
         # Create projection layers during initialization
-        self.numerical_projection = tf.keras.layers.Dense(d_model)
-        self.categorical_projection = tf.keras.layers.Dense(embedding_dim)
+        self.numerical_projection = keras.layers.Dense(d_model)
+        self.categorical_projection = keras.layers.Dense(embedding_dim)
 
         # Numerical attention
-        self.numerical_attention = tf.keras.layers.MultiHeadAttention(
+        self.numerical_attention = keras.layers.MultiHeadAttention(
             num_heads=num_heads,
             key_dim=d_model // num_heads,
             dropout=dropout_rate,
         )
-        self.numerical_ffn = tf.keras.Sequential(
+        self.numerical_ffn = keras.Sequential(
             [
-                tf.keras.layers.Dense(d_model * 2, activation="relu"),
-                tf.keras.layers.Dense(d_model),
+                keras.layers.Dense(d_model * 2, activation="relu"),
+                keras.layers.Dense(d_model),
             ],
         )
-        self.numerical_layernorm1 = tf.keras.layers.LayerNormalization()
-        self.numerical_layernorm2 = tf.keras.layers.LayerNormalization()
-        self.numerical_dropout1 = tf.keras.layers.Dropout(dropout_rate)
-        self.numerical_dropout2 = tf.keras.layers.Dropout(dropout_rate)
+        self.numerical_layernorm1 = keras.layers.LayerNormalization()
+        self.numerical_layernorm2 = keras.layers.LayerNormalization()
+        self.numerical_dropout1 = keras.layers.Dropout(dropout_rate)
+        self.numerical_dropout2 = keras.layers.Dropout(dropout_rate)
 
         # Categorical attention
-        self.categorical_attention = tf.keras.layers.MultiHeadAttention(
+        self.categorical_attention = keras.layers.MultiHeadAttention(
             num_heads=num_heads,
             key_dim=embedding_dim // num_heads,
             dropout=dropout_rate,
         )
-        self.categorical_ffn = tf.keras.Sequential(
+        self.categorical_ffn = keras.Sequential(
             [
-                tf.keras.layers.Dense(embedding_dim * 2, activation="relu"),
-                tf.keras.layers.Dense(embedding_dim),
+                keras.layers.Dense(embedding_dim * 2, activation="relu"),
+                keras.layers.Dense(embedding_dim),
             ],
         )
-        self.categorical_layernorm1 = tf.keras.layers.LayerNormalization()
-        self.categorical_layernorm2 = tf.keras.layers.LayerNormalization()
-        self.categorical_dropout1 = tf.keras.layers.Dropout(dropout_rate)
-        self.categorical_dropout2 = tf.keras.layers.Dropout(dropout_rate)
+        self.categorical_layernorm1 = keras.layers.LayerNormalization()
+        self.categorical_layernorm2 = keras.layers.LayerNormalization()
+        self.categorical_dropout1 = keras.layers.Dropout(dropout_rate)
+        self.categorical_dropout2 = keras.layers.Dropout(dropout_rate)
 
         # Cross attention
-        self.cross_attention = tf.keras.layers.MultiHeadAttention(
+        self.cross_attention = keras.layers.MultiHeadAttention(
             num_heads=num_heads,
             key_dim=d_model // num_heads,
             dropout=dropout_rate,
         )
-        self.cross_layernorm = tf.keras.layers.LayerNormalization()
-        self.cross_dropout = tf.keras.layers.Dropout(dropout_rate)
+        self.cross_layernorm = keras.layers.LayerNormalization()
+        self.cross_dropout = keras.layers.Dropout(dropout_rate)
 
         # Final projections
-        self.categorical_output_projection = tf.keras.layers.Dense(d_model)
+        self.categorical_output_projection = keras.layers.Dense(d_model)
 
     def call(
         self,

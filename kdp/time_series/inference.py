@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 import tensorflow as tf
-from typing import Dict, List, Union, Optional, Any
+from typing import Any
 
 from kdp.features import FeatureType, TimeSeriesFeature
 from kdp.inference.base import InferenceFormatter
@@ -40,7 +40,7 @@ class TimeSeriesInferenceFormatter(InferenceFormatter):
         """
         return len(self.time_series_features) > 0
 
-    def _identify_time_series_features(self) -> Dict[str, TimeSeriesFeature]:
+    def _identify_time_series_features(self) -> dict[str, TimeSeriesFeature]:
         """Identify all time series features in the preprocessor.
 
         Returns:
@@ -57,7 +57,7 @@ class TimeSeriesInferenceFormatter(InferenceFormatter):
 
         return time_series_features
 
-    def _calculate_min_history_requirements(self) -> Dict[str, Dict[str, Any]]:
+    def _calculate_min_history_requirements(self) -> dict[str, dict[str, Any]]:
         """Calculate minimum history requirements for each time series feature.
 
         Returns:
@@ -79,7 +79,8 @@ class TimeSeriesInferenceFormatter(InferenceFormatter):
                 lags = feature.lag_config.get("lags", [])
                 if lags:
                     feature_req["min_history"] = max(
-                        feature_req["min_history"], max(lags)
+                        feature_req["min_history"],
+                        max(lags),
                     )
 
             # Check rolling statistics
@@ -89,7 +90,8 @@ class TimeSeriesInferenceFormatter(InferenceFormatter):
             ):
                 window_size = feature.rolling_stats_config.get("window_size", 1)
                 feature_req["min_history"] = max(
-                    feature_req["min_history"], window_size
+                    feature_req["min_history"],
+                    window_size,
                 )
 
             # Check differencing
@@ -105,7 +107,8 @@ class TimeSeriesInferenceFormatter(InferenceFormatter):
                 periods = feature.moving_average_config.get("periods", [])
                 if periods:
                     feature_req["min_history"] = max(
-                        feature_req["min_history"], max(periods)
+                        feature_req["min_history"],
+                        max(periods),
                     )
 
             # Check wavelet transform
@@ -122,17 +125,22 @@ class TimeSeriesInferenceFormatter(InferenceFormatter):
 
     def prepare_inference_data(
         self,
-        data: Union[Dict, pd.DataFrame],
-        historical_data: Optional[Union[Dict, pd.DataFrame]] = None,
-        fill_missing: bool = True,
+        data: dict | pd.DataFrame,
+        historical_data: dict | pd.DataFrame | None = None,
+        fill_missing: bool = True,  # noqa: ARG002 - inert, see docstring
         to_tensors: bool = False,
-    ) -> Union[Dict, Dict[str, tf.Tensor]]:
+    ) -> dict | dict[str, tf.Tensor]:
         """Prepare time series data for inference based on preprocessor requirements.
 
         Args:
             data: The new data to make predictions on
             historical_data: Optional historical data to provide context for time series
-            fill_missing: Whether to attempt to fill missing values/context
+            fill_missing: Accepted for backwards compatibility and currently
+                inert. This formatter never fabricates history: when the data is
+                too short for the configured lookback it raises so the caller can
+                supply real context. Missing *values* inside otherwise sufficient
+                history are handled in-graph by `MissingValueHandlerLayer`, via
+                the feature's `missing_value_config`.
             to_tensors: Whether to convert the output to TensorFlow tensors
 
         Returns:
@@ -153,7 +161,8 @@ class TimeSeriesInferenceFormatter(InferenceFormatter):
             historical_dict = self._convert_to_dict(historical_data)
             # Combine historical and new data
             combined_data = self._combine_historical_and_new(
-                historical_dict, inference_data
+                historical_dict,
+                inference_data,
             )
         else:
             # Check if inference data itself has enough history
@@ -172,7 +181,7 @@ class TimeSeriesInferenceFormatter(InferenceFormatter):
 
         return formatted_data
 
-    def _check_inference_data_sufficiency(self, data: Dict) -> None:
+    def _check_inference_data_sufficiency(self, data: dict) -> None:
         """Check if inference data itself has enough history for each feature.
 
         Args:
@@ -184,7 +193,7 @@ class TimeSeriesInferenceFormatter(InferenceFormatter):
         for feature_name, requirements in self.min_history_requirements.items():
             if feature_name not in data:
                 raise ValueError(
-                    f"Time series feature '{feature_name}' is missing from input data"
+                    f"Time series feature '{feature_name}' is missing from input data",
                 )
 
             # Check that data length is sufficient
@@ -193,10 +202,10 @@ class TimeSeriesInferenceFormatter(InferenceFormatter):
                 raise ValueError(
                     f"Time series feature '{feature_name}' requires at least "
                     f"{requirements['min_history']} data points, but only "
-                    f"{data_length} were provided. Please provide historical data."
+                    f"{data_length} were provided. Please provide historical data.",
                 )
 
-    def _combine_historical_and_new(self, historical: Dict, new_data: Dict) -> Dict:
+    def _combine_historical_and_new(self, historical: dict, new_data: dict) -> dict:
         """Combine historical and new data for time series features.
 
         Args:
@@ -232,7 +241,7 @@ class TimeSeriesInferenceFormatter(InferenceFormatter):
 
         return combined
 
-    def _sort_by_time_and_group(self, data: Dict) -> Dict:
+    def _sort_by_time_and_group(self, data: dict) -> dict:
         """Sort time series data by time and group.
 
         Args:
@@ -246,7 +255,7 @@ class TimeSeriesInferenceFormatter(InferenceFormatter):
         sort_columns = set()
         group_columns = set()
 
-        for feature_name, requirements in self.min_history_requirements.items():
+        for requirements in self.min_history_requirements.values():
             if requirements["sort_by"]:
                 needs_sorting = True
                 sort_columns.add(requirements["sort_by"])
@@ -318,13 +327,13 @@ class TimeSeriesInferenceFormatter(InferenceFormatter):
         for feature_name, reqs in self.min_history_requirements.items():
             feature_req = [f"  - {feature_name}:"]
             feature_req.append(
-                f"    * Minimum history: {reqs['min_history']} data points"
+                f"    * Minimum history: {reqs['min_history']} data points",
             )
 
             if reqs["sort_by"]:
                 feature_req.append(
                     f"    * Must be sorted by: {reqs['sort_by']} "
-                    + f"({'ascending' if reqs['sort_ascending'] else 'descending'})"
+                    f"({'ascending' if reqs['sort_ascending'] else 'descending'})",
                 )
 
             if reqs["group_by"]:
@@ -335,8 +344,11 @@ class TimeSeriesInferenceFormatter(InferenceFormatter):
         return "\n".join(requirements)
 
     def format_for_incremental_prediction(
-        self, current_history: Dict, new_row: Dict, to_tensors: bool = False
-    ) -> Union[Dict, Dict[str, tf.Tensor]]:
+        self,
+        current_history: dict,
+        new_row: dict,
+        to_tensors: bool = False,
+    ) -> dict | dict[str, tf.Tensor]:
         """Format data for incremental time series prediction.
 
         This is useful for forecasting scenarios where each new prediction
@@ -356,32 +368,58 @@ class TimeSeriesInferenceFormatter(InferenceFormatter):
 
         # Combine and prepare the data
         return self.prepare_inference_data(
-            new_dict, history_dict, to_tensors=to_tensors
+            new_dict,
+            history_dict,
+            to_tensors=to_tensors,
         )
 
     def generate_multi_step_forecast(
         self,
-        history: Dict,
-        future_dates: List,
-        group_id: Optional[str] = None,
-        steps: int = 1,
+        history: dict,
+        future_dates: list,
+        group_id: str | None = None,
+        steps: int | None = None,
     ) -> pd.DataFrame:
-        """Generate data frames for multi-step forecasting.
+        """Generate a placeholder frame for multi-step forecasting.
 
-        This method prepares a sequence of data frames for multi-step forecasting
-        where each prediction becomes part of the history for the next step.
+        The returned frame carries one row per forecast step, with the sort
+        column filled from ``future_dates`` and every time series feature set to
+        NaN. Callers fill each row in turn with their model's prediction, so the
+        row becomes part of the history for the following step.
 
         Args:
-            history: Historical data dictionary or DataFrame
-            future_dates: List of dates for future predictions
-            group_id: Optional group identifier (e.g., store_id) if using grouped time series
-            steps: Number of steps to forecast
+            history: Historical data dictionary or DataFrame. It is validated
+                against the minimum history each configured feature needs.
+            future_dates: List of dates for future predictions.
+            group_id: Optional group identifier (e.g. store_id) if using grouped
+                time series.
+            steps: Number of steps to forecast. Defaults to every date in
+                ``future_dates``.
 
         Returns:
-            DataFrame with placeholder rows for each future step
+            DataFrame with placeholder rows for each future step.
+
+        Raises:
+            ValueError: If the preprocessor has no time series features, if the
+                feature has no sort column, if ``steps`` asks for more rows than
+                ``future_dates`` provides, or if ``history`` is too short for the
+                configured lookback.
         """
         if not self.time_series_features:
             raise ValueError("No time series features found in the preprocessor")
+
+        future_dates = list(future_dates)
+        if steps is not None:
+            if steps > len(future_dates):
+                raise ValueError(
+                    f"Requested {steps} forecast steps but only "
+                    f"{len(future_dates)} future date(s) were supplied.",
+                )
+            future_dates = future_dates[:steps]
+
+        # The history has to satisfy the same lookback the preprocessor needs,
+        # otherwise the frame built here cannot be fed back through it.
+        self._check_history_requirements(self._convert_to_dict(history))
 
         # Get the first time series feature to determine sort and group columns
         feature_name = next(iter(self.time_series_features))
@@ -389,7 +427,7 @@ class TimeSeriesInferenceFormatter(InferenceFormatter):
 
         if not requirements["sort_by"]:
             raise ValueError(
-                f"Time series feature '{feature_name}' has no sort_by column specified"
+                f"Time series feature '{feature_name}' has no sort_by column specified",
             )
 
         # Create a DataFrame of future dates

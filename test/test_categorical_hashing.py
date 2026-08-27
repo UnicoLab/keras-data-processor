@@ -1,7 +1,8 @@
+import keras
 import unittest
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras.layers import Input
+from keras.layers import Input
 
 from kdp import (
     CategoricalFeature,
@@ -166,17 +167,17 @@ class TestCategoricalHashing(unittest.TestCase):
         hash_bucket_size = 64
         salt = 42
 
-        hashing_layer = tf.keras.layers.Hashing(
+        hashing_layer = keras.layers.Hashing(
             num_bins=hash_bucket_size, salt=salt, name="hash_layer"
         )(input_layer)
 
         # Create a category encoding layer
-        encoding_layer = tf.keras.layers.CategoryEncoding(
+        encoding_layer = keras.layers.CategoryEncoding(
             num_tokens=hash_bucket_size, output_mode="multi_hot", name="encoding_layer"
         )(hashing_layer)
 
         # Create a model
-        model = tf.keras.Model(inputs=input_layer, outputs=encoding_layer)
+        model = keras.Model(inputs=input_layer, outputs=encoding_layer)
 
         # Test with some sample data - use longer, more distinctive strings to avoid collisions
         user1 = tf.constant("user_with_very_distinctive_name_1", dtype=tf.string)
@@ -207,20 +208,20 @@ class TestCategoricalHashing(unittest.TestCase):
         hash_bucket_size = 64
         embedding_dim = 8
 
-        hashing_layer = tf.keras.layers.Hashing(
+        hashing_layer = keras.layers.Hashing(
             num_bins=hash_bucket_size, name="hash_layer"
         )(input_layer)
 
         # Add embedding layer after hashing
-        embedding_layer = tf.keras.layers.Embedding(
+        embedding_layer = keras.layers.Embedding(
             input_dim=hash_bucket_size, output_dim=embedding_dim, name="embedding_layer"
         )(hashing_layer)
 
         # Flatten the output
-        flattened_layer = tf.keras.layers.Flatten()(embedding_layer)
+        flattened_layer = keras.layers.Flatten()(embedding_layer)
 
         # Create a model
-        model = tf.keras.Model(inputs=input_layer, outputs=flattened_layer)
+        model = keras.Model(inputs=input_layer, outputs=flattened_layer)
 
         # Test with some sample data
         user1 = tf.constant("user_1", dtype=tf.string)
@@ -248,17 +249,17 @@ class TestCategoricalHashing(unittest.TestCase):
         hash_bucket_size = 64
 
         # Model 1 with salt=1
-        hashing_layer1 = tf.keras.layers.Hashing(
+        hashing_layer1 = keras.layers.Hashing(
             num_bins=hash_bucket_size, salt=1, name="hash_layer1"
         )(input_layer)
 
         # Model 2 with salt=2
-        hashing_layer2 = tf.keras.layers.Hashing(
+        hashing_layer2 = keras.layers.Hashing(
             num_bins=hash_bucket_size, salt=2, name="hash_layer2"
         )(input_layer)
 
         # Create a model with both outputs
-        model = tf.keras.Model(
+        model = keras.Model(
             inputs=input_layer, outputs=[hashing_layer1, hashing_layer2]
         )
 

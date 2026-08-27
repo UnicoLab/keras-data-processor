@@ -1,8 +1,10 @@
+import keras
 import tensorflow as tf
-from tensorflow.keras.layers import Layer
+from keras.layers import Layer
 import numpy as np
 
 
+@keras.saving.register_keras_serializable(package="kdp.layers")
 class MissingValueHandlerLayer(Layer):
     """Layer for advanced handling of missing values in time series data.
 
@@ -35,6 +37,11 @@ class MissingValueHandlerLayer(Layer):
         extrapolate=True,
         **kwargs,
     ):
+        """Initialize the MissingValueHandlerLayer.
+
+        See the class docstring for the accepted arguments and what
+        each one controls.
+        """
         super().__init__(**kwargs)
         self.mask_value = mask_value
         self.strategy = strategy
@@ -55,10 +62,10 @@ class MissingValueHandlerLayer(Layer):
         ]
         if self.strategy not in valid_strategies:
             raise ValueError(
-                f"Strategy must be one of {valid_strategies}, got {strategy}"
+                f"Strategy must be one of {valid_strategies}, got {strategy}",
             )
 
-    def call(self, inputs, training=None):
+    def call(self, inputs, training=None) -> tf.Tensor:
         """Apply missing value handling strategy.
 
         Args:
@@ -93,14 +100,14 @@ class MissingValueHandlerLayer(Layer):
                     inputs_tensor.shape[2] * 2
                 )  # Original features + indicators
                 result.set_shape(
-                    [inputs_tensor.shape[0], inputs_tensor.shape[1], feature_dim]
+                    [inputs_tensor.shape[0], inputs_tensor.shape[1], feature_dim],
                 )
             else:
                 result.set_shape(inputs_tensor.shape)
 
         return result
 
-    def _numpy_impute_2d(self, inputs_tensor):
+    def _numpy_impute_2d(self, inputs_tensor) -> np.ndarray:
         """Numpy-based implementation of imputation for 2D tensors."""
         # Convert to numpy
         inputs = inputs_tensor.numpy()
@@ -130,12 +137,11 @@ class MissingValueHandlerLayer(Layer):
         # Add indicators if requested
         if self.add_indicators:
             indicators = missing_mask.astype(np.float32)
-            result = np.stack([imputed, indicators], axis=-1)
-            return result
+            return np.stack([imputed, indicators], axis=-1)
         else:
             return imputed
 
-    def _numpy_impute_3d(self, inputs_tensor):
+    def _numpy_impute_3d(self, inputs_tensor) -> np.ndarray:
         """Numpy-based implementation of imputation for 3D tensors."""
         # Convert to numpy
         inputs = inputs_tensor.numpy()
@@ -179,12 +185,11 @@ class MissingValueHandlerLayer(Layer):
         # Add indicators if requested
         if self.add_indicators:
             indicators = missing_mask.astype(np.float32)
-            result = np.concatenate([imputed, indicators], axis=-1)
-            return result
+            return np.concatenate([imputed, indicators], axis=-1)
         else:
             return imputed
 
-    def _numpy_forward_fill(self, data, mask):
+    def _numpy_forward_fill(self, data, mask) -> None:
         """Forward fill missing values in-place."""
         # For each batch
         for b in range(data.shape[0]):
@@ -210,7 +215,7 @@ class MissingValueHandlerLayer(Layer):
                     # Valid value, update last_valid
                     last_valid = series[t]
 
-    def _numpy_backward_fill(self, data, mask):
+    def _numpy_backward_fill(self, data, mask) -> None:
         """Backward fill missing values in-place."""
         # For each batch
         for b in range(data.shape[0]):
@@ -236,7 +241,7 @@ class MissingValueHandlerLayer(Layer):
                     # Valid value, update next_valid
                     next_valid = series[t]
 
-    def _numpy_linear_interpolation(self, data, mask):
+    def _numpy_linear_interpolation(self, data, mask) -> None:
         """Linear interpolation between valid values in-place."""
         # For each batch
         for b in range(data.shape[0]):
@@ -300,7 +305,7 @@ class MissingValueHandlerLayer(Layer):
                 else:
                     next_valid = series[t]
 
-    def _numpy_mean_imputation(self, data, mask):
+    def _numpy_mean_imputation(self, data, mask) -> None:
         """Mean imputation in-place."""
         # For each batch
         for b in range(data.shape[0]):
@@ -320,7 +325,7 @@ class MissingValueHandlerLayer(Layer):
                 # Fill missing values with mean
                 series[series_mask] = mean_value
 
-    def _numpy_median_imputation(self, data, mask):
+    def _numpy_median_imputation(self, data, mask) -> None:
         """Median imputation in-place."""
         # For each batch
         for b in range(data.shape[0]):
@@ -340,7 +345,7 @@ class MissingValueHandlerLayer(Layer):
                 # Fill missing values with median
                 series[series_mask] = median_value
 
-    def _numpy_rolling_mean_imputation(self, data, mask):
+    def _numpy_rolling_mean_imputation(self, data, mask) -> None:
         """Rolling mean imputation in-place."""
         # For each batch
         for b in range(data.shape[0]):
@@ -378,7 +383,7 @@ class MissingValueHandlerLayer(Layer):
                     if len(valid_values) > 0:
                         series[t] = np.mean(valid_values)
 
-    def _numpy_seasonal_imputation(self, data, mask):
+    def _numpy_seasonal_imputation(self, data, mask) -> None:
         """Seasonal imputation in-place."""
         # For each batch
         for b in range(data.shape[0]):
@@ -412,10 +417,11 @@ class MissingValueHandlerLayer(Layer):
                 else:
                     # No valid values at this phase, fall back to rolling mean
                     self._numpy_rolling_mean_imputation(
-                        data[b : b + 1], mask[b : b + 1]
+                        data[b : b + 1],
+                        mask[b : b + 1],
                     )
 
-    def compute_output_shape(self, input_shape):
+    def compute_output_shape(self, input_shape) -> tuple:
         """Compute output shape of the layer."""
         if len(input_shape) == 2:
             # (batch_size, time_steps)
@@ -431,7 +437,7 @@ class MissingValueHandlerLayer(Layer):
             else:
                 return input_shape
 
-    def get_config(self):
+    def get_config(self) -> dict:
         """Return layer configuration."""
         config = {
             "mask_value": self.mask_value,

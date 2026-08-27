@@ -1,3 +1,4 @@
+import keras
 import numpy as np
 import tensorflow as tf
 
@@ -137,8 +138,8 @@ def test_multi_resolution_attention_end_to_end_complex():
     output_dim = 1
 
     # Create inputs
-    numerical_inputs = tf.keras.Input(shape=(num_numerical, numerical_dim))
-    categorical_inputs = tf.keras.Input(shape=(num_categorical, categorical_dim))
+    numerical_inputs = keras.Input(shape=(num_numerical, numerical_dim))
+    categorical_inputs = keras.Input(shape=(num_categorical, categorical_dim))
 
     # Apply multi-resolution attention
     num_attended, cat_attended = MultiResolutionTabularAttention(
@@ -146,13 +147,11 @@ def test_multi_resolution_attention_end_to_end_complex():
     )(numerical_inputs, categorical_inputs)
 
     # Combine outputs
-    combined = tf.keras.layers.Concatenate(axis=1)([num_attended, cat_attended])
-    outputs = tf.keras.layers.Dense(output_dim)(combined)
+    combined = keras.layers.Concatenate(axis=1)([num_attended, cat_attended])
+    outputs = keras.layers.Dense(output_dim)(combined)
 
     # Create model
-    model = tf.keras.Model(
-        inputs=[numerical_inputs, categorical_inputs], outputs=outputs
-    )
+    model = keras.Model(inputs=[numerical_inputs, categorical_inputs], outputs=outputs)
 
     # Compile the model
     model.compile(optimizer="adam", loss="mse")
@@ -347,20 +346,18 @@ def test_multi_resolution_attention_end_to_end_simple():
     num_heads = 2
 
     # Create a simple model
-    numerical_inputs = tf.keras.Input(shape=(num_numerical, numerical_dim))
-    categorical_inputs = tf.keras.Input(shape=(num_categorical, categorical_dim))
+    numerical_inputs = keras.Input(shape=(num_numerical, numerical_dim))
+    categorical_inputs = keras.Input(shape=(num_categorical, categorical_dim))
 
     attention_layer = MultiResolutionTabularAttention(
         num_heads=num_heads, d_model=d_model, embedding_dim=embedding_dim
     )
 
     num_output, cat_output = attention_layer(numerical_inputs, categorical_inputs)
-    combined = tf.keras.layers.Concatenate(axis=1)([num_output, cat_output])
-    outputs = tf.keras.layers.Dense(1)(combined)
+    combined = keras.layers.Concatenate(axis=1)([num_output, cat_output])
+    outputs = keras.layers.Dense(1)(combined)
 
-    model = tf.keras.Model(
-        inputs=[numerical_inputs, categorical_inputs], outputs=outputs
-    )
+    model = keras.Model(inputs=[numerical_inputs, categorical_inputs], outputs=outputs)
 
     # Compile model
     model.compile(optimizer="adam", loss="mse")

@@ -1,5 +1,6 @@
 from collections.abc import Callable
 
+import keras
 import tensorflow as tf
 from loguru import logger
 
@@ -9,17 +10,19 @@ from kdp.dynamic_pipeline import DynamicPreprocessingPipeline
 
 class ProcessingStep:
     def __init__(
-        self, layer_creator: Callable[..., tf.keras.layers.Layer], **layer_kwargs
+        self,
+        layer_creator: Callable[..., keras.layers.Layer],
+        **layer_kwargs,
     ) -> None:
         """Initialize a processing step.
 
         Args:
-            layer_creator (Callable[..., tf.keras.layers.Layer]): A callable that creates a layer.
+            layer_creator (Callable[..., keras.layers.Layer]): A callable that creates a layer.
             **layer_kwargs: Additional keyword arguments for the layer creator.
         """
         self.layer = layer_creator(**layer_kwargs)
 
-    def process(self, input_data) -> tf.keras.layers.Layer:
+    def process(self, input_data) -> keras.layers.Layer:
         """Apply the processing step to the input data.
 
         Args:
@@ -27,7 +30,7 @@ class ProcessingStep:
         """
         return self.layer(input_data)
 
-    def connect(self, input_layer) -> tf.keras.layers.Layer:
+    def connect(self, input_layer) -> keras.layers.Layer:
         """Connect this step's layer to an input layer and return the output layer.
 
         Args:
@@ -61,7 +64,7 @@ class Pipeline:
         logger.info(f"Adding new preprocessing layer: {step.name} to the pipeline ➕")
         self.steps.append(step)
 
-    def chain(self, input_layer) -> tf.keras.layers.Layer:
+    def chain(self, input_layer) -> keras.layers.Layer:
         """Chain the pipeline steps by connecting each step in sequence, starting from the input layer.
 
         Args:
@@ -89,8 +92,7 @@ class Pipeline:
 
 class FeaturePreprocessor:
     def __init__(self, name: str, use_dynamic: bool = False) -> None:
-        """
-        Initializes a feature preprocessor.
+        """Initializes a feature preprocessor.
 
         Args:
             name (str): The name of the feature preprocessor.
@@ -107,15 +109,16 @@ class FeaturePreprocessor:
         self.processing_steps = []
 
     def add_processing_step(
-        self, layer_creator: Callable[..., tf.keras.layers.Layer] = None, **layer_kwargs
+        self,
+        layer_creator: Callable[..., keras.layers.Layer] = None,
+        **layer_kwargs,
     ) -> None:
-        """
-        Add a preprocessing layer to the feature preprocessor pipeline.
+        """Add a preprocessing layer to the feature preprocessor pipeline.
         If using the standard pipeline, a ProcessingStep is added.
         Otherwise, the layer is added to a list for dynamic handling.
 
         Args:
-            layer_creator (Callable[..., tf.keras.layers.Layer]): A callable that creates a layer.
+            layer_creator (Callable[..., keras.layers.Layer]): A callable that creates a layer.
                 If not provided, the default layer creator is used.
             **layer_kwargs: Additional keyword arguments for the layer creator.
         """
@@ -132,27 +135,38 @@ class FeaturePreprocessor:
             step = ProcessingStep(layer_creator=layer_creator, **layer_kwargs)
             self.pipeline.add_step(step=step)
 
-    def chain(self, input_layer) -> tf.keras.layers.Layer:
+    def _run_dynamic(self, input_data) -> tf.Tensor:
+        """Run the dynamic pipeline over a single tensor and return its output.
+
+        The dynamic pipeline keys its data by layer name, so the input is handed
+        to the first layer under that layer's name and the last layer's output is
+        returned.
+
+        Args:
+            input_data: The tensor (or symbolic Keras tensor) to process.
+
+        Returns:
+            The output of the final layer, or ``input_data`` if there are no layers.
         """
-        Chains the processing steps starting from the given input_layer.
+        if not self.layers:
+            return input_data
+
+        dynamic_pipeline = DynamicPreprocessingPipeline(self.layers)
+        output_dict = dynamic_pipeline.transform({self.layers[0].name: input_data})
+        return output_dict[self.layers[-1].name]
+
+    def chain(self, input_layer) -> keras.layers.Layer:
+        """Chains the processing steps starting from the given input_layer.
 
         For a static pipeline, this delegates to the internal Pipeline's chain() method.
         For the dynamic pipeline, it constructs the dynamic pipeline on the fly.
         """
         if not self.use_dynamic:
             return self.pipeline.chain(input_layer)
-        else:
-            dynamic_pipeline = DynamicPreprocessingPipeline(self.layers)
-            # In the dynamic case, we use a dict for the input.
-            output_dict = dynamic_pipeline.initialize_and_transform(
-                {"input": input_layer}
-            )
-            # Return the transformed data at key "input" (or adjust as needed).
-            return output_dict.get("input", input_layer)
+        return self._run_dynamic(input_layer)
 
     def transform(self, input_data: tf.Tensor) -> tf.Tensor:
-        """
-        Process the input data through the pipeline.
+        """Process the input data through the pipeline.
         For the dynamic pipeline, wrap input in a dictionary and extract final output.
 
         Args:
@@ -163,9 +177,4 @@ class FeaturePreprocessor:
         """
         if not self.use_dynamic:
             return self.pipeline.transform(input_data)
-        else:
-            dynamic_pipeline = DynamicPreprocessingPipeline(self.layers)
-            output_dict = dynamic_pipeline.initialize_and_transform(
-                {"input": input_data}
-            )
-            return output_dict.get("input", input_data)
+        return self._run_dynamic(input_data)

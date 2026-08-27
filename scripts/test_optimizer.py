@@ -15,8 +15,8 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Dict, List, Tuple, Any
-import xml.etree.ElementTree as ET
+from typing import Any
+from xml.etree import ElementTree  # noqa: S405 - parses our own pytest output
 
 
 class TestOptimizer:
@@ -27,15 +27,18 @@ class TestOptimizer:
         self.test_dir = self.project_root / "test"
 
     def analyze_test_performance(
-        self, junit_xml_path: str = "pytest.xml"
-    ) -> Dict[str, Any]:
+        self,
+        junit_xml_path: str = "pytest.xml",
+    ) -> dict[str, Any]:
         """Analyze test performance from JUnit XML output."""
         if not Path(junit_xml_path).exists():
             print(f"JUnit XML file not found: {junit_xml_path}")
             return {}
 
         try:
-            tree = ET.parse(junit_xml_path)
+            tree = ElementTree.parse(  # noqa: S314 - input is this script's own JUnit report
+                junit_xml_path,
+            )
             root = tree.getroot()
 
             test_results = []
@@ -52,14 +55,14 @@ class TestOptimizer:
                         "classname": classname,
                         "time": time_taken,
                         "full_name": f"{classname}::{name}",
-                    }
+                    },
                 )
                 total_time += time_taken
 
             # Sort by time taken (slowest first)
             test_results.sort(key=lambda x: x["time"], reverse=True)
 
-            analysis = {
+            return {
                 "total_tests": len(test_results),
                 "total_time": total_time,
                 "average_time": total_time / len(test_results) if test_results else 0,
@@ -69,13 +72,11 @@ class TestOptimizer:
                 "slow_tests": [t for t in test_results if t["time"] > 5.0],
             }
 
-            return analysis
-
         except Exception as e:
             print(f"Error analyzing test performance: {e}")
             return {}
 
-    def suggest_optimizations(self, analysis: Dict[str, Any]) -> List[str]:
+    def suggest_optimizations(self, analysis: dict[str, Any]) -> list[str]:
         """Suggest optimizations based on test analysis."""
         suggestions = []
 
@@ -95,13 +96,13 @@ class TestOptimizer:
         avg_time = analysis.get("average_time", 0)
         if avg_time > 2.0:
             suggestions.append(
-                f"Average test time is {avg_time:.2f}s - consider optimization"
+                f"Average test time is {avg_time:.2f}s - consider optimization",
             )
 
         total_time = analysis.get("total_time", 0)
         if total_time > 300:  # 5 minutes
             suggestions.append(
-                f"Total test time is {total_time:.2f}s - consider parallel execution"
+                f"Total test time is {total_time:.2f}s - consider parallel execution",
             )
 
         return suggestions
@@ -112,7 +113,7 @@ class TestOptimizer:
         parallel: bool = True,
         coverage: bool = False,
         verbose: bool = False,
-    ) -> Tuple[int, str]:
+    ) -> tuple[int, str]:
         """Run test suite with specified configuration."""
         cmd = ["poetry", "run", "pytest"]
 
@@ -123,7 +124,7 @@ class TestOptimizer:
         # Add coverage
         if coverage:
             cmd.extend(
-                ["--cov=kdp", "--cov-report=term-missing", "--cov-report=html:htmlcov"]
+                ["--cov=kdp", "--cov-report=term-missing", "--cov-report=html:htmlcov"],
             )
 
         # Add verbosity
@@ -144,7 +145,10 @@ class TestOptimizer:
 
         try:
             result = subprocess.run(
-                cmd, capture_output=True, text=True, cwd=self.project_root
+                cmd,
+                capture_output=True,
+                text=True,
+                cwd=self.project_root,
             )
             end_time = time.time()
 
@@ -160,7 +164,7 @@ class TestOptimizer:
         except Exception as e:
             return 1, f"Error running tests: {e}"
 
-    def benchmark_test_configurations(self) -> Dict[str, Any]:
+    def benchmark_test_configurations(self) -> dict[str, Any]:
         """Benchmark different test configurations."""
         configurations = [
             ("sequential", {"parallel": False, "coverage": False}),
@@ -194,7 +198,7 @@ class TestOptimizer:
             }
 
             print(
-                f"Configuration {config_name}: {execution_time:.2f}s (exit code: {returncode})"
+                f"Configuration {config_name}: {execution_time:.2f}s (exit code: {returncode})",
             )
 
         return results
@@ -205,7 +209,9 @@ class TestOptimizer:
 
         # Run a quick analysis
         returncode, output = self.run_test_suite(
-            parallel=True, coverage=False, verbose=False
+            parallel=True,
+            coverage=False,
+            verbose=False,
         )
 
         # Analyze performance
@@ -268,10 +274,14 @@ def main():
         help="Enable parallel execution",
     )
     parser.add_argument(
-        "--no-parallel", action="store_true", help="Disable parallel execution"
+        "--no-parallel",
+        action="store_true",
+        help="Disable parallel execution",
     )
     parser.add_argument(
-        "--coverage", action="store_true", help="Enable coverage reporting"
+        "--coverage",
+        action="store_true",
+        help="Enable coverage reporting",
     )
     parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
 
@@ -295,7 +305,7 @@ def main():
                     print(f"  {suggestion}")
         else:
             print(
-                "No performance data available. Run tests with --junitxml=pytest.xml first."
+                "No performance data available. Run tests with --junitxml=pytest.xml first.",
             )
 
     elif args.benchmark:

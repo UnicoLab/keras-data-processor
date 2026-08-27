@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 """
 Example of using the new time series feature layers in keras-data-processor.
@@ -10,8 +9,8 @@ for extracting features from time series data.
 
 import numpy as np
 import matplotlib.pyplot as plt
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input, Dense, Concatenate
+from keras.models import Model
+from keras.layers import Input, Dense, Concatenate
 
 from kdp.layers.time_series import (
     WaveletTransformLayer,
@@ -52,17 +51,16 @@ def generate_sample_data(n_samples=1000, n_features=1):
             signals.append(variation)
         signal = np.column_stack(signals)
 
-    # Create test/train split
-    train_size = int(0.8 * n_samples)
-    X_train = signal[:train_size]
-    X_test = signal[train_size:]
+    # Target variable: the next value in the series. Predicting one step ahead
+    # means the final row has no target, so it is dropped from the inputs too --
+    # otherwise X and y differ by one row and Keras rejects the pair.
+    targets = signal[1:, 0] if n_features > 1 else signal[1:]
+    features = signal[:-1]
 
-    # Create target variable (for regression task)
-    # We'll predict the next value in the series
-    y_train = (
-        signal[1 : train_size + 1, 0] if n_features > 1 else signal[1 : train_size + 1]
-    )
-    y_test = signal[train_size + 1 :, 0] if n_features > 1 else signal[train_size + 1 :]
+    # Create test/train split
+    train_size = int(0.8 * len(features))
+    X_train, X_test = features[:train_size], features[train_size:]
+    y_train, y_test = targets[:train_size], targets[train_size:]
 
     return X_train, y_train, X_test, y_test
 
@@ -73,7 +71,9 @@ def build_model_with_feature_layers(input_shape):
 
     # 1. Extract wavelet transform features
     wavelet_features = WaveletTransformLayer(
-        levels=3, window_sizes=[4, 8, 16], flatten_output=True
+        levels=3,
+        window_sizes=[4, 8, 16],
+        flatten_output=True,
     )(inputs)
 
     # 2. Extract statistical features using TSFreshFeatureLayer
@@ -90,7 +90,7 @@ def build_model_with_feature_layers(input_shape):
 
     # Combine all features
     combined_features = Concatenate()(
-        [wavelet_features, tsfresh_features, lag_features]
+        [wavelet_features, tsfresh_features, lag_features],
     )
 
     # Dense layers for prediction
@@ -108,7 +108,8 @@ def main():
     """Run the example."""
     # Generate sample data
     X_train, y_train, X_test, y_test = generate_sample_data(
-        n_samples=1000, n_features=2
+        n_samples=1000,
+        n_features=2,
     )
 
     print(f"X_train shape: {X_train.shape}")

@@ -3,7 +3,12 @@
 # ------------------------------------
 
 HAS_POETRY := $(shell command -v poetry 2> /dev/null)
-POETRY_VERSION := $(shell poetry version $(shell git describe --tags --abbrev=0))
+
+# Sets the package version from the latest git tag. This MUST stay a lazily
+# expanded recipe command: as a `:=` shell assignment it ran `poetry version
+# <tag>` while make was still parsing the file, so every single make target --
+# `make help` included -- silently rewrote the version in pyproject.toml.
+SET_VERSION_FROM_TAG = poetry version $$(git describe --tags --abbrev=0)
 
 # ------------------------------------
 # Test
@@ -101,10 +106,10 @@ unittests: test
 .PHONY: clean_tests
 ## Remove pytest cache and test artifacts
 clean_tests:
-	find . -type d -name .pytest_cache -exec rm -r {} +
-	find . -type d -name __pycache__ -exec rm -r {} +
-	find . -type f -name '*junit_report.xml' -exec rm {} +
-	find . -type f -name '*.pyc' -exec rm {} +
+	find . -type d -name .pytest_cache -prune -exec rm -rf {} + 2>/dev/null || true
+	find . -type d -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
+	find . -type f -name '*junit_report.xml' -delete
+	find . -type f -name '*.pyc' -delete
 	rm -rf htmlcov/
 	rm -f .coverage
 	rm -f coverage.xml
@@ -125,7 +130,7 @@ coverage:
 build_pkg:
 	@echo "Start to build pkg"
 ifdef HAS_POETRY
-	@$(POETRY_VERSION)
+	@$(SET_VERSION_FROM_TAG)
 	poetry build
 else
 	@echo "To build the package, you need to have poetry first"
@@ -139,8 +144,9 @@ build: clean_built build_pkg
 .PHONY: clean_built
 ## Remove cache, built package, and docs directories after build or installation
 clean_built:
-	find . -type d -name dist -exec rm -r {} +
-	find . -type f -name '*.py[co]' -delete -o -type d -name __pycache__ -delete
+	rm -rf dist
+	find . -type f -name '*.py[co]' -delete
+	find . -type d -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
 
 # ------------------------------------
 # Build doc
@@ -172,7 +178,7 @@ docs_deploy: generate_all_diagrams
 	@echo "Starting to build docs"
 	@echo "more info: https://squidfunk.github.io/mkdocs-material/setup/setting-up-versioning/"
 ifdef HAS_POETRY
-	@$(POETRY_VERSION)
+	@$(SET_VERSION_FROM_TAG)
 	poetry version -s | xargs -I {} sh -c 'echo Deploying version {} && mike deploy --push --update-aliases {} latest'
 else
 	@echo "To build the docs, you need to have poetry first"
@@ -223,10 +229,8 @@ clean_old_diagrams: identify_unused_diagrams
 
 .PHONY: clean
 ## Remove cache, built package, and docs directories after build or installation
-clean: clean_old_diagrams
-	find . -type d -name dist -exec rm -r {} +
-	find . -type f -name '*.rst' ! -name 'index.rst' -delete
-	find . -type f -name '*.py[co]' -delete -o -type d -name __pycache__ -delete
+clean: clean_tests clean_built clean_old_diagrams
+	@echo "Workspace cleaned"
 
 # ------------------------------------
 # Default

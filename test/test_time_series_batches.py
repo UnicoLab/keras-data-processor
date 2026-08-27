@@ -1,8 +1,10 @@
+import keras
 import os
 import shutil
 import tempfile
 import unittest
 import numpy as np
+from pathlib import Path
 import pandas as pd
 import tensorflow as tf
 from tensorflow.test import TestCase  # For tf-specific assertions
@@ -485,10 +487,10 @@ class TestTimeSeriesBatches(TestCase):  # Use TestCase from tensorflow.test
         dataset = dataset.batch(2)  # Small batch size to test batching
 
         # Create a simple model
-        inputs = tf.keras.layers.Input(shape=(2,))
-        x = tf.keras.layers.Dense(16, activation="relu")(inputs)
-        outputs = tf.keras.layers.Dense(1)(x)
-        model = tf.keras.Model(inputs=inputs, outputs=outputs)
+        inputs = keras.layers.Input(shape=(2,))
+        x = keras.layers.Dense(16, activation="relu")(inputs)
+        outputs = keras.layers.Dense(1)(x)
+        model = keras.Model(inputs=inputs, outputs=outputs)
 
         # Compile the model
         model.compile(optimizer="adam", loss="mse", metrics=["mae"])
@@ -656,13 +658,13 @@ class TestTimeSeriesBatches(TestCase):  # Use TestCase from tensorflow.test
         prediction_output = preprocessor_model(new_batch)
 
         # Verify the prediction output has the expected shape
-        # With time series features, the number of rows in the output may be reduced
-        # due to grouping and processing by store_id
         expected_feature_dim = full_output["sales"].shape[1]
         self.assertEqual(prediction_output["sales"].shape[1], expected_feature_dim)
 
-        # In this particular case, the time series feature layers reduce the data to one row per store
-        self.assertEqual(prediction_output["sales"].shape[0], num_stores)
+        # One output row per input row. The layers used to drop their warm-up
+        # rows, so a caller got back fewer rows than it sent with no way to tell
+        # which ones survived -- unusable next to other features or to labels.
+        self.assertEqual(prediction_output["sales"].shape[0], len(new_df))
 
         # Test with new batches containing data for only some stores
         # This tests that the model handles partial data correctly
@@ -909,8 +911,19 @@ class TestTimeSeriesBatches(TestCase):  # Use TestCase from tensorflow.test
             "store_id": FeatureType.STRING_CATEGORICAL,
         }
 
+        # KDP reads its statistics from CSV data on disk, so `path_data` takes a
+        # file path rather than an in-memory frame.
+        work_dir = Path(tempfile.mkdtemp(prefix="kdp_ts_inference_validation_"))
+        csv_path = work_dir / "data.csv"
+        df.to_csv(csv_path, index=False)
+
         # Create and build the preprocessor
-        preprocessor = PreprocessingModel(features_specs=features, path_data=df)
+        preprocessor = PreprocessingModel(
+            features_specs=features,
+            path_data=str(csv_path),
+            features_stats_path=str(work_dir / "features_stats.json"),
+            overwrite_stats=True,
+        )
         preprocessor.build_preprocessor()
 
         # Test 1: Single point inference should fail
@@ -1016,10 +1029,15 @@ class TestTimeSeriesBatches(TestCase):  # Use TestCase from tensorflow.test
         }
 
         # Create preprocessor with our feature stats
+        work_dir = Path(tempfile.mkdtemp(prefix="kdp_ts_validation_"))
+        csv_path = work_dir / "data.csv"
+        df.to_csv(csv_path, index=False)
+
         preprocessor = PreprocessingModel(
             features_specs=features,
-            path_data=df,
+            path_data=str(csv_path),
             features_stats=feature_stats,
+            features_stats_path=str(work_dir / "features_stats.json"),
             overwrite_stats=True,
         )
 

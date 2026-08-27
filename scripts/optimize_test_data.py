@@ -8,7 +8,7 @@ for maximum speed while maintaining test coverage.
 
 import re
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any
 
 
 class TestDataOptimizer:
@@ -18,7 +18,7 @@ class TestDataOptimizer:
         self.test_dir = test_dir or Path("test")
         self.optimizations_applied = []
 
-    def optimize_all_tests(self) -> Dict[str, Any]:
+    def optimize_all_tests(self) -> dict[str, Any]:
         """Optimize all test files for faster execution."""
         results = {
             "files_processed": 0,
@@ -37,7 +37,7 @@ class TestDataOptimizer:
     def optimize_test_file(self, file_path: Path) -> bool:
         """Optimize a single test file."""
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 content = f.read()
 
             original_content = content
@@ -78,7 +78,9 @@ class TestDataOptimizer:
             (
                 r"np\.random\.choice\([^,]+,\s*(\d{3,})\)",
                 lambda m: re.sub(
-                    r"(\d{3,})", str(min(50, int(m.group(1)))), m.group(0)
+                    r"(\d{3,})",
+                    str(min(50, int(m.group(1)))),
+                    m.group(0),
                 ),
             ),
         ]
@@ -173,7 +175,7 @@ class TestDataOptimizer:
         slow_tests = []
 
         for test_file in self.test_dir.rglob("test_*.py"):
-            with open(test_file, "r") as f:
+            with open(test_file) as f:
                 content = f.read()
 
             # Find slow tests
@@ -189,7 +191,7 @@ class TestDataOptimizer:
 
     def create_fast_variant(self, original_path: Path, fast_path: Path) -> None:
         """Create a fast variant of a test file."""
-        with open(original_path, "r") as f:
+        with open(original_path) as f:
             content = f.read()
 
         # Aggressive optimizations for fast variant

@@ -21,30 +21,44 @@ jobs:
   pre-commit-checks:
     runs-on: ["ubuntu-latest"]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Check Pull Request Title
-        uses: Slashgear/action-check-pr-title@main
-        with:
-          regexp: '(break|build|ci|docs|feat|fix|perf|refactor|style|test|ops|hotfix)\([a-z,A-Z,0-9,\-,\_,\/,:]+\)(:)\s{1}([\w\s]+)' # Regex the title should match.
-      - name: Getting changed files list
-        id: files
-        uses: jitterbit/get-changed-files@master
-      - name: Checking chaged files
-        shell: bash
+
+      # Kept in step with the local commit-msg hook in .pre-commit-config.yaml.
+      # Checking it here rather than through a third-party action keeps the two
+      # definitions in one repository and removes an unpinned dependency.
+      - name: Check pull request title
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
-          echo "Changed files"
-          echo ${{ steps.files.outputs.all }}
-          echo "Github Client version"
-          echo $(gh --version)
-      - name: Pre-Commit Checks
+          PATTERN='^(break|build|ci|docs|feat|fix|perf|refactor|style|test|ops|hotfix|release|maint|init|enh|revert)\([^)]+\)!?: .+'
+          if ! printf '%s' "$PR_TITLE" | grep -Eq "$PATTERN"; then
+            echo "::error::Pull request title does not follow the conventional-commit format."
+            echo "Got:      $PR_TITLE"
+            echo "Expected: type(scope): description"
+            echo "Types:    break, build, ci, docs, feat, fix, perf, refactor, style,"
+            echo "          test, ops, hotfix, release, maint, init, enh, revert"
+            exit 1
+          fi
+          echo "Pull request title is valid."
+
+      - name: Cache pre-commit environments
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      # `--all-files` rather than a changed-files list: the repository is clean
+      # under every hook, so this is both simpler and stricter, and it drops the
+      # unpinned third-party action the changed-files plumbing needed.
+      - name: Pre-commit checks
+        shell: bash
         run: |
           python -m pip install --upgrade pip
-          pip install pre-commit==3.3.3
-          echo "Running pre-commit scans:"
-          # adding log display in case of pre-commit errors
-          pre-commit run -v --files ${{ steps.files.outputs.all }}
-        shell: bash
+          pip install "pre-commit>=3.6,<4"
+          pre-commit run --all-files --show-diff-on-failure

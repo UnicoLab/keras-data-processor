@@ -1,8 +1,9 @@
+import keras
 import tensorflow as tf
 
 
-@tf.keras.utils.register_keras_serializable(package="kdp.layers")
-class NumericalEmbedding(tf.keras.layers.Layer):
+@keras.saving.register_keras_serializable(package="kdp.layers")
+class NumericalEmbedding(keras.layers.Layer):
     """Advanced numerical embedding layer for continuous features.
 
     This layer embeds each continuous numerical feature into a higher-dimensional space by
@@ -65,42 +66,48 @@ class NumericalEmbedding(tf.keras.layers.Layer):
 
         if self.num_bins is None:
             raise ValueError(
-                "num_bins must be provided to activate the discrete branch."
+                "num_bins must be provided to activate the discrete branch.",
             )
 
-    def build(self, input_shape):
+    def build(self, input_shape) -> None:
         # input_shape: (batch, num_features)
+        """Build the layer's weights for a given input shape.
+
+        Args:
+            input_shape: Shape of the input tensor.
+        """
         self.num_features = input_shape[-1]
         # Continuous branch: process each feature independently using TimeDistributed MLP.
-        self.cont_mlp = tf.keras.Sequential(
+        self.cont_mlp = keras.Sequential(
             [
-                tf.keras.layers.TimeDistributed(
-                    tf.keras.layers.Dense(self.mlp_hidden_units, activation="relu")
+                keras.layers.TimeDistributed(
+                    keras.layers.Dense(self.mlp_hidden_units, activation="relu"),
                 ),
-                tf.keras.layers.TimeDistributed(
-                    tf.keras.layers.Dense(self.embedding_dim)
+                keras.layers.TimeDistributed(
+                    keras.layers.Dense(self.embedding_dim),
                 ),
             ],
             name="cont_mlp",
         )
         self.dropout = (
-            tf.keras.layers.Dropout(self.dropout_rate)
+            keras.layers.Dropout(self.dropout_rate)
             if self.dropout_rate > 0
-            else lambda x, training: x
+            else lambda x, **kwargs: x  # no-op matching the Dropout call signature
         )
         if self.use_batch_norm:
-            self.batch_norm = tf.keras.layers.TimeDistributed(
-                tf.keras.layers.BatchNormalization(), name="cont_batch_norm"
+            self.batch_norm = keras.layers.TimeDistributed(
+                keras.layers.BatchNormalization(),
+                name="cont_batch_norm",
             )
         # Residual projection to match embedding_dim.
-        self.residual_proj = tf.keras.layers.TimeDistributed(
-            tf.keras.layers.Dense(self.embedding_dim, activation=None),
+        self.residual_proj = keras.layers.TimeDistributed(
+            keras.layers.Dense(self.embedding_dim, activation=None),
             name="residual_proj",
         )
         # Discrete branch: Create one Embedding layer per feature.
         self.bin_embeddings = []
         for i in range(self.num_features):
-            embed_layer = tf.keras.layers.Embedding(
+            embed_layer = keras.layers.Embedding(
                 input_dim=self.num_bins,
                 output_dim=self.embedding_dim,
                 name=f"bin_embed_{i}",
@@ -149,10 +156,33 @@ class NumericalEmbedding(tf.keras.layers.Layer):
             initializer="zeros",
             trainable=True,
         )
+
+        # Explicitly build the sub-layers. Keras restores weights only for
+        # sub-layers that are already built when a saved model is deserialized,
+        # so leaving these to build lazily inside `call` breaks `load_model`
+        # whenever this layer is nested inside another custom layer.
+        batch = input_shape[0]
+        branch_input_shape = (batch, self.num_features, 1)
+        self.cont_mlp.build(branch_input_shape)
+        self.residual_proj.build(branch_input_shape)
+        if self.use_batch_norm:
+            self.batch_norm.build((batch, self.num_features, self.embedding_dim))
+        for embed_layer in self.bin_embeddings:
+            embed_layer.build((batch,))
+
         super().build(input_shape)
 
     def call(self, inputs: tf.Tensor, training: bool = False) -> tf.Tensor:
         # Continuous branch.
+        """Apply the layer to its inputs.
+
+        Args:
+            inputs: Input tensor to process.
+            training: Whether the layer is being called in training mode.
+
+        Returns:
+            The transformed tensor.
+        """
         inputs_expanded = tf.expand_dims(inputs, axis=-1)  # (batch, num_features, 1)
         cont = self.cont_mlp(inputs_expanded)
         cont = self.dropout(cont, training=training)
@@ -176,7 +206,7 @@ class NumericalEmbedding(tf.keras.layers.Layer):
         for i in range(self.num_features):
             feat_bins = bin_indices[:, i]  # (batch,)
             feat_embed = self.bin_embeddings[i](
-                feat_bins
+                feat_bins,
             )  # i is a Python integer here.
             disc_embeddings.append(feat_embed)
         disc = tf.stack(disc_embeddings, axis=1)  # (batch, num_features, embedding_dim)
@@ -189,7 +219,12 @@ class NumericalEmbedding(tf.keras.layers.Layer):
             return tf.squeeze(output, axis=1)  # New shape: (batch, embedding_dim)
         return output
 
-    def get_config(self):
+    def get_config(self) -> dict:
+        """Return the configuration needed to re-create this layer.
+
+        Returns:
+            The layer configuration.
+        """
         config = super().get_config()
         config.update(
             {
@@ -200,10 +235,18 @@ class NumericalEmbedding(tf.keras.layers.Layer):
                 "init_max": self.init_max,
                 "dropout_rate": self.dropout_rate,
                 "use_batch_norm": self.use_batch_norm,
-            }
+            },
         )
         return config
 
     @classmethod
-    def from_config(cls, config):
+    def from_config(cls, config) -> "NumericalEmbedding":
+        """Re-create the layer from its configuration.
+
+        Args:
+            config: Configuration dictionary produced by `get_config`.
+
+        Returns:
+            The reconstructed layer.
+        """
         return cls(**config)

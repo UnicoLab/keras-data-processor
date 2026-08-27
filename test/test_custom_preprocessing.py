@@ -1,3 +1,4 @@
+import keras
 import unittest
 import numpy as np
 import tensorflow as tf
@@ -16,7 +17,7 @@ np.random.seed(42)
 
 
 # Custom scaling layer for testing
-class CustomScalingLayer(tf.keras.layers.Layer):
+class CustomScalingLayer(keras.layers.Layer):
     def __init__(self, scaling_factor=2.0, **kwargs):
         super().__init__(**kwargs)
         self.scaling_factor = scaling_factor
@@ -33,7 +34,7 @@ class CustomScalingLayer(tf.keras.layers.Layer):
 
 
 # Custom normalization layer for testing
-class CustomNormalizationLayer(tf.keras.layers.Layer):
+class CustomNormalizationLayer(keras.layers.Layer):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         # Add __name__ attribute for compatibility with PreprocessingModel

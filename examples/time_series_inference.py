@@ -1,10 +1,12 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 """
 Example script showing how to use the InferenceDataFormatter to prepare data for time series inference.
 This demonstrates how to handle single-point inference, batch inference, forecasting, etc.
 """
+
+import tempfile
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -42,12 +44,12 @@ def generate_sample_data(num_stores=3, days_per_store=30, add_noise=True):
             date = base_date + timedelta(days=day)
 
             # Calculate sales based on pattern
-            if store_id < 2:
-                # Linear pattern
-                sales = base_sales + (day * growth)
-            else:
-                # Sinusoidal pattern
-                sales = base_sales + 50 * np.sin(day * 0.2)
+            # Linear pattern for the first stores, sinusoidal for the rest.
+            sales = (
+                base_sales + (day * growth)
+                if store_id < 2
+                else base_sales + 50 * np.sin(day * 0.2)
+            )
 
             # Add noise if requested
             if add_noise:
@@ -58,7 +60,7 @@ def generate_sample_data(num_stores=3, days_per_store=30, add_noise=True):
                     "date": date.strftime("%Y-%m-%d"),
                     "store_id": f"Store_{store_id}",
                     "sales": sales,
-                }
+                },
             )
 
     return pd.DataFrame(all_data)
@@ -85,10 +87,18 @@ def train_preprocessor(train_data):
         "store_id": FeatureType.STRING_CATEGORICAL,
     }
 
+    # KDP computes its statistics from data on disk, so `path_data` is a file
+    # path rather than a DataFrame; write the frame out first.
+    work_dir = Path(tempfile.mkdtemp(prefix="kdp_time_series_inference_"))
+    train_csv = work_dir / "train.csv"
+    train_data.to_csv(train_csv, index=False)
+
     # Create a preprocessor with dict output to see results
     preprocessor = PreprocessingModel(
-        path_data=train_data,
+        path_data=str(train_csv),
         features_specs=features_specs,
+        features_stats_path=str(work_dir / "features_stats.json"),
+        overwrite_stats=True,
         output_mode="dict",
     )
 
@@ -98,7 +108,7 @@ def train_preprocessor(train_data):
     return preprocessor
 
 
-def example_single_point_inference_failure(preprocessor, formatter):
+def example_single_point_inference_failure(formatter):
     """Example showing how single-point inference fails with time series features."""
     print("\n=== Single-Point Inference with Time Series Features ===")
 
@@ -193,10 +203,9 @@ def example_multi_step_forecast(preprocessor, formatter, train_data):
         prediction = preprocessor.predict(formatted_data)
 
         # Extract the prediction value (last value in the sales array)
-        if isinstance(prediction, dict):
-            predicted_value = prediction["sales"][-1]
-        else:
-            predicted_value = prediction[-1]
+        predicted_value = (
+            prediction["sales"][-1] if isinstance(prediction, dict) else prediction[-1]
+        )
 
         # Create a result row for the forecast
         forecast_row = {
@@ -297,11 +306,12 @@ def example_batch_inference(preprocessor, formatter, train_data):
             if store_indices[store]:
                 last_idx = store_indices[store][-1]
                 print(
-                    f"Predicted sales for {store}: {prediction['sales'][last_idx].numpy()}"
+                    f"Predicted sales for {store}: {prediction['sales'][last_idx].numpy()}",
                 )
     else:
         print(
-            "Prediction result:", prediction[-3:]
+            "Prediction result:",
+            prediction[-3:],
         )  # Last 3 values are the predictions
 
 
@@ -318,7 +328,7 @@ def main():
     formatter = TimeSeriesInferenceFormatter(preprocessor)
 
     # Example 1: Single-point inference (will fail, showing why we need the formatter)
-    example_single_point_inference_failure(preprocessor, formatter)
+    example_single_point_inference_failure(formatter)
 
     # Example 2: Inference with historical context
     example_with_historical_context(preprocessor, formatter, train_data)

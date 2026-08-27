@@ -1,10 +1,12 @@
+import keras
 import tensorflow as tf
-from tensorflow.keras.layers import Layer
+from keras.layers import Layer
 import numpy as np
 from loguru import logger
 import pandas as pd
 
 
+@keras.saving.register_keras_serializable(package="kdp.layers")
 class CalendarFeatureLayer(Layer):
     """Layer for generating calendar features from date or timestamp inputs.
 
@@ -49,6 +51,11 @@ class CalendarFeatureLayer(Layer):
         onehot_categorical=False,
         **kwargs,
     ):
+        """Initialize the CalendarFeatureLayer.
+
+        See the class docstring for the accepted arguments and what
+        each one controls.
+        """
         super().__init__(**kwargs)
 
         # Default features if none provided
@@ -107,10 +114,15 @@ class CalendarFeatureLayer(Layer):
             ):
                 raise ValueError(f"Invalid feature: {feature}")
 
-    def build(self, input_shape):
+    def build(self, input_shape) -> None:
+        """Build the layer's weights for a given input shape.
+
+        Args:
+            input_shape: Shape of the input tensor.
+        """
         super().build(input_shape)
 
-    def call(self, inputs, training=None):
+    def call(self, inputs, training=None) -> tf.Tensor:
         """Extract calendar features from date inputs.
 
         Args:
@@ -122,7 +134,7 @@ class CalendarFeatureLayer(Layer):
         """
 
         # Process date inputs using pandas for more flexibility
-        def extract_calendar_features(date_inputs):
+        def extract_calendar_features(date_inputs) -> np.ndarray:
             # Convert tensor to numpy
             if isinstance(date_inputs, tf.Tensor):
                 date_inputs = date_inputs.numpy()
@@ -139,17 +151,17 @@ class CalendarFeatureLayer(Layer):
                             [
                                 s.decode("utf-8") if isinstance(s, bytes) else s
                                 for s in date_inputs
-                            ]
+                            ],
                         )
                     # Also handle case where strings are repr'd as bytes
                     elif isinstance(date_inputs[0], str) and date_inputs[0].startswith(
-                        "b'"
+                        "b'",
                     ):
                         date_inputs = np.array(
                             [
                                 s[2:-1] if s.startswith("b'") and s.endswith("'") else s
                                 for s in date_inputs
-                            ]
+                            ],
                         )
                 except (IndexError, TypeError):
                     pass  # Handle empty arrays or arrays with mixed types
@@ -171,7 +183,7 @@ class CalendarFeatureLayer(Layer):
                     # Last resort: try to clean the strings and convert
                     cleaned_inputs = []
                     for d in date_inputs:
-                        if isinstance(d, (bytes, str)):
+                        if isinstance(d, bytes | str):
                             # Clean up string representation of bytes
                             if (
                                 isinstance(d, str)
@@ -285,9 +297,7 @@ class CalendarFeatureLayer(Layer):
                             df[feature] = np.sin(angle)
 
             # Convert to numpy array
-            features_array = df.values.astype(np.float32)
-
-            return features_array
+            return df.to_numpy().astype(np.float32)
 
         # Apply the function
         result = tf.py_function(extract_calendar_features, [inputs], tf.float32)
@@ -298,14 +308,14 @@ class CalendarFeatureLayer(Layer):
 
         return result
 
-    def compute_output_shape(self, input_shape):
+    def compute_output_shape(self, input_shape) -> tuple:
         """Compute the output shape of the layer."""
         batch_size = input_shape[0]
         n_features = len(self.features)
 
         return (batch_size, n_features)
 
-    def get_config(self):
+    def get_config(self) -> dict:
         """Return the configuration of the layer."""
         config = {
             "features": self.features,

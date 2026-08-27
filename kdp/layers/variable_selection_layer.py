@@ -1,8 +1,10 @@
+import keras
 import tensorflow as tf
 from kdp.layers.gated_residual_network_layer import GatedResidualNetwork
 
 
-class VariableSelection(tf.keras.layers.Layer):
+@keras.saving.register_keras_serializable(package="kdp.layers")
+class VariableSelection(keras.layers.Layer):
     """VariableSelection is a custom Keras layer that implements a variable selection mechanism.
 
     This layer applies a gated residual network to each feature independently and concatenates the results.
@@ -21,7 +23,11 @@ class VariableSelection(tf.keras.layers.Layer):
     """
 
     def __init__(
-        self, nr_features: int, units: int, dropout_rate: float = 0.2, **kwargs: dict
+        self,
+        nr_features: int,
+        units: int,
+        dropout_rate: float = 0.2,
+        **kwargs: dict,
     ) -> None:
         """Initialize the VariableSelection layer.
 
@@ -44,10 +50,12 @@ class VariableSelection(tf.keras.layers.Layer):
 
         # Create a GRN for the concatenation of all the features
         self.grn_concat = GatedResidualNetwork(units=units, dropout_rate=dropout_rate)
-        self.softmax = tf.keras.layers.Dense(units=nr_features, activation="softmax")
+        self.softmax = keras.layers.Dense(units=nr_features, activation="softmax")
 
     def call(
-        self, inputs: list[tf.Tensor], training: bool = False
+        self,
+        inputs: list[tf.Tensor],
+        training: bool = False,
     ) -> tuple[tf.Tensor, tf.Tensor]:
         """Forward pass of the layer.
 
@@ -59,7 +67,7 @@ class VariableSelection(tf.keras.layers.Layer):
             tuple[tf.Tensor, tf.Tensor]: Tuple containing selected features and feature weights.
         """
         # Process concatenated features
-        v = tf.keras.layers.concatenate(inputs)
+        v = keras.layers.concatenate(inputs)
         v = self.grn_concat(v, training=training)
         feature_weights = self.softmax(v)
         feature_weights = tf.expand_dims(feature_weights, axis=-1)
@@ -72,7 +80,8 @@ class VariableSelection(tf.keras.layers.Layer):
 
         # Apply feature selection weights
         selected_features = tf.squeeze(
-            tf.matmul(feature_weights, x, transpose_a=True), axis=1
+            tf.matmul(feature_weights, x, transpose_a=True),
+            axis=1,
         )
         return selected_features, feature_weights
 

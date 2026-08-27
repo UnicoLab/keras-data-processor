@@ -206,7 +206,9 @@ For more complex scenarios, the formatter provides additional options:
 formatted_data = formatter.prepare_inference_data(
     data=new_data,
     historical_data=historical_data,
-    fill_missing=True,   # Try to fill missing values or context
+    fill_missing=True,   # Inert; see the API docs. Missing values inside
+                         # sufficient history are handled by
+                         # missing_value_config on the feature itself.
     to_tensors=False     # Keep as Python/NumPy types for inspection
 )
 

@@ -1,3 +1,4 @@
+import keras
 import unittest
 import numpy as np
 import tensorflow as tf
@@ -63,15 +64,15 @@ class TestPreprocessorLayerFactory(unittest.TestCase):
         dense_layer = PreprocessorLayerFactory.create_layer(
             layer_class="Dense", units=10, activation="relu"
         )
-        self.assertIsInstance(dense_layer, tf.keras.layers.Dense)
+        self.assertIsInstance(dense_layer, keras.layers.Dense)
         self.assertEqual(dense_layer.units, 10)
         self.assertEqual(dense_layer.activation.__name__, "relu")
 
         # Test with class object
         dropout_layer = PreprocessorLayerFactory.create_layer(
-            layer_class=tf.keras.layers.Dropout, rate=0.5
+            layer_class=keras.layers.Dropout, rate=0.5
         )
-        self.assertIsInstance(dropout_layer, tf.keras.layers.Dropout)
+        self.assertIsInstance(dropout_layer, keras.layers.Dropout)
         self.assertEqual(dropout_layer.rate, 0.5)
 
     def test_distribution_aware_encoder(self):

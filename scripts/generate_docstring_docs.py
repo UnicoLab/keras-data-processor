@@ -4,6 +4,7 @@ Script to extract docstrings from the codebase and generate Markdown documentati
 This allows for automatic documentation generation directly from the code.
 """
 
+import importlib
 import os
 import re
 import inspect
@@ -15,7 +16,17 @@ project_root = str(Path(__file__).resolve().parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-# Import required modules
+MODULES_TO_DOCUMENT = [
+    "kdp.processor",
+    "kdp.dynamic_pipeline",
+    "kdp.features",
+    "kdp.layers.distribution_aware_encoder_layer",
+    "kdp.layers.distribution_transform_layer",
+    "kdp.layers.global_numerical_embedding_layer",
+    "kdp.layers.numerical_embedding_layer",
+    "kdp.layers.tabular_attention_layer",
+    "kdp.layers.multi_resolution_tabular_attention_layer",
+]
 
 
 def docstring_to_markdown(docstring):
@@ -42,7 +53,7 @@ def docstring_to_markdown(docstring):
         # Remove this indentation from all lines
         docstring = "\n".join(
             [lines[0]]
-            + [line[min_indent:] if line.strip() else line for line in lines[1:]]
+            + [line[min_indent:] if line.strip() else line for line in lines[1:]],
         )
 
     # Replace reST/Google-style formatting with Markdown equivalents
@@ -57,22 +68,30 @@ def docstring_to_markdown(docstring):
 
     # Convert Returns: section to Markdown
     markdown = re.sub(
-        r"Returns:\s*\n(\s+[^\n]*\n(?:\s+[^\n]*\n)*)", r"### Returns\n\n\1", markdown
+        r"Returns:\s*\n(\s+[^\n]*\n(?:\s+[^\n]*\n)*)",
+        r"### Returns\n\n\1",
+        markdown,
     )
 
     # Convert Raises: section to Markdown
     markdown = re.sub(
-        r"Raises:\s*\n(\s+[^\n]*\n(?:\s+[^\n]*\n)*)", r"### Raises\n\n\1", markdown
+        r"Raises:\s*\n(\s+[^\n]*\n(?:\s+[^\n]*\n)*)",
+        r"### Raises\n\n\1",
+        markdown,
     )
 
     # Convert Examples: section to Markdown
     markdown = re.sub(
-        r"Examples?:\s*\n(\s+[^\n]*\n(?:\s+[^\n]*\n)*)", r"### Examples\n\n\1", markdown
+        r"Examples?:\s*\n(\s+[^\n]*\n(?:\s+[^\n]*\n)*)",
+        r"### Examples\n\n\1",
+        markdown,
     )
 
     # Convert Note: section to Markdown
     markdown = re.sub(
-        r"Note:\s*\n(\s+[^\n]*\n(?:\s+[^\n]*\n)*)", r"### Notes\n\n\1", markdown
+        r"Note:\s*\n(\s+[^\n]*\n(?:\s+[^\n]*\n)*)",
+        r"### Notes\n\n\1",
+        markdown,
     )
 
     # Convert parameter descriptions to bullet points
@@ -89,9 +108,7 @@ def docstring_to_markdown(docstring):
     )
 
     # Remove trailing spaces
-    markdown = "\n".join(line.rstrip() for line in markdown.split("\n"))
-
-    return markdown
+    return "\n".join(line.rstrip() for line in markdown.split("\n"))
 
 
 def extract_class_docs(cls):
@@ -177,7 +194,7 @@ def generate_module_index(modules, output_dir):
     with open(output_file, "w") as f:
         f.write("# API Reference\n\n")
         f.write(
-            "This section provides detailed API documentation extracted directly from the codebase.\n\n"
+            "This section provides detailed API documentation extracted directly from the codebase.\n\n",
         )
 
         for module in modules:
@@ -206,18 +223,10 @@ def extract_docstrings():
     # Define output directory
     output_dir = "docs/generated"
 
-    # List of modules to document
-    modules = [
-        sys.modules["kdp.processor"],
-        sys.modules["kdp.dynamic_pipeline"],
-        sys.modules["kdp.features"],
-        sys.modules["kdp.layers.distribution_aware_encoder_layer"],
-        sys.modules["kdp.layers.distribution_transform_layer"],
-        sys.modules["kdp.layers.global_numerical_embedding_layer"],
-        sys.modules["kdp.layers.numerical_embedding_layer"],
-        sys.modules["kdp.layers.tabular_attention_layer"],
-        sys.modules["kdp.layers.multi_resolution_tabular_attention_layer"],
-    ]
+    # Import the modules rather than reading them out of sys.modules: nothing
+    # here imported them, so every lookup raised KeyError and this script --
+    # which `make generate_doc_content` runs -- could never complete.
+    modules = [importlib.import_module(name) for name in MODULES_TO_DOCUMENT]
 
     # Process each module
     for module in modules:

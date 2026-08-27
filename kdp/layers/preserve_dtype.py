@@ -1,8 +1,8 @@
 import tensorflow as tf
-from tensorflow import keras
+import keras
 
 
-@tf.keras.utils.register_keras_serializable(package="kdp.layers")
+@keras.saving.register_keras_serializable(package="kdp.layers")
 class PreserveDtypeLayer(keras.layers.Layer):
     """Custom Keras layer that preserves the original dtype of input tensors.
 
@@ -20,7 +20,7 @@ class PreserveDtypeLayer(keras.layers.Layer):
         super().__init__(**kwargs)
         self.target_dtype = target_dtype
 
-    def call(self, inputs, **kwargs):
+    def call(self, inputs, **kwargs) -> tf.Tensor:
         """Process the input tensor, optionally casting to target_dtype.
 
         Args:
@@ -34,7 +34,7 @@ class PreserveDtypeLayer(keras.layers.Layer):
             return tf.cast(inputs, self.target_dtype)
         return inputs
 
-    def get_config(self):
+    def get_config(self) -> dict:
         """Return the config dictionary for serialization.
 
         Returns:
@@ -45,7 +45,7 @@ class PreserveDtypeLayer(keras.layers.Layer):
         return config
 
     @classmethod
-    def from_config(cls, config):
+    def from_config(cls, config) -> "PreserveDtypeLayer":
         """Create a new instance from the serialized configuration.
 
         Args:

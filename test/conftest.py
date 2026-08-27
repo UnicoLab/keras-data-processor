@@ -9,6 +9,7 @@ This module provides:
 - Aggressive speed optimizations
 """
 
+import keras
 import gc
 import os
 import tempfile
@@ -110,7 +111,7 @@ def setup_test_environment():
     yield
 
     # Cleanup after all tests
-    tf.keras.backend.clear_session()
+    keras.backend.clear_session()
     gc.collect()
 
 
@@ -118,9 +119,9 @@ def setup_test_environment():
 def cleanup_after_test():
     """Lightweight cleanup after each test."""
     yield
-    # Only clear session if needed (check if any models exist)
-    if hasattr(tf.keras.backend, "_SESSION") and tf.keras.backend._SESSION is not None:
-        tf.keras.backend.clear_session()
+    # Keras 3 has no TF1-style global session, so there is nothing to probe:
+    # clearing is cheap and keeps layer-name counters from leaking across tests.
+    keras.backend.clear_session()
 
 
 @pytest.fixture(scope="session")
@@ -418,14 +419,14 @@ def pytest_runtest_setup(item):
 
     # Only clear session if it's a slow test
     if item.get_closest_marker("slow") or item.get_closest_marker("integration"):
-        tf.keras.backend.clear_session()
+        keras.backend.clear_session()
 
 
 def pytest_runtest_teardown(item, nextitem):
     """Teardown after each test run (minimal overhead)."""
     # Only do expensive cleanup for slow tests
     if item.get_closest_marker("slow") or item.get_closest_marker("integration"):
-        tf.keras.backend.clear_session()
+        keras.backend.clear_session()
         gc.collect()
 
 
@@ -446,5 +447,5 @@ def pytest_sessionfinish(session, exitstatus):
     _TEST_DATA_CACHE.clear()
 
     # Final cleanup
-    tf.keras.backend.clear_session()
+    keras.backend.clear_session()
     gc.collect()

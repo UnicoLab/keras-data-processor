@@ -1,7 +1,23 @@
 import pandas as pd
 import numpy as np
 import tensorflow as tf
-from typing import Dict, Union
+
+
+def _is_missing(value) -> bool:
+    """Report whether a single value stands for "no data".
+
+    Args:
+        value: A scalar taken from a feature column.
+
+    Returns:
+        True for None, NaN and NaT.
+    """
+    if value is None:
+        return True
+    try:
+        return bool(pd.isna(value))
+    except (TypeError, ValueError):
+        return False
 
 
 class InferenceFormatter:
@@ -23,8 +39,10 @@ class InferenceFormatter:
         self.preprocessor = preprocessor
 
     def prepare_inference_data(
-        self, data: Union[Dict, pd.DataFrame], to_tensors: bool = False
-    ) -> Union[Dict, Dict[str, tf.Tensor]]:
+        self,
+        data: dict | pd.DataFrame,
+        to_tensors: bool = False,
+    ) -> dict | dict[str, tf.Tensor]:
         """Prepare data for inference based on preprocessor requirements.
 
         Args:
@@ -43,7 +61,7 @@ class InferenceFormatter:
 
         return inference_data
 
-    def _convert_to_dict(self, data: Union[Dict, pd.DataFrame]) -> Dict:
+    def _convert_to_dict(self, data: dict | pd.DataFrame) -> dict:
         """Convert data to dictionary format required by the preprocessor.
 
         Args:
@@ -61,13 +79,13 @@ class InferenceFormatter:
         elif isinstance(data, dict):
             # Ensure all values are lists/arrays
             for key, value in data.items():
-                if not isinstance(value, (list, np.ndarray)):
+                if not isinstance(value, list | np.ndarray):
                     data[key] = [value]  # Convert single values to lists
             return data
         else:
             raise ValueError(f"Unsupported data type: {type(data)}")
 
-    def _convert_to_tensors(self, data: Dict) -> Dict[str, tf.Tensor]:
+    def _convert_to_tensors(self, data: dict) -> dict[str, tf.Tensor]:
         """Convert dictionary data to TensorFlow tensors.
 
         Args:
@@ -78,18 +96,30 @@ class InferenceFormatter:
         """
         tf_data = {}
         for key, value in data.items():
-            # Infer the type from the values
-            if (
-                len(value) > 0
-                and isinstance(value[0], (int, float, np.number, type(None)))
-                or any(
-                    isinstance(v, (int, float, np.number)) or pd.isna(v) for v in value
+            values = list(value)
+            # Decide the column's type from the values that are actually there.
+            # The previous check treated any column containing a missing value
+            # as numeric, so a categorical column with one gap was handed to
+            # `tf.constant(..., tf.float32)` and raised "mixed types".
+            present = [item for item in values if not _is_missing(item)]
+            is_numeric = bool(present) and all(
+                isinstance(item, int | float | np.number) and not isinstance(item, bool)
+                for item in present
+            )
+
+            if is_numeric:
+                tf_data[key] = tf.constant(
+                    [
+                        float("nan") if _is_missing(item) else float(item)
+                        for item in values
+                    ],
+                    dtype=tf.float32,
                 )
-            ):
-                # Numerical features as float32
-                tf_data[key] = tf.constant(value, dtype=tf.float32)
             else:
-                # Everything else as string
-                tf_data[key] = tf.constant(value)
+                # Missing categories become the empty string, which every
+                # vocabulary layer maps to its out-of-vocabulary slot.
+                tf_data[key] = tf.constant(
+                    ["" if _is_missing(item) else str(item) for item in values],
+                )
 
         return tf_data

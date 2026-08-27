@@ -1,8 +1,10 @@
+import keras
 import tensorflow as tf
-from tensorflow.keras.layers import Layer
+from keras.layers import Layer
 import numpy as np
 
 
+@keras.saving.register_keras_serializable(package="kdp.layers")
 class WaveletTransformLayer(Layer):
     """Layer for applying simplified wavelet-like transforms to time series data.
 
@@ -29,6 +31,11 @@ class WaveletTransformLayer(Layer):
         drop_na=True,
         **kwargs,
     ):
+        """Initialize the WaveletTransformLayer.
+
+        See the class docstring for the accepted arguments and what
+        each one controls.
+        """
         super().__init__(**kwargs)
         self.levels = levels
         self.keep_levels = keep_levels
@@ -43,13 +50,18 @@ class WaveletTransformLayer(Layer):
             or isinstance(keep_levels, list)
         ):
             raise ValueError(
-                "keep_levels must be 'all', 'approx', or a list of level indices"
+                "keep_levels must be 'all', 'approx', or a list of level indices",
             )
 
-    def build(self, input_shape):
+    def build(self, input_shape) -> None:
+        """Build the layer's weights for a given input shape.
+
+        Args:
+            input_shape: Shape of the input tensor.
+        """
         super().build(input_shape)
 
-    def call(self, inputs, training=None):
+    def call(self, inputs, training=None) -> tf.Tensor:
         """Apply simplified wavelet transform to the input time series.
 
         Args:
@@ -64,7 +76,7 @@ class WaveletTransformLayer(Layer):
         # original_rank = tf.rank(inputs)
 
         # Process the input tensor using NumPy for more control over the transform
-        def apply_transform(inputs_tensor):
+        def apply_transform(inputs_tensor) -> np.ndarray:
             # Convert to NumPy
             inputs_np = inputs_tensor.numpy()
 
@@ -128,7 +140,10 @@ class WaveletTransformLayer(Layer):
 
             # Filter and process coefficients
             result = self._process_coefficients(
-                all_coeffs, batch_size, n_features, time_steps
+                all_coeffs,
+                batch_size,
+                n_features,
+                time_steps,
             )
 
             return result.astype(np.float32)
@@ -151,13 +166,18 @@ class WaveletTransformLayer(Layer):
 
         return result
 
-    def _moving_average(self, series, window_size):
+    def _moving_average(self, series, window_size) -> np.ndarray:
         """Apply moving average to a time series."""
         cumsum = np.cumsum(np.insert(series, 0, 0))
-        ma = (cumsum[window_size:] - cumsum[:-window_size]) / window_size
-        return ma
+        return (cumsum[window_size:] - cumsum[:-window_size]) / window_size
 
-    def _process_coefficients(self, all_coeffs, batch_size, n_features, time_steps):
+    def _process_coefficients(
+        self,
+        all_coeffs,
+        batch_size,
+        n_features,
+        time_steps,
+    ) -> np.ndarray:
         """Process and filter coefficients based on keep_levels."""
         # Calculate total size of output features
         n_output_features = self._get_n_output_features(time_steps)
@@ -165,7 +185,8 @@ class WaveletTransformLayer(Layer):
         if self.flatten_output:
             # Initialize output array
             result = np.zeros(
-                (batch_size, n_features * n_output_features), dtype=np.float32
+                (batch_size, n_features * n_output_features),
+                dtype=np.float32,
             )
 
             for b in range(batch_size):
@@ -196,7 +217,7 @@ class WaveletTransformLayer(Layer):
             # This is a simplified approach to demonstrate the concept
             return np.zeros((batch_size, n_features, n_output_features))
 
-    def _filter_levels(self, level_coeffs):
+    def _filter_levels(self, level_coeffs) -> list:
         """Filter coefficient levels based on keep_levels."""
         if self.keep_levels == "all":
             return level_coeffs
@@ -210,7 +231,7 @@ class WaveletTransformLayer(Layer):
                     filtered.append(level_coeffs[level])
             return filtered
 
-    def _get_n_output_features(self, time_steps):
+    def _get_n_output_features(self, time_steps) -> int:
         """Calculate the number of output features based on wavelet parameters."""
         # In our simplified approach, we'll estimate based on time_steps and levels
         n_features = 0
@@ -244,7 +265,7 @@ class WaveletTransformLayer(Layer):
         # Ensure a minimum size
         return max(n_features, 1)
 
-    def compute_output_shape(self, input_shape):
+    def compute_output_shape(self, input_shape) -> tuple:
         """Compute the output shape of the layer."""
         if self.flatten_output:
             # Calculate output features
@@ -263,7 +284,7 @@ class WaveletTransformLayer(Layer):
 
         return output_shape
 
-    def get_config(self):
+    def get_config(self) -> dict:
         """Return the configuration of the layer."""
         config = {
             "levels": self.levels,

@@ -10,7 +10,6 @@ import argparse
 import json
 import os
 from pathlib import Path
-from typing import Optional, Dict
 
 from loguru import logger
 
@@ -23,7 +22,7 @@ from kdp.stats import DatasetStatistics
 def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="Analyze a dataset and recommend optimal preprocessing configurations."
+        description="Analyze a dataset and recommend optimal preprocessing configurations.",
     )
     parser.add_argument(
         "--data",
@@ -72,10 +71,10 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def load_feature_types(file_path: Path) -> Optional[Dict[str, FeatureType]]:
+def load_feature_types(file_path: Path) -> dict[str, FeatureType] | None:
     """Load feature types from a JSON file."""
     try:
-        with open(file_path, "r") as f:
+        with open(file_path) as f:
             feature_types = json.load(f)
 
         features_specs = {}
@@ -96,7 +95,7 @@ def load_feature_types(file_path: Path) -> Optional[Dict[str, FeatureType]]:
             except KeyError:
                 logger.warning(
                     f"Unknown feature type '{feature_type}' for feature '{feature_name}'. "
-                    f"Defaulting to FLOAT_NORMALIZED."
+                    f"Defaulting to FLOAT_NORMALIZED.",
                 )
                 features_specs[feature_name] = FeatureType.FLOAT_NORMALIZED
 

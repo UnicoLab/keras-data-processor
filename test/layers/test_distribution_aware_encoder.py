@@ -1,3 +1,4 @@
+import keras
 import tensorflow as tf
 import numpy as np
 from kdp.layers.distribution_aware_encoder_layer import DistributionAwareEncoder
@@ -79,9 +80,9 @@ def test_automatic_detection():
         tensor_data = tf.convert_to_tensor(dist_data, dtype=tf.float32)
 
         # Create a small model with the encoder
-        inputs = tf.keras.Input(shape=(tensor_data.shape[-1],))
+        inputs = keras.Input(shape=(tensor_data.shape[-1],))
         encoded = encoder(inputs)
-        model = tf.keras.Model(inputs, encoded)
+        model = keras.Model(inputs, encoded)
 
         # Feed data through the model to trigger detection
         _ = model(tensor_data, training=True)
@@ -126,9 +127,9 @@ def test_various_configurations():
         tensor_data = tf.convert_to_tensor(data["normal"], dtype=tf.float32)
 
         # Create a small model with matching input shape
-        inputs = tf.keras.Input(shape=(tensor_data.shape[-1],))
+        inputs = keras.Input(shape=(tensor_data.shape[-1],))
         encoded = encoder(inputs)
-        model = tf.keras.Model(inputs, encoded)
+        model = keras.Model(inputs, encoded)
 
         # Feed data through the model
         output = model(tensor_data)
@@ -191,14 +192,14 @@ def test_in_model():
     y_train = (x_train[:, 0] > 0).astype(np.float32)  # Simple binary task
 
     # Create a model with the encoder - disable periodicity detection to avoid shape mismatches
-    inputs = tf.keras.Input(shape=(5,))
+    inputs = keras.Input(shape=(5,))
     encoded = DistributionAwareEncoder(embedding_dim=16, detect_periodicity=False)(
         inputs
     )
-    hidden = tf.keras.layers.Dense(8, activation="relu")(encoded)
-    outputs = tf.keras.layers.Dense(1, activation="sigmoid")(hidden)
+    hidden = keras.layers.Dense(8, activation="relu")(encoded)
+    outputs = keras.layers.Dense(1, activation="sigmoid")(hidden)
 
-    model = tf.keras.Model(inputs, outputs)
+    model = keras.Model(inputs, outputs)
     model.compile(optimizer="adam", loss="binary_crossentropy", metrics=["accuracy"])
 
     # Train for just a few epochs to verify it works
@@ -210,7 +211,7 @@ def test_in_model():
     print("  Testing model saving and loading...")
     try:
         model.save(model_path)
-        loaded_model = tf.keras.models.load_model(model_path)
+        loaded_model = keras.saving.load_model(model_path)
         print("  Model saved and loaded successfully")
 
         # Test for prediction consistency

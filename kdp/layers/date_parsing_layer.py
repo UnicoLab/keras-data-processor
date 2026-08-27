@@ -1,7 +1,9 @@
+import keras
 import tensorflow as tf
 
 
-class DateParsingLayer(tf.keras.layers.Layer):
+@keras.saving.register_keras_serializable(package="kdp.layers")
+class DateParsingLayer(keras.layers.Layer):
     def __init__(self, date_format: str = "YYYY-MM-DD", **kwargs) -> None:
         """Initializing DateParsingLayer.
 
@@ -91,15 +93,21 @@ class DateParsingLayer(tf.keras.layers.Layer):
                 day_of_month + ((13 * (m + 1)) // 5) + k + (k // 4) + (j // 4) - (2 * j)
             ) % 7
             day_of_week = tf.where(
-                h == 0, 6, h - 1
+                h == 0,
+                6,
+                h - 1,
             )  # Adjust to 0-6 range where 0 is Sunday
 
             return tf.stack([year, month, day_of_month, day_of_week])
 
-        parsed_dates = tf.map_fn(
-            parse_date, tf.squeeze(inputs), fn_output_signature=tf.int32
+        # `tf.reshape(..., [-1])` rather than `tf.squeeze`: squeezing a
+        # single-row batch of shape (1, 1) collapses it to a scalar, which
+        # `tf.map_fn` cannot map over -- so predicting on one row raised.
+        return tf.map_fn(
+            parse_date,
+            tf.reshape(inputs, [-1]),
+            fn_output_signature=tf.int32,
         )
-        return parsed_dates
 
     def compute_output_shape(self, input_shape: int) -> int:
         """Getting output shape."""

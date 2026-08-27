@@ -1,8 +1,8 @@
 import tensorflow as tf
-from tensorflow import keras
+import keras
 
 
-@tf.keras.utils.register_keras_serializable(package="kdp.layers")
+@keras.saving.register_keras_serializable(package="kdp.layers")
 class CastToFloat32Layer(keras.layers.Layer):
     """Custom Keras layer that casts input tensors to float32.
 
@@ -14,7 +14,7 @@ class CastToFloat32Layer(keras.layers.Layer):
         """Initialize the layer."""
         super().__init__(**kwargs)
 
-    def call(self, inputs, **kwargs):
+    def call(self, inputs, **kwargs) -> tf.Tensor:
         """Cast the input tensor to float32.
 
         Args:
@@ -26,17 +26,16 @@ class CastToFloat32Layer(keras.layers.Layer):
         """
         return tf.cast(inputs, tf.float32)
 
-    def get_config(self):
+    def get_config(self) -> dict:
         """Return the config dictionary for serialization.
 
         Returns:
             A dictionary with the layer configuration
         """
-        config = super().get_config()
-        return config
+        return super().get_config()
 
     @classmethod
-    def from_config(cls, config):
+    def from_config(cls, config) -> "CastToFloat32Layer":
         """Create a new instance from the serialized configuration.
 
         Args:

@@ -1,5 +1,7 @@
 import inspect
+from typing import Any
 
+import keras
 import tensorflow as tf
 
 from kdp.layers.distribution_aware_encoder_layer import (
@@ -33,8 +35,10 @@ from kdp.layers.time_series.moving_average_layer import MovingAverageLayer
 class PreprocessorLayerFactory:
     @staticmethod
     def create_layer(
-        layer_class: str | object, name: str = None, **kwargs
-    ) -> tf.keras.layers.Layer:
+        layer_class: str | object,
+        name: str = None,
+        **kwargs: Any,
+    ) -> keras.layers.Layer:
         """Create a layer using the layer class name, automatically filtering kwargs based on the layer class.
 
         Args:
@@ -49,7 +53,7 @@ class PreprocessorLayerFactory:
         # Dynamically get the layer class from TensorFlow Keras layers
         if isinstance(layer_class, str):
             name = name or layer_class.lower()
-            layer_class = getattr(tf.keras.layers, layer_class)
+            layer_class = getattr(keras.layers, layer_class)
 
         # Get the signature of the layer class constructor
         constructor_params = inspect.signature(layer_class.__init__).parameters
@@ -76,8 +80,8 @@ class PreprocessorLayerFactory:
         adaptive_binning: bool = True,
         mixture_components: int = 3,
         prefered_distribution: "DistributionType" = None,
-        **kwargs,
-    ) -> tf.keras.layers.Layer:
+        **kwargs: Any,
+    ) -> keras.layers.Layer:
         """Create a DistributionAwareEncoder layer.
 
         Args:
@@ -88,7 +92,8 @@ class PreprocessorLayerFactory:
             handle_sparsity (bool): Whether to handle sparse data specially
             adaptive_binning (bool): Whether to use adaptive binning
             mixture_components (int): Number of components for mixture modeling
-            specified_distribution (DistributionType): Optional specific distribution type to use
+            prefered_distribution (DistributionType): Optional specific distribution type to use.
+                When given, automatic distribution detection is disabled.
             **kwargs: Additional keyword arguments
 
         Returns:
@@ -116,8 +121,8 @@ class PreprocessorLayerFactory:
         max_value: float = 1.0,
         clip_values: bool = True,
         auto_candidates: list[str] = None,
-        **kwargs,
-    ) -> tf.keras.layers.Layer:
+        **kwargs: Any,
+    ) -> keras.layers.Layer:
         """Create a DistributionTransformLayer layer.
 
         Args:
@@ -148,8 +153,9 @@ class PreprocessorLayerFactory:
 
     @staticmethod
     def text_preprocessing_layer(
-        name: str = "text_preprocessing", **kwargs: dict
-    ) -> tf.keras.layers.Layer:
+        name: str = "text_preprocessing",
+        **kwargs: dict,
+    ) -> keras.layers.Layer:
         """Create a TextPreprocessingLayer layer.
 
         Args:
@@ -167,8 +173,9 @@ class PreprocessorLayerFactory:
 
     @staticmethod
     def cast_to_float32_layer(
-        name: str = "cast_to_float32", **kwargs: dict
-    ) -> tf.keras.layers.Layer:
+        name: str = "cast_to_float32",
+        **kwargs: dict,
+    ) -> keras.layers.Layer:
         """Create a CastToFloat32Layer layer.
 
         Args:
@@ -186,8 +193,10 @@ class PreprocessorLayerFactory:
 
     @staticmethod
     def preserve_dtype_layer(
-        name: str = "preserve_dtype", target_dtype=None, **kwargs: dict
-    ) -> tf.keras.layers.Layer:
+        name: str = "preserve_dtype",
+        target_dtype: tf.DType | None = None,
+        **kwargs: dict,
+    ) -> keras.layers.Layer:
         """Create a PreserveDtypeLayer layer.
 
         Args:
@@ -207,8 +216,9 @@ class PreprocessorLayerFactory:
 
     @staticmethod
     def date_parsing_layer(
-        name: str = "date_parsing_layer", **kwargs: dict
-    ) -> tf.keras.layers.Layer:
+        name: str = "date_parsing_layer",
+        **kwargs: dict,
+    ) -> keras.layers.Layer:
         """Create a DateParsingLayer layer.
 
         Args:
@@ -226,8 +236,9 @@ class PreprocessorLayerFactory:
 
     @staticmethod
     def date_encoding_layer(
-        name: str = "date_encoding_layer", **kwargs: dict
-    ) -> tf.keras.layers.Layer:
+        name: str = "date_encoding_layer",
+        **kwargs: dict,
+    ) -> keras.layers.Layer:
         """Create a DateEncodingLayer layer.
 
         Args:
@@ -245,8 +256,9 @@ class PreprocessorLayerFactory:
 
     @staticmethod
     def date_season_layer(
-        name: str = "date_season_layer", **kwargs: dict
-    ) -> tf.keras.layers.Layer:
+        name: str = "date_season_layer",
+        **kwargs: dict,
+    ) -> keras.layers.Layer:
         """Create a SeasonLayer layer.
 
         Args:
@@ -264,8 +276,9 @@ class PreprocessorLayerFactory:
 
     @staticmethod
     def transformer_block_layer(
-        name: str = "transformer", **kwargs: dict
-    ) -> tf.keras.layers.Layer:
+        name: str = "transformer",
+        **kwargs: dict,
+    ) -> keras.layers.Layer:
         """Create a TransformerBlock layer.
 
         Args:
@@ -287,7 +300,7 @@ class PreprocessorLayerFactory:
         d_model: int,
         name: str = "tabular_attention",
         **kwargs: dict,
-    ) -> tf.keras.layers.Layer:
+    ) -> keras.layers.Layer:
         """Create a TabularAttention layer.
 
         Args:
@@ -313,7 +326,7 @@ class PreprocessorLayerFactory:
         embedding_dim: int = 32,
         name: str = "multi_resolution_attention",
         **kwargs: dict,
-    ) -> tf.keras.layers.Layer:
+    ) -> keras.layers.Layer:
         """Create a MultiResolutionTabularAttention layer.
 
         Args:
@@ -341,7 +354,7 @@ class PreprocessorLayerFactory:
         dropout_rate: float = 0.2,
         name: str = "variable_selection",
         **kwargs: dict,
-    ) -> tf.keras.layers.Layer:
+    ) -> keras.layers.Layer:
         """Create a VariableSelection layer.
 
         Args:
@@ -373,7 +386,7 @@ class PreprocessorLayerFactory:
         use_batch_norm: bool = True,
         name: str = "numerical_embedding",
         **kwargs: dict,
-    ) -> tf.keras.layers.Layer:
+    ) -> keras.layers.Layer:
         """Create a NumericalEmbedding layer.
 
         Args:
@@ -414,7 +427,7 @@ class PreprocessorLayerFactory:
         global_pooling: str = "average",
         name: str = "global_numerical_embedding",
         **kwargs: dict,
-    ) -> tf.keras.layers.Layer:
+    ) -> keras.layers.Layer:
         """Create a GlobalNumericalEmbedding layer.
 
         Args:
@@ -450,7 +463,7 @@ class PreprocessorLayerFactory:
         units: int,
         name: str = "gated_linear_unit",
         **kwargs: dict,
-    ) -> tf.keras.layers.Layer:
+    ) -> keras.layers.Layer:
         """Create a GatedLinearUnit layer.
 
         Args:
@@ -473,7 +486,7 @@ class PreprocessorLayerFactory:
         dropout_rate: float = 0.2,
         name: str = "gated_residual_network",
         **kwargs: dict,
-    ) -> tf.keras.layers.Layer:
+    ) -> keras.layers.Layer:
         """Create a GatedResidualNetwork layer.
 
         Args:
@@ -499,7 +512,7 @@ class PreprocessorLayerFactory:
         fill_value: float = 0.0,
         drop_na: bool = True,
         **kwargs: dict,
-    ) -> tf.keras.layers.Layer:
+    ) -> keras.layers.Layer:
         """Create a LagFeatureLayer for generating lag features from time series data.
 
         Args:
@@ -529,7 +542,7 @@ class PreprocessorLayerFactory:
         window_stride: int = 1,
         pad_value: float = 0.0,
         **kwargs: dict,
-    ) -> tf.keras.layers.Layer:
+    ) -> keras.layers.Layer:
         """Create a RollingStatsLayer for computing rolling statistics over a sliding window.
 
         Args:
@@ -561,7 +574,7 @@ class PreprocessorLayerFactory:
         fill_value: float = 0.0,
         drop_na: bool = True,
         **kwargs: dict,
-    ) -> tf.keras.layers.Layer:
+    ) -> keras.layers.Layer:
         """Create a DifferencingLayer for differencing time series data to make it stationary.
 
         Args:
@@ -590,7 +603,7 @@ class PreprocessorLayerFactory:
         pad_value: float = 0.0,
         keep_original: bool = True,
         **kwargs: dict,
-    ) -> tf.keras.layers.Layer:
+    ) -> keras.layers.Layer:
         """Create a MovingAverageLayer for computing moving averages to smooth time series data.
 
         Args:

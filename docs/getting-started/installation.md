@@ -99,8 +99,8 @@ poetry install
   <div class="dependencies-card">
     <h3>Core Dependencies</h3>
     <ul class="dependency-list">
-      <li>🐍 Python 3.7+</li>
-      <li>🔄 TensorFlow 2.5+</li>
+      <li>🐍 Python 3.10+</li>
+      <li>🔄 TensorFlow 2.18+ (Keras 3)</li>
       <li>🔢 NumPy 1.19+</li>
       <li>📊 Pandas 1.2+</li>
     </ul>

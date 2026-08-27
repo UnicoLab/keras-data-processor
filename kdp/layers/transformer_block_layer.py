@@ -1,7 +1,9 @@
+import keras
 import tensorflow as tf
 
 
-class TransformerBlock(tf.keras.layers.Layer):
+@keras.saving.register_keras_serializable(package="kdp.layers")
+class TransformerBlock(keras.layers.Layer):
     """Class that implements a transformer block."""
 
     def __init__(
@@ -28,18 +30,19 @@ class TransformerBlock(tf.keras.layers.Layer):
         self.dropout_rate = dropout_rate
 
         # Define layers
-        self.multihead_attention = tf.keras.layers.MultiHeadAttention(
-            num_heads=num_heads, key_dim=dim_model
+        self.multihead_attention = keras.layers.MultiHeadAttention(
+            num_heads=num_heads,
+            key_dim=dim_model,
         )
-        self.dropout1 = tf.keras.layers.Dropout(dropout_rate)
-        self.add1 = tf.keras.layers.Add()
-        self.layer_norm1 = tf.keras.layers.LayerNormalization()
+        self.dropout1 = keras.layers.Dropout(dropout_rate)
+        self.add1 = keras.layers.Add()
+        self.layer_norm1 = keras.layers.LayerNormalization()
 
-        self.ff1 = tf.keras.layers.Dense(ff_units, activation="relu")
-        self.dropout2 = tf.keras.layers.Dropout(dropout_rate)
-        self.ff2 = tf.keras.layers.Dense(dim_model)
-        self.add2 = tf.keras.layers.Add()
-        self.layer_norm2 = tf.keras.layers.LayerNormalization()
+        self.ff1 = keras.layers.Dense(ff_units, activation="relu")
+        self.dropout2 = keras.layers.Dropout(dropout_rate)
+        self.ff2 = keras.layers.Dense(dim_model)
+        self.add2 = keras.layers.Add()
+        self.layer_norm2 = keras.layers.LayerNormalization()
 
     def call(self, inputs: tf.Tensor) -> tf.Tensor:
         """Defines the forward pass for the transformer block.
@@ -65,6 +68,4 @@ class TransformerBlock(tf.keras.layers.Layer):
         ff = self.dropout2(ff)
         ff = self.ff2(ff)
         ff = self.add2([attention_norm, ff])
-        ff_norm = self.layer_norm2(ff)
-
-        return ff_norm
+        return self.layer_norm2(ff)

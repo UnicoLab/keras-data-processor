@@ -1,8 +1,10 @@
 import math
+import keras
 import tensorflow as tf
 
 
-class DateEncodingLayer(tf.keras.layers.Layer):
+@keras.saving.register_keras_serializable(package="kdp.layers")
+class DateEncodingLayer(keras.layers.Layer):
     def __init__(self, **kwargs):
         """Initializing DateEncodingLayer."""
         super().__init__(**kwargs)
@@ -15,7 +17,9 @@ class DateEncodingLayer(tf.keras.layers.Layer):
 
     @tf.function
     def cyclic_encoding(
-        self, value: tf.Tensor, period: float
+        self,
+        value: tf.Tensor,
+        period: float,
     ) -> tuple[tf.Tensor, tf.Tensor]:
         """Encode a value as a cyclical feature using sine and cosine transformations.
 
@@ -67,13 +71,15 @@ class DateEncodingLayer(tf.keras.layers.Layer):
         year_sin, year_cos = self.cyclic_encoding(year_float, period=1.0)
         month_sin, month_cos = self.cyclic_encoding(month_float, period=12.0)
         day_of_month_sin, day_of_month_cos = self.cyclic_encoding(
-            day_of_month_float, period=31.0
+            day_of_month_float,
+            period=31.0,
         )
         day_of_week_sin, day_of_week_cos = self.cyclic_encoding(
-            day_of_week_float, period=7.0
+            day_of_week_float,
+            period=7.0,
         )
 
-        encoded = tf.stack(
+        return tf.stack(
             [
                 year_sin,
                 year_cos,
@@ -86,8 +92,6 @@ class DateEncodingLayer(tf.keras.layers.Layer):
             ],
             axis=-1,
         )
-
-        return encoded
 
     def compute_output_shape(self, input_shape: tf.TensorShape) -> tf.TensorShape:
         """Compute the output shape after cyclic encoding.

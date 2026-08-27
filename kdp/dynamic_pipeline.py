@@ -2,83 +2,124 @@ import tensorflow as tf
 
 
 class DynamicPreprocessingPipeline:
-    """
-    Dynamically initializes and manages a sequence of Keras preprocessing layers, with selective retention of outputs
-    based on dependencies among layers, and supports streaming data through the pipeline.
+    """Chains Keras preprocessing layers over a dictionary of features.
+
+    Every layer is addressed by its ``name``. When the pipeline runs, a layer
+    reads its input from the entry that shares its name if that entry exists,
+    and otherwise from the output of the layer that precedes it. The result is
+    always written back under the layer's own name, so intermediate results
+    stay available to later layers and to the caller.
+
+    That single rule covers both common shapes:
+
+    * supplying one entry per layer runs the layers independently over their
+      own inputs;
+    * supplying only the first layer's entry chains the layers, each one
+      consuming what the previous layer produced.
+
+    Example:
+        ```python
+        pipeline = DynamicPreprocessingPipeline(
+            [ScalingLayer(name="scaling"), LogLayer(name="log")]
+        )
+        # "log" is absent from the data, so it consumes the scaling output.
+        out = pipeline.transform({"scaling": tf.constant([[1.0], [2.0]])})
+        out["scaling"], out["log"]
+        ```
     """
 
-    def __init__(self, layers):
-        """
-        Initializes the pipeline with a list of preprocessing layers.
+    def __init__(self, layers: list) -> None:
+        """Initializes the pipeline with a list of preprocessing layers.
 
         Args:
-            layers (list): A list of TensorFlow preprocessing layers.
+            layers (list): A list of TensorFlow preprocessing layers. Each layer
+                must have a unique ``name``, which doubles as the key it reads
+                from and writes to.
+
+        Raises:
+            ValueError: If two layers share the same name.
         """
         self.layers = layers
         self.dependency_map = self._analyze_dependencies()
 
-    def _analyze_dependencies(self):
-        """
-        Analyzes and determines the dependencies of each layer on the outputs of previous layers.
+    def _analyze_dependencies(self) -> dict:
+        """Determines which key each layer consumes.
 
         Returns:
-            dict: A dictionary mapping each layer's name to the set of layer outputs it depends on.
+            dict: A mapping of each layer's name to the name of the entry it
+                reads when the pipeline runs. A layer reads its own key when the
+                data provides it, otherwise it falls back to the previous
+                layer's output. The first layer always reads its own key.
+
+        Raises:
+            ValueError: If two layers share the same name.
         """
         dependencies = {}
-        all_outputs = set()
-        for i, layer in enumerate(self.layers):
-            # If the layer has an input_spec (which is common in Keras layers) we inspect it.
-            if hasattr(layer, "input_spec") and layer.input_spec is not None:
-                # Use a safe getter so that if an element does not have a 'name' attribute, we get None.
-                # Then filter out the Nones.
-                required_inputs = set(
-                    [
-                        name
-                        for name in tf.nest.flatten(
-                            tf.nest.map_structure(
-                                lambda x: getattr(x, "name", None), layer.input_spec
-                            )
-                        )
-                        if name is not None
-                    ]
+        previous_name = None
+        for layer in self.layers:
+            if layer.name in dependencies:
+                raise ValueError(
+                    f"Duplicate layer name {layer.name!r} in pipeline. Each layer "
+                    "needs a unique name because names are used as data keys.",
                 )
-            else:
-                # Otherwise, assume that the layer depends on all outputs seen so far.
-                required_inputs = all_outputs
-            dependencies[layer.name] = required_inputs
-            all_outputs.update(required_inputs)
-            all_outputs.add(layer.name)
+            # The key is only known at run time (it depends on what the data
+            # actually contains), so record both candidates in priority order.
+            dependencies[layer.name] = (
+                (layer.name,) if previous_name is None else (layer.name, previous_name)
+            )
+            previous_name = layer.name
         return dependencies
 
-    def process(self, dataset):
-        """
-        Processes the dataset through the pipeline using tf.data API.
+    def transform(self, features: dict) -> dict:
+        """Applies every layer to the feature dictionary.
 
         Args:
-            dataset (tf.data.Dataset): The dataset where each element is a dictionary of features.
+            features (dict): Mapping of feature names to tensors. It is not
+                modified; a new dictionary is returned.
 
         Returns:
-            tf.data.Dataset: The processed dataset with outputs of each layer stored by key.
+            dict: The input entries plus one entry per layer, holding that
+                layer's output.
+
+        Raises:
+            KeyError: If a layer has no entry to read from, i.e. neither its own
+                key nor the previous layer's output is available.
         """
+        current_data = dict(features)
+        for layer in self.layers:
+            candidates = self.dependency_map[layer.name]
+            source = next((key for key in candidates if key in current_data), None)
+            if source is None:
+                raise KeyError(
+                    f"Layer {layer.name!r} has no input: none of {list(candidates)} "
+                    f"is present in the data (available keys: "
+                    f"{sorted(current_data)}).",
+                )
+            current_data[layer.name] = layer(current_data[source])
+        return current_data
 
-        def _apply_transformations(features):
-            current_data = features
-            for i, layer in enumerate(self.layers):
-                # Get the required input keys for the current layer.
-                required_keys = self.dependency_map[layer.name]
-                # Prepare the input by selecting the keys if they exist in the current data.
-                current_input = {
-                    k: current_data[k] for k in required_keys if k in current_data
-                }
-                # Process each required input through the layer.
-                # Here we assume the layer accepts one tensor per key.
-                transformed_output = {
-                    layer.name: layer(current_input[k])
-                    for k in required_keys
-                    if k in current_input
-                }
-                # Merge transformed output into the working data dictionary.
-                current_data.update(transformed_output)
-            return current_data
+    def initialize_and_transform(self, features: dict) -> dict:
+        """Applies every layer to the feature dictionary.
 
-        return dataset.map(_apply_transformations)
+        Kept as an alias of :meth:`transform` for backwards compatibility.
+
+        Args:
+            features (dict): Mapping of feature names to tensors.
+
+        Returns:
+            dict: The input entries plus one entry per layer.
+        """
+        return self.transform(features)
+
+    def process(self, dataset: tf.data.Dataset) -> tf.data.Dataset:
+        """Processes the dataset through the pipeline using the tf.data API.
+
+        Args:
+            dataset (tf.data.Dataset): A dataset whose elements are dictionaries
+                of features.
+
+        Returns:
+            tf.data.Dataset: The processed dataset, with each layer's output
+                stored under the layer's name.
+        """
+        return dataset.map(self.transform)

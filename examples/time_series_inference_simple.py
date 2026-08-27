@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 """
 Simplified example showing how to use the TimeSeriesInferenceFormatter to prepare data for time series inference.
@@ -41,12 +40,12 @@ def generate_sample_data(num_stores=3, days_per_store=30, add_noise=True):
             date = base_date + timedelta(days=day)
 
             # Calculate sales based on pattern
-            if store_id < 2:
-                # Linear pattern
-                sales = base_sales + (day * growth)
-            else:
-                # Sinusoidal pattern
-                sales = base_sales + 50 * np.sin(day * 0.2)
+            # Linear pattern for the first stores, sinusoidal for the rest.
+            sales = (
+                base_sales + (day * growth)
+                if store_id < 2
+                else base_sales + 50 * np.sin(day * 0.2)
+            )
 
             # Add noise if requested
             if add_noise:
@@ -57,7 +56,7 @@ def generate_sample_data(num_stores=3, days_per_store=30, add_noise=True):
                     "date": date.strftime("%Y-%m-%d"),
                     "store_id": f"Store_{store_id}",
                     "sales": sales,
-                }
+                },
             )
 
     return pd.DataFrame(all_data)
@@ -85,7 +84,7 @@ def create_preprocessor(train_data):
     }
 
     # Create a preprocessor
-    preprocessor = PreprocessingModel(
+    return PreprocessingModel(
         path_data=train_data,
         features_specs=features_specs,
     )
@@ -93,10 +92,8 @@ def create_preprocessor(train_data):
     # We don't need to build the preprocessor for this simplified example
     # We just need the features_specs and validation methods
 
-    return preprocessor
 
-
-def example_single_point_inference_failure(preprocessor, formatter):
+def example_single_point_inference_failure(formatter):
     """Example showing how single-point inference fails with time series features."""
     print("\n=== Single-Point Inference with Time Series Features ===")
 
@@ -145,7 +142,7 @@ def example_with_historical_context(formatter, train_data):
     # In a real example, we would now call preprocessor.predict(formatted_data)
     # but for this simplified example, we'll just show that the data is ready for prediction
     print(
-        f"Data is ready for prediction! Last data point date: {formatted_data['date'][-1]}"
+        f"Data is ready for prediction! Last data point date: {formatted_data['date'][-1]}",
     )
 
 
@@ -213,7 +210,7 @@ def main():
     formatter = TimeSeriesInferenceFormatter(preprocessor)
 
     # Example 1: Single-point inference (will fail, showing why we need the formatter)
-    example_single_point_inference_failure(preprocessor, formatter)
+    example_single_point_inference_failure(formatter)
 
     # Example 2: Inference with historical context
     example_with_historical_context(formatter, train_data)

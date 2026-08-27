@@ -1,4 +1,5 @@
 import json
+import math
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -10,10 +11,12 @@ from loguru import logger
 
 from kdp.features import (
     CategoricalFeature,
+    FeatureSpaceConverter,
     FeatureType,
     NumericalFeature,
     TimeSeriesFeature,
 )
+from kdp.layers.date_parsing_layer import DateParsingLayer
 
 MAX_WORKERS = os.cpu_count() or 4
 
@@ -100,18 +103,19 @@ class CategoricalAccumulator:
             self.values.assign(updated_values)
         elif new_values.dtype == tf.int32:
             updated_values = tf.unique(
-                tf.concat([self.int_values, new_values], axis=0)
+                tf.concat([self.int_values, new_values], axis=0),
             )[0]
             self.int_values.assign(updated_values)
         else:
             raise ValueError(
-                f"Unsupported data type for categorical features: {new_values.dtype}"
+                f"Unsupported data type for categorical features: {new_values.dtype}",
             )
 
     def get_unique_values(self) -> list:
         """Returns the unique categorical values accumulated so far."""
         all_values = tf.concat(
-            [self.values, tf.strings.as_string(self.int_values)], axis=0
+            [self.values, tf.strings.as_string(self.int_values)],
+            axis=0,
         )
         return tf.unique(all_values)[0].numpy().tolist()
 
@@ -144,7 +148,7 @@ class TextAccumulator:
         """
         if new_texts.dtype != tf.string:
             raise ValueError(
-                f"Unsupported data type for text features: {new_texts.dtype}"
+                f"Unsupported data type for text features: {new_texts.dtype}",
             )
 
         # Split each string into words and flatten the list
@@ -162,8 +166,11 @@ class TextAccumulator:
         Returns:
             list of str: Unique words accumulated.
         """
-        unique_words = self.words.value().numpy().tolist()
-        return unique_words
+        # `.numpy().tolist()` yields `bytes`; decode so the vocabulary is made of
+        # real `str` values. Keeping `bytes` here breaks Keras serialization of the
+        # TextVectorization layer and corrupts the vocabulary when the stats are
+        # round-tripped through JSON.
+        return [word.decode("utf-8") for word in self.words.value().numpy().tolist()]
 
 
 class DateAccumulator:
@@ -178,19 +185,37 @@ class DateAccumulator:
         self.day_of_week_sin_accumulator = WelfordAccumulator()
         self.day_of_week_cos_accumulator = WelfordAccumulator()
 
-    @tf.function
     def update(self, dates: tf.Tensor) -> None:
         """Updates the accumulators with new date values.
 
         Args:
-            dates: A tensor of shape [batch_size, 3] where each row contains [year, month, day_of_week].
+            dates: Either a tensor of date strings (``YYYY-MM-DD`` or ``YYYY/MM/DD``),
+                as read from a CSV column, or an already parsed numeric tensor of
+                shape ``[batch_size, >=4]`` whose columns are
+                ``[year, month, day_of_month, day_of_week]``.
+
+        Raises:
+            ValueError: If a parsed numeric tensor does not carry the four
+                expected date components.
         """
-        year = dates[:, 0]
-        month = dates[:, 1]
-        day_of_week = dates[:, 2]
+        if dates.dtype == tf.string:
+            parsed = DateParsingLayer()(tf.reshape(dates, [-1, 1]))
+        else:
+            parsed = tf.convert_to_tensor(dates)
+            if parsed.shape.rank != 2 or parsed.shape[-1] < 4:
+                raise ValueError(
+                    "Parsed date tensors must have shape [batch_size, >=4] with "
+                    "columns [year, month, day_of_month, day_of_week], got shape "
+                    f"{parsed.shape}.",
+                )
+
+        parsed = tf.cast(parsed, tf.float32)
+        year = parsed[:, 0]
+        month = parsed[:, 1]
+        day_of_week = parsed[:, 3]
 
         # Cyclical encoding
-        pi = tf.math.pi
+        pi = tf.constant(math.pi, dtype=tf.float32)
         month_sin = tf.math.sin(2 * pi * month / 12)
         month_cos = tf.math.cos(2 * pi * month / 12)
         day_of_week_sin = tf.math.sin(2 * pi * day_of_week / 7)
@@ -202,7 +227,6 @@ class DateAccumulator:
         self.day_of_week_sin_accumulator.update(day_of_week_sin)
         self.day_of_week_cos_accumulator.update(day_of_week_cos)
 
-    @property
     def mean(self) -> dict:
         """Returns the mean statistics for date features."""
         return {
@@ -213,7 +237,6 @@ class DateAccumulator:
             "day_of_week_cos": self.day_of_week_cos_accumulator.mean.numpy(),
         }
 
-    @property
     def variance(self) -> dict:
         """Returns the variance statistics for date features."""
         return {
@@ -262,6 +285,27 @@ class DatasetStatistics:
         self.date_features = date_features or []
         self.time_series_features = time_series_features or []
         self.features_specs = features_specs or {}
+
+        # `features_specs` is documented as the easier alternative to listing the
+        # features by type, but nothing derived those lists from it: an instance
+        # built that way created no accumulators and `main()` returned {}, which
+        # is what made `auto_configure` produce empty recommendations.
+        if self.features_specs and not any(
+            (
+                self.numeric_features,
+                self.categorical_features,
+                self.text_features,
+                self.date_features,
+                self.time_series_features,
+            ),
+        ):
+            converter = FeatureSpaceConverter()
+            self.features_specs = converter._init_features_specs(self.features_specs)
+            self.numeric_features = converter.numeric_features
+            self.categorical_features = converter.categorical_features
+            self.text_features = converter.text_features
+            self.date_features = converter.date_features
+            self.time_series_features = converter.time_series_features
         self.features_stats_path = features_stats_path or "features_stats.json"
         self.overwrite_stats = overwrite_stats
         self.batch_size = batch_size
@@ -288,6 +332,18 @@ class DatasetStatistics:
             str: File pattern that always has *.csv at the end
 
         """
+        if path is None:
+            raise ValueError(
+                "`path_data` is required to compute statistics but was None. "
+                "Pass a path to a CSV file or to a directory of CSV files.",
+            )
+        if not isinstance(path, str | os.PathLike):
+            raise TypeError(
+                "`path_data` must be a path to CSV data (a str or PathLike), "
+                f"got {type(path).__name__}. In-memory frames are not read "
+                "directly -- write the data to a CSV first and pass its path.",
+            )
+
         file_path = Path(path)
         # Check if the path is a directory
         if file_path.suffix:
@@ -395,13 +451,13 @@ class DatasetStatistics:
 
             if not has_feature:
                 logger.warning(
-                    f"Feature '{feature_name}' not found in the dataset. Skipping statistics calculation."
+                    f"Feature '{feature_name}' not found in the dataset. Skipping statistics calculation.",
                 )
                 continue
 
             # Prepare for grouped processing if grouping is specified
             if feature.group_by and feature.group_by in list(
-                dataset.element_spec.keys()
+                dataset.element_spec.keys(),
             ):
                 # Process data by groups
                 group_data = {}
@@ -429,11 +485,11 @@ class DatasetStatistics:
 
                             if sort_keys is not None:
                                 group_data[group_key].append(
-                                    (sort_keys[i], feature_values[i])
+                                    (sort_keys[i], feature_values[i]),
                                 )
                             else:
                                 group_data[group_key].append(
-                                    (i, feature_values[i])
+                                    (i, feature_values[i]),
                                 )  # Use index as sort key
 
                 # Create a separate accumulator for each group and process them
@@ -443,7 +499,8 @@ class DatasetStatistics:
                     # Sort if sort_by is specified
                     if feature.sort_by:
                         pairs.sort(
-                            key=lambda x: x[0], reverse=not feature.sort_ascending
+                            key=lambda x: x[0],
+                            reverse=not feature.sort_ascending,
                         )
 
                     # Extract sorted values
@@ -481,7 +538,7 @@ class DatasetStatistics:
                         "count": int(
                             sum(
                                 acc.count.numpy() for acc in group_accumulators.values()
-                            )
+                            ),
                         ),
                         "dtype": feature.dtype.name
                         if hasattr(feature.dtype, "name")
@@ -498,7 +555,7 @@ class DatasetStatistics:
                 accumulator = WelfordAccumulator()
 
                 if feature.sort_by and feature.sort_by in list(
-                    dataset.element_spec.keys()
+                    dataset.element_spec.keys(),
                 ):
                     # Process in a streaming fashion to avoid memory issues
                     # Create buffer for sorting that can be processed in chunks
@@ -525,7 +582,8 @@ class DatasetStatistics:
                                 # Extract values and update accumulator
                                 sorted_values = [pair[1] for pair in buffer]
                                 sorted_tensor = tf.constant(
-                                    sorted_values, dtype=tf.float32
+                                    sorted_values,
+                                    dtype=tf.float32,
                                 )
                                 accumulator.update(sorted_tensor)
 
@@ -535,7 +593,8 @@ class DatasetStatistics:
                     # Process any remaining items in buffer
                     if buffer:
                         buffer.sort(
-                            key=lambda x: x[0], reverse=not feature.sort_ascending
+                            key=lambda x: x[0],
+                            reverse=not feature.sort_ascending,
                         )
                         sorted_values = [pair[1] for pair in buffer]
                         sorted_tensor = tf.constant(sorted_values, dtype=tf.float32)
@@ -610,7 +669,9 @@ class DatasetStatistics:
                     raise
 
     def _compute_feature_stats_parallel(
-        self, feature_type: str, features: list[str]
+        self,
+        feature_type: str,
+        features: list[str],
     ) -> dict[str, Any]:
         """Compute statistics for a group of features in parallel.
 
@@ -711,25 +772,29 @@ class DatasetStatistics:
         # Compute numeric statistics
         if self.numeric_features:
             stats["numeric_stats"] = self._compute_feature_stats_parallel(
-                "numeric", self.numeric_features
+                "numeric",
+                self.numeric_features,
             )
 
         # Compute categorical statistics
         if self.categorical_features:
             stats["categorical_stats"] = self._compute_feature_stats_parallel(
-                "categorical", self.categorical_features
+                "categorical",
+                self.categorical_features,
             )
 
         # Compute text statistics
         if self.text_features:
             stats["text"] = self._compute_feature_stats_parallel(
-                "text", self.text_features
+                "text",
+                self.text_features,
             )
 
         # Compute date statistics
         if self.date_features:
             stats["date"] = self._compute_feature_stats_parallel(
-                "date", self.date_features
+                "date",
+                self.date_features,
             )
 
         # Compute time series statistics
@@ -767,7 +832,9 @@ class DatasetStatistics:
         elif isinstance(obj, np.floating):
             return float(obj)  # Convert numpy float to Python float
         elif isinstance(obj, bytes):
-            return str(obj)
+            # `str(b"foo")` would serialize the *repr* ("b'foo'") and silently
+            # corrupt vocabularies on reload, so decode explicitly.
+            return obj.decode("utf-8")
         elif isinstance(obj, np.ndarray):
             return obj.tolist()  # Convert numpy arrays to lists
         logger.debug(f"Type {type(obj)} is not serializable")
@@ -783,6 +850,36 @@ class DatasetStatistics:
             json.dump(self.features_stats, f, default=self._custom_serializer)
         logger.info("features_stats saved ")
 
+    @staticmethod
+    def _has_repr_encoded_vocabulary(features_stats: dict) -> bool:
+        """Detect vocabularies saved as Python byte reprs by older releases.
+
+        Args:
+            features_stats: Statistics loaded from disk.
+
+        Returns:
+            True when any vocabulary entry looks like ``b'value'`` rather than
+            the value itself.
+        """
+        for stats_group in features_stats.values():
+            if not isinstance(stats_group, dict):
+                continue
+            for feature_stats in stats_group.values():
+                if not isinstance(feature_stats, dict):
+                    continue
+                vocabulary = feature_stats.get("vocab")
+                if not isinstance(vocabulary, list):
+                    continue
+                for entry in vocabulary:
+                    if (
+                        isinstance(entry, str)
+                        and len(entry) >= 3
+                        and entry.startswith(("b'", 'b"'))
+                        and entry[-1] == entry[1]
+                    ):
+                        return True
+        return False
+
     def _load_stats(self) -> dict:
         """Loads serialized features stats from a file, with custom handling for TensorFlow dtypes.
 
@@ -796,10 +893,26 @@ class DatasetStatistics:
         stats_path = Path(self.features_stats_path)
         if stats_path.is_file():
             logger.info(
-                f"Found columns statistics, loading as features_stats: {self.features_stats_path}"
+                f"Found columns statistics, loading as features_stats: {self.features_stats_path}",
             )
             with stats_path.open() as f:
                 self.features_stats = json.load(f)
+
+            # Statistics written before the bytes-decoding fix hold repr strings
+            # ("b'paris'") instead of the real categories. Such a file still
+            # loads and still builds a model, but every category then misses the
+            # vocabulary and encodes identically to an unseen value -- silent,
+            # total signal loss. Recompute instead of trusting it.
+            if self._has_repr_encoded_vocabulary(self.features_stats):
+                logger.warning(
+                    f"{self.features_stats_path} was written by an older KDP "
+                    "release whose vocabularies were stored as byte reprs "
+                    "(\"b'value'\"). Reusing it would silently map every "
+                    "category to the out-of-vocabulary slot, so the statistics "
+                    "are being recomputed from the data.",
+                )
+                self.features_stats = {}
+                return self.features_stats
 
             # Convert dtype strings back to TensorFlow dtype objects
             for stats_type in (
@@ -808,7 +921,7 @@ class DatasetStatistics:
                 for _, feature_stats in stats_type.items():
                     if "dtype" in feature_stats:
                         feature_stats["dtype"] = tf.dtypes.as_dtype(
-                            feature_stats["dtype"]
+                            feature_stats["dtype"],
                         )
             logger.info("features_stats loaded ")
         else:
@@ -828,8 +941,7 @@ class DatasetStatistics:
         return stats
 
     def recommend_model_configuration(self) -> dict:
-        """
-        Analyze the computed dataset statistics and provide recommendations for optimal preprocessing.
+        """Analyze the computed dataset statistics and provide recommendations for optimal preprocessing.
 
         This method leverages the ModelAdvisor to analyze feature characteristics and suggest
         the best preprocessing strategies, layer configurations, and model parameters.
@@ -850,10 +962,10 @@ class DatasetStatistics:
         recommendations = recommend_model_configuration(self.features_stats)
 
         logger.info(
-            "Generated model configuration recommendations based on dataset statistics"
+            "Generated model configuration recommendations based on dataset statistics",
         )
         logger.info(
-            f"Recommended configuration for {len(recommendations.get('features', {}))} features"
+            f"Recommended configuration for {len(recommendations.get('features', {}))} features",
         )
 
         return recommendations

@@ -143,8 +143,9 @@ class TestTimeSeriesFeature(unittest.TestCase):
             lag_config={"lags": [1, 7], "keep_original": False},
             rolling_stats_config={"window_size": 7, "statistics": ["mean", "std"]},
         )
-        # 2 lags + 2 stats = 4
-        self.assertEqual(feature.get_output_dim(), 4)
+        # The rolling-stats layer keeps its input alongside the two statistics,
+        # and its input is the 2 lag columns: 2 * (1 + 2) = 6
+        self.assertEqual(feature.get_output_dim(), 6)
 
         # Test with all configs
         feature = TimeSeriesFeature(
@@ -154,8 +155,10 @@ class TestTimeSeriesFeature(unittest.TestCase):
             differencing_config={"order": 1},
             moving_average_config={"periods": [7, 14]},
         )
-        # Original + 2 lags + 2 stats + 1 diff + 2 MAs = 8
-        self.assertEqual(feature.get_output_dim(), 8)
+        # Each layer keeps its input and appends to it, so the widths compose
+        # multiplicatively: 1 -> lags (1+2)=3 -> stats 3*(1+2)=9
+        # -> differencing 9*2=18 -> moving averages 18*(1+2)=54
+        self.assertEqual(feature.get_output_dim(), 54)
 
     @parameterized.expand(
         [
@@ -193,7 +196,8 @@ class TestTimeSeriesFeature(unittest.TestCase):
                     "lag_config": {"lags": [1, 7]},
                     "differencing_config": {"order": 1},
                 },
-                5,
+                # 3 lag columns, differenced while keeping the originals: 3 * 2
+                6,
             ],
         ]
     )
@@ -298,6 +302,45 @@ class TestTimeSeriesFeature(unittest.TestCase):
 
         self.assertEqual(layers[2].features, ["month", "day_of_week"])
         self.assertTrue(layers[2].cyclic_encoding)
+
+    @parameterized.expand(
+        [
+            [{"name": "sales", "lag_config": {"lags": [1, 3]}}],
+            [
+                {
+                    "name": "sales",
+                    "lag_config": {"lags": [1, 3]},
+                    "differencing_config": {"order": 1},
+                }
+            ],
+            [
+                {
+                    "name": "sales",
+                    "rolling_stats_config": {
+                        "window_size": 3,
+                        "statistics": ["mean", "std"],
+                    },
+                }
+            ],
+            [{"name": "sales", "moving_average_config": {"periods": [2, 3]}}],
+            [
+                {
+                    "name": "sales",
+                    "lag_config": {"lags": [1, 3]},
+                    "rolling_stats_config": {"window_size": 3, "statistics": ["mean"]},
+                    "moving_average_config": {"periods": [2]},
+                }
+            ],
+        ]
+    )
+    def test_output_dim_matches_actual_layer_output(self, config):
+        """get_output_dim must agree with the width the layer stack produces."""
+        feature = TimeSeriesFeature(**config)
+        data = tf.constant(np.arange(1, 41, dtype=np.float32).reshape(-1, 1))
+        for layer in feature.build_layers():
+            data = layer(data)
+        actual_columns = int(data.shape[-1]) if data.shape.rank > 1 else 1
+        self.assertEqual(feature.get_output_dim(), actual_columns)
 
     def test_output_dim_with_new_transforms(self):
         """Test output dimension calculation with the new transform layers."""

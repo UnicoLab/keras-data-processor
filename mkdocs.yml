@@ -1,6 +1,10 @@
 site_name: KDP - Keras Data Preprocessor
 site_url: https://unicolab.github.io/keras-data-processor
 docs_dir: docs
+# Contributor-facing notes about the docs tree itself, not a site page.
+# mkdocs would otherwise treat it as a second index.
+exclude_docs: |
+  README.md
 theme:
   name: "material"
   icon:
@@ -43,6 +47,7 @@ nav:
       - 🎯 Quick Start: getting-started/quick-start.md
       - 🌍 Why KDP?: getting-started/motivation.md
       - 🧩 Architecture Overview: getting-started/architecture.md
+      - ⬆️ Upgrading from 1.11.x: getting-started/upgrading.md
   - 📚 Feature Types:
       - 🛠️ Features Overview: features/overview.md
       - 🔢 Numerical Features: features/numerical-features.md
@@ -50,6 +55,7 @@ nav:
       - 📝 Text Features: features/text-features.md
       - 📅 Date Features: features/date-features.md
       - 📊 Time Series Features: features/time_series_features.md
+      - 🔮 Time Series Inference: time_series_inference.md
       - ➕ Cross Features: features/cross-features.md
       - 🔄 Passthrough Features: features/passthrough-features.md
   - 🧠 Advanced Features:
@@ -166,7 +172,7 @@ extra:
     - icon: fontawesome/brands/github
       link: https://github.com/UnicoLab/keras-data-processor
     - icon: fontawesome/brands/python
-      link: https://pypi.org/project/keras-data-processor/
+      link: https://pypi.org/project/kdp/
 
 extra_javascript:
   - assets/js/fix-image-paths.js
