@@ -210,7 +210,7 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
         # Initialize layers
         self._init_layers()
 
-    def _init_layers(self):
+    def _init_layers(self) -> None:
         """Initialize internal layers."""
         # Check accepted parameters for DistributionTransformLayer
         transform_kwargs = {}
@@ -299,7 +299,7 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
         # Fix the super().build call
         tf.keras.layers.Layer.build(self, input_shape)
 
-    def _calculate_statistics(self, x):
+    def _calculate_statistics(self, x) -> dict:
         """Calculate statistics for distribution detection.
 
         Args:
@@ -354,7 +354,7 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
             ),
         }
 
-    def _detect_distribution(self, x):
+    def _detect_distribution(self, x) -> tf.Tensor:
         """Detect the distribution type of the data.
 
         Args:
@@ -533,7 +533,7 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
 
         return dist_idx
 
-    def _check_periodicity(self, x, max_lag=20, threshold=0.2):
+    def _check_periodicity(self, x, max_lag=20, threshold=0.2) -> tf.Tensor:
         """Check if the input data has periodicity by analyzing autocorrelation.
 
         This method detects periodic patterns in the data by:
@@ -567,7 +567,7 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
             lambda: self._compute_periodicity(x_flat, n, max_lag, threshold),
         )
 
-    def _compute_periodicity(self, x_flat, n, max_lag, threshold):
+    def _compute_periodicity(self, x_flat, n, max_lag, threshold) -> tf.Tensor:
         """Helper function to compute periodicity for graph mode compatibility."""
         # Center the data
         x_centered = x_flat - tf.reduce_mean(x_flat)
@@ -588,7 +588,14 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
             ),
         )
 
-    def _compute_autocorrelation(self, x_centered, n, max_lag, variance, threshold):
+    def _compute_autocorrelation(
+        self,
+        x_centered,
+        n,
+        max_lag,
+        variance,
+        threshold,
+    ) -> tf.Tensor:
         """Helper function to compute autocorrelation."""
         # Use TensorArray to collect autocorrelation values
         acf_array = tf.TensorArray(tf.float32, size=max_lag)
@@ -597,10 +604,10 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
         i = tf.constant(0)
 
         # Use while_loop for graph compatibility
-        def loop_cond(i, *args: Any):
+        def loop_cond(i, *args: Any) -> tf.Tensor:
             return tf.logical_and(tf.less(i, max_lag), tf.less(i, n // 3))
 
-        def loop_body(i, acf_array):
+        def loop_body(i, acf_array) -> list:
             # Make sure we don't go out of bounds
             lag = i + 1  # Start from lag 1
 
@@ -631,7 +638,7 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
             lambda: self._find_peaks(acf_tensor, threshold),
         )
 
-    def _find_peaks(self, acf_tensor, threshold):
+    def _find_peaks(self, acf_tensor, threshold) -> tf.Tensor:
         """Find peaks in autocorrelation values."""
         # Need at least 3 points for meaningful peaks
         return tf.cond(
@@ -640,7 +647,7 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
             lambda: self._check_significant_peaks(acf_tensor, threshold),
         )
 
-    def _check_significant_peaks(self, acf_tensor, threshold):
+    def _check_significant_peaks(self, acf_tensor, threshold) -> tf.Tensor:
         """Check if there are significant peaks in the autocorrelation."""
         # Create is_greater_left and is_greater_right tensors
         is_greater_left = tf.concat([[True], acf_tensor[1:] > acf_tensor[:-1]], axis=0)
@@ -654,7 +661,7 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
         # Consider periodic if at least one significant peak
         return num_peaks >= 1
 
-    def _check_multimodality(self, x, stats, num_bins=100):
+    def _check_multimodality(self, x, stats, num_bins=100) -> tf.Tensor:
         """Check if the data has a multimodal distribution by analyzing its histogram.
 
         This method detects multimodality by:
@@ -723,7 +730,7 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
         # Consider multimodal if at least two significant peaks
         return num_peaks >= 2
 
-    def _apply_distribution_specific_transform(self, x, dist_type):
+    def _apply_distribution_specific_transform(self, x, dist_type) -> tf.Tensor:
         """Apply distribution-specific transformations to the input tensor.
 
         This method applies different transformations depending on the detected or specified
@@ -850,7 +857,7 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
             is_training = training if training is not None else True
 
             # Use tf.cond for graph mode compatibility
-            def detect_distribution_fn():
+            def detect_distribution_fn() -> tf.Tensor:
                 # During training or first call, detect the distribution
                 dist_idx = self._detect_distribution(x)
 
@@ -862,7 +869,7 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
                 # Ensure consistent type (int32)
                 return tf.cast(dist_idx, tf.int32)
 
-            def use_stored_distribution_fn():
+            def use_stored_distribution_fn() -> tf.Tensor:
                 # During inference, use the stored distribution
                 if hasattr(self, "detected_distribution"):
                     dist_idx = self.detected_distribution[0]
@@ -944,7 +951,7 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
                     )
             else:
                 # In graph mode, use tf.cond with carefully managed shapes
-                def add_periodic_features():
+                def add_periodic_features() -> tf.Tensor:
                     mean = tf.reduce_mean(transformed)
                     std = tf.math.reduce_std(transformed) + self.epsilon
                     normalized = (
@@ -962,7 +969,7 @@ class DistributionAwareEncoder(tf.keras.layers.Layer):
                     # Concat with the transformed features
                     return tf.concat([transformed, sin_feature, cos_feature], axis=-1)
 
-                def keep_original():
+                def keep_original() -> tf.Tensor:
                     return transformed
 
                 # Use tf.cond to conditionally add periodic features

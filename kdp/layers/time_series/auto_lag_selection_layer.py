@@ -34,6 +34,11 @@ class AutoLagSelectionLayer(Layer):
         keep_original=True,
         **kwargs,
     ):
+        """Initialize the AutoLagSelectionLayer.
+
+        See the class docstring for the accepted arguments and what
+        each one controls.
+        """
         super().__init__(**kwargs)
         self.max_lag = max_lag
         self.n_lags = n_lags
@@ -51,6 +56,11 @@ class AutoLagSelectionLayer(Layer):
         self.selected_lags = None
 
     def build(self, input_shape) -> None:
+        """Build the layer's weights for a given input shape.
+
+        Args:
+            input_shape: Shape of the input tensor.
+        """
         super().build(input_shape)
 
     def call(self, inputs, training=None) -> tf.Tensor:
@@ -96,7 +106,7 @@ class AutoLagSelectionLayer(Layer):
 
         # Create lag features
         # Handle lag feature creation as a NumPy operation for more control
-        def create_lag_features(inputs_tensor, selected_lags_tensor):
+        def create_lag_features(inputs_tensor, selected_lags_tensor) -> np.ndarray:
             # Convert to NumPy
             inputs_np = inputs_tensor.numpy()
             selected_lags_np = selected_lags_tensor.numpy()
@@ -258,11 +268,11 @@ class AutoLagSelectionLayer(Layer):
             # Fallback case (shouldn't happen in normal execution)
             return inputs
 
-    def _compute_autocorrelation(self, series):
+    def _compute_autocorrelation(self, series) -> np.ndarray:
         """Compute autocorrelation for lags 1 to max_lag using numpy for more accuracy."""
 
         # Convert to numpy for more control over computation
-        def compute_acf(batch_tensor):
+        def compute_acf(batch_tensor) -> np.ndarray:
             # Convert to numpy array
             batch_np = batch_tensor.numpy()
             result = np.zeros((batch_np.shape[0], self.max_lag + 1), dtype=np.float32)
@@ -299,7 +309,7 @@ class AutoLagSelectionLayer(Layer):
 
         return acf
 
-    def _select_lags(self, acf):
+    def _select_lags(self, acf) -> tf.Tensor:
         """Select lags based on autocorrelation values."""
         # Use batch mean autocorrelation for lag selection
         mean_acf = tf.reduce_mean(acf, axis=0)

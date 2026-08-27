@@ -55,6 +55,11 @@ class TSFreshFeatureLayer(Layer):
         normalize=False,
         **kwargs,
     ):
+        """Initialize the TSFreshFeatureLayer.
+
+        See the class docstring for the accepted arguments and what
+        each one controls.
+        """
         super().__init__(**kwargs)
 
         # Default features if none provided
@@ -120,6 +125,11 @@ class TSFreshFeatureLayer(Layer):
                 raise ValueError(f"Invalid feature: {feature}")
 
     def build(self, input_shape) -> None:
+        """Build the layer's weights for a given input shape.
+
+        Args:
+            input_shape: Shape of the input tensor.
+        """
         super().build(input_shape)
 
     def call(self, inputs, training=None) -> tf.Tensor:
@@ -134,7 +144,7 @@ class TSFreshFeatureLayer(Layer):
         """
 
         # Process the input tensor using NumPy for more control over feature extraction
-        def extract_tsfresh_features(inputs_tensor):
+        def extract_tsfresh_features(inputs_tensor) -> np.ndarray:
             # Convert to NumPy
             inputs_np = inputs_tensor.numpy()
 
@@ -251,7 +261,7 @@ class TSFreshFeatureLayer(Layer):
 
         return result
 
-    def _compute_features(self, series):
+    def _compute_features(self, series) -> list:
         """Compute statistical features for a single time series."""
         results = []
 
@@ -422,7 +432,7 @@ class TSFreshFeatureLayer(Layer):
 
         return results
 
-    def _get_n_output_features(self):
+    def _get_n_output_features(self) -> int:
         """Calculate the number of output features."""
         n_features = 0
 

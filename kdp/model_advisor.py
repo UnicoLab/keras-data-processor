@@ -64,7 +64,7 @@ class ModelAdvisor:
 
         return {"features": self.recommendations, "global_config": self.global_config}
 
-    def _analyze_numeric_features(self):
+    def _analyze_numeric_features(self) -> None:
         """Analyze numeric features and generate specific recommendations."""
         numeric_stats = self.features_stats.get("numeric_stats", {})
 
@@ -309,7 +309,7 @@ class ModelAdvisor:
             "values, which are not part of the summary statistics.",
         )
 
-    def _analyze_categorical_features(self):
+    def _analyze_categorical_features(self) -> None:
         """Analyze categorical features and generate recommendations."""
         # Try both "categorical" and "categorical_stats" keys
         categorical_features = self.features_stats.get("categorical", {})
@@ -472,7 +472,7 @@ class ModelAdvisor:
                         "rare_value_threshold": max(0.001, 1.0 / vocabulary_size),
                     }
 
-    def _analyze_text_features(self):
+    def _analyze_text_features(self) -> None:
         """Analyze text features and generate specific recommendations."""
         text_stats = self.features_stats.get("text", {})
 
@@ -547,7 +547,7 @@ class ModelAdvisor:
         else:
             return "lower_and_strip_punctuation"
 
-    def _analyze_date_features(self):
+    def _analyze_date_features(self) -> None:
         """Analyze date features and generate specific recommendations."""
         date_stats = self.features_stats.get("date_stats", {})
 
@@ -593,7 +593,7 @@ class ModelAdvisor:
 
             self.recommendations[feature] = recommendation
 
-    def _generate_global_recommendations(self):
+    def _generate_global_recommendations(self) -> None:
         """Generate global configuration recommendations based on feature analysis."""
         # Count features by type and encoding strategy
         categorical_features = self.features_stats.get("categorical_stats", {})

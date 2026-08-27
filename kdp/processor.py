@@ -2251,7 +2251,7 @@ class PreprocessingModel:
 
         logger.info("Feature MoE applied successfully in dict mode")
 
-    def _apply_feature_moe(self):
+    def _apply_feature_moe(self) -> None:
         """Enhances the combined feature representation using Feature-wise Mixture of Experts (MoE)
         in concatenated output mode.
 
@@ -2785,7 +2785,7 @@ class PreprocessingModel:
 
         return feature_importances
 
-    def _validate_time_series_inference_data(self, data):
+    def _validate_time_series_inference_data(self, data) -> bool:
         """Validate that the provided data meets minimum requirements for time series inference.
 
         Args:
@@ -2924,11 +2924,24 @@ class SplitLayer(keras.layers.Layer):
     """Custom layer to split a tensor into individual features based on dimensions."""
 
     def __init__(self, feature_dims, **kwargs):
+        """Initialize the SplitLayer.
+
+        See the class docstring for the accepted arguments and what
+        each one controls.
+        """
         super().__init__(**kwargs)
         self.feature_dims = feature_dims
 
     def call(self, inputs) -> list:
         # Handle case where feature_dims is None or empty
+        """Apply the layer to its inputs.
+
+        Args:
+            inputs: Input tensor to process.
+
+        Returns:
+            The transformed tensor.
+        """
         if not self.feature_dims:
             # Return the input as a single feature if no dimensions are provided
             return [inputs]
@@ -2958,12 +2971,25 @@ class SplitLayer(keras.layers.Layer):
         )
 
     def get_config(self) -> dict:
+        """Return the configuration needed to re-create this layer.
+
+        Returns:
+            The layer configuration.
+        """
         config = super().get_config()
         config.update({"feature_dims": self.feature_dims})
         return config
 
     def compute_output_shape(self, input_shape) -> tuple:
         # Return a list of shapes for each split
+        """Compute the output shape for a given input shape.
+
+        Args:
+            input_shape: Shape of the input tensor.
+
+        Returns:
+            The corresponding output shape.
+        """
         if not self.feature_dims:
             return [input_shape]
         elif isinstance(self.feature_dims[0], int):

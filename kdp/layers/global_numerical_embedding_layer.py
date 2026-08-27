@@ -121,9 +121,22 @@ class GlobalNumericalEmbedding(tf.keras.layers.Layer):
 
     def compute_output_shape(self, input_shape) -> tuple:
         # Regardless of the input shape, the output shape is (batch_size, embedding_dim)
+        """Compute the output shape for a given input shape.
+
+        Args:
+            input_shape: Shape of the input tensor.
+
+        Returns:
+            The corresponding output shape.
+        """
         return (input_shape[0], self.global_embedding_dim)
 
     def get_config(self) -> dict:
+        """Return the configuration needed to re-create this layer.
+
+        Returns:
+            The layer configuration.
+        """
         config = super().get_config()
         config.update(
             {
@@ -141,4 +154,12 @@ class GlobalNumericalEmbedding(tf.keras.layers.Layer):
 
     @classmethod
     def from_config(cls, config) -> "GlobalNumericalEmbedding":
+        """Re-create the layer from its configuration.
+
+        Args:
+            config: Configuration dictionary produced by `get_config`.
+
+        Returns:
+            The reconstructed layer.
+        """
         return cls(**config)

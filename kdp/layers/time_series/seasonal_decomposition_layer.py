@@ -35,6 +35,11 @@ class SeasonalDecompositionLayer(Layer):
         drop_na=True,
         **kwargs,
     ):
+        """Initialize the SeasonalDecompositionLayer.
+
+        See the class docstring for the accepted arguments and what
+        each one controls.
+        """
         super().__init__(**kwargs)
         self.period = period
         self.method = method
@@ -79,7 +84,7 @@ class SeasonalDecompositionLayer(Layer):
             # Concatenate results along the feature dimension
             return tf.concat(outputs, axis=2)
 
-    def _decompose_2d(self, inputs):
+    def _decompose_2d(self, inputs) -> tf.Tensor:
         """Decompose a single 2D time series."""
         # Extract dimensions - remove unused variables
         # batch_size = tf.shape(inputs)[0]
@@ -139,11 +144,11 @@ class SeasonalDecompositionLayer(Layer):
 
         return result
 
-    def _calculate_trend(self, inputs):
+    def _calculate_trend(self, inputs) -> tf.Tensor:
         """Calculate trend component using centered moving average."""
 
         # Use numpy-style operations with tf.py_function for simplicity
-        def moving_average(batch_tensor):
+        def moving_average(batch_tensor) -> np.ndarray:
             # Convert to numpy for easier manipulation
             batch_np = batch_tensor.numpy()
             result = np.zeros_like(batch_np)
@@ -179,11 +184,11 @@ class SeasonalDecompositionLayer(Layer):
         trend.set_shape(inputs.shape)
         return trend
 
-    def _calculate_seasonal(self, detrended):
+    def _calculate_seasonal(self, detrended) -> tf.Tensor:
         """Calculate seasonal component by averaging values at the same phase."""
 
         # Use numpy-style operations with tf.py_function for simplicity
-        def extract_seasonal(batch_tensor):
+        def extract_seasonal(batch_tensor) -> np.ndarray:
             # Convert to numpy for easier manipulation
             batch_np = batch_tensor.numpy()
             result = np.zeros_like(batch_np)

@@ -70,6 +70,11 @@ class NumericalEmbedding(tf.keras.layers.Layer):
 
     def build(self, input_shape) -> None:
         # input_shape: (batch, num_features)
+        """Build the layer's weights for a given input shape.
+
+        Args:
+            input_shape: Shape of the input tensor.
+        """
         self.num_features = input_shape[-1]
         # Continuous branch: process each feature independently using TimeDistributed MLP.
         self.cont_mlp = tf.keras.Sequential(
@@ -168,6 +173,15 @@ class NumericalEmbedding(tf.keras.layers.Layer):
 
     def call(self, inputs: tf.Tensor, training: bool = False) -> tf.Tensor:
         # Continuous branch.
+        """Apply the layer to its inputs.
+
+        Args:
+            inputs: Input tensor to process.
+            training: Whether the layer is being called in training mode.
+
+        Returns:
+            The transformed tensor.
+        """
         inputs_expanded = tf.expand_dims(inputs, axis=-1)  # (batch, num_features, 1)
         cont = self.cont_mlp(inputs_expanded)
         cont = self.dropout(cont, training=training)
@@ -205,6 +219,11 @@ class NumericalEmbedding(tf.keras.layers.Layer):
         return output
 
     def get_config(self) -> dict:
+        """Return the configuration needed to re-create this layer.
+
+        Returns:
+            The layer configuration.
+        """
         config = super().get_config()
         config.update(
             {
@@ -221,4 +240,12 @@ class NumericalEmbedding(tf.keras.layers.Layer):
 
     @classmethod
     def from_config(cls, config) -> "NumericalEmbedding":
+        """Re-create the layer from its configuration.
+
+        Args:
+            config: Configuration dictionary produced by `get_config`.
+
+        Returns:
+            The reconstructed layer.
+        """
         return cls(**config)

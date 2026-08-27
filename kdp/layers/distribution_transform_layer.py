@@ -88,6 +88,11 @@ class DistributionTransformLayer(tf.keras.layers.Layer):
         **kwargs: Any,
     ) -> None:
         # Call parent's __init__ first
+        """Initialize the DistributionTransformLayer.
+
+        See the class docstring for the accepted arguments and what
+        each one controls.
+        """
         tf.keras.layers.Layer.__init__(self, name=name, **kwargs)
 
         # Set private attributes
@@ -339,7 +344,7 @@ class DistributionTransformLayer(tf.keras.layers.Layer):
 
         return min_gt_zero & max_lt_one  # Using & operator for element-wise logical AND
 
-    def _compute_statistics(self, x):
+    def _compute_statistics(self, x) -> dict:
         """Compute basic statistics for a tensor in a graph-mode compatible way.
 
         Args:
@@ -524,7 +529,7 @@ class DistributionTransformLayer(tf.keras.layers.Layer):
 
         return transform_type, lambda_param
 
-    def _apply_transform(self, x):
+    def _apply_transform(self, x) -> tf.Tensor:
         """Apply the selected transformation to the input tensor in a graph-compatible way.
 
         Args:
@@ -536,18 +541,18 @@ class DistributionTransformLayer(tf.keras.layers.Layer):
 
         # Use tf.case to select the transformation type
         # Define functions for each transformation type
-        def apply_none():
+        def apply_none() -> tf.Tensor:
             return x
 
-        def apply_log():
+        def apply_log() -> tf.Tensor:
             # Add epsilon to avoid log(0)
             return tf.math.log(x + self.epsilon)
 
-        def apply_sqrt():
+        def apply_sqrt() -> tf.Tensor:
             # Ensure non-negative values
             return tf.sqrt(tf.maximum(x, 0.0) + self.epsilon)
 
-        def apply_box_cox():
+        def apply_box_cox() -> tf.Tensor:
             # Box-Cox transformation: (x^lambda - 1)/lambda if lambda != 0, log(x) if lambda == 0
             # Ensure x is positive
             x_pos = tf.maximum(x, self.epsilon)
@@ -559,7 +564,7 @@ class DistributionTransformLayer(tf.keras.layers.Layer):
                 / self.lambda_param,  # Standard Box-Cox formula
             )
 
-        def apply_yeo_johnson():
+        def apply_yeo_johnson() -> tf.Tensor:
             # Yeo-Johnson works for both positive and negative values
             lambda_p = self.lambda_param
 
@@ -591,12 +596,12 @@ class DistributionTransformLayer(tf.keras.layers.Layer):
                 tf.where(neg_mask, neg_values, tf.zeros_like(x)),
             )
 
-        def apply_arcsinh():
+        def apply_arcsinh() -> tf.Tensor:
             # Inverse hyperbolic sine transformation
             # Works well for both positive and negative values with heavy tails
             return tf.math.log(x + tf.sqrt(tf.square(x) + 1.0))
 
-        def apply_cube_root():
+        def apply_cube_root() -> tf.Tensor:
             # Cube root transformation
             # Works well for both positive and negative values
             pos_mask = x >= 0
@@ -615,13 +620,13 @@ class DistributionTransformLayer(tf.keras.layers.Layer):
                 tf.where(neg_mask, neg_values, tf.zeros_like(x)),
             )
 
-        def apply_logit():
+        def apply_logit() -> tf.Tensor:
             # Logit transformation: log(x / (1 - x))
             # Clip values to the valid range with a small epsilon
             x_clipped = tf.clip_by_value(x, self.epsilon, 1.0 - self.epsilon)
             return tf.math.log(x_clipped / (1.0 - x_clipped))
 
-        def apply_min_max():
+        def apply_min_max() -> tf.Tensor:
             # Min-Max scaling to [0, 1]
             if self.clip_values:
                 # Use predefined min/max values
@@ -638,7 +643,7 @@ class DistributionTransformLayer(tf.keras.layers.Layer):
 
             return (x - min_val) / denom
 
-        def apply_robust_scale():
+        def apply_robust_scale() -> tf.Tensor:
             # Robust scaling: centre on the per-feature median and divide by the
             # per-feature interquartile range, so outliers do not dominate.
             _, _, median, iqr = self._compute_robust_statistics(x)
@@ -648,7 +653,7 @@ class DistributionTransformLayer(tf.keras.layers.Layer):
 
             return (x - median) / iqr
 
-        def apply_quantile():
+        def apply_quantile() -> tf.Tensor:
             # Rank-based quantile transformation, computed per feature so that
             # features on different scales are not pooled into a single ranking.
             # Ranks are mapped to [-1, 1] rather than through an exact normal

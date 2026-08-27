@@ -50,6 +50,11 @@ class CalendarFeatureLayer(Layer):
         onehot_categorical=False,
         **kwargs,
     ):
+        """Initialize the CalendarFeatureLayer.
+
+        See the class docstring for the accepted arguments and what
+        each one controls.
+        """
         super().__init__(**kwargs)
 
         # Default features if none provided
@@ -109,6 +114,11 @@ class CalendarFeatureLayer(Layer):
                 raise ValueError(f"Invalid feature: {feature}")
 
     def build(self, input_shape) -> None:
+        """Build the layer's weights for a given input shape.
+
+        Args:
+            input_shape: Shape of the input tensor.
+        """
         super().build(input_shape)
 
     def call(self, inputs, training=None) -> tf.Tensor:
@@ -123,7 +133,7 @@ class CalendarFeatureLayer(Layer):
         """
 
         # Process date inputs using pandas for more flexibility
-        def extract_calendar_features(date_inputs):
+        def extract_calendar_features(date_inputs) -> np.ndarray:
             # Convert tensor to numpy
             if isinstance(date_inputs, tf.Tensor):
                 date_inputs = date_inputs.numpy()

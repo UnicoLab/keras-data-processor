@@ -24,6 +24,11 @@ class LagFeatureLayer(Layer):
         keep_original=False,
         **kwargs,
     ):
+        """Initialize the LagFeatureLayer.
+
+        See the class docstring for the accepted arguments and what
+        each one controls.
+        """
         super().__init__(**kwargs)
         self.lag_indices = lag_indices
         self.drop_na = drop_na
@@ -31,6 +36,11 @@ class LagFeatureLayer(Layer):
         self.keep_original = keep_original
 
     def build(self, input_shape) -> None:
+        """Build the layer's weights for a given input shape.
+
+        Args:
+            input_shape: Shape of the input tensor.
+        """
         super().build(input_shape)
 
     def call(self, inputs) -> tf.Tensor:
@@ -83,6 +93,14 @@ class LagFeatureLayer(Layer):
         return result
 
     def compute_output_shape(self, input_shape) -> tuple:
+        """Compute the output shape for a given input shape.
+
+        Args:
+            input_shape: Shape of the input tensor.
+
+        Returns:
+            The corresponding output shape.
+        """
         output_shape = list(input_shape)
         feature_dim = 0
 
@@ -109,6 +127,11 @@ class LagFeatureLayer(Layer):
         return tuple(output_shape)
 
     def get_config(self) -> dict:
+        """Return the configuration needed to re-create this layer.
+
+        Returns:
+            The layer configuration.
+        """
         config = {
             "lag_indices": self.lag_indices,
             "drop_na": self.drop_na,

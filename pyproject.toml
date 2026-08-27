@@ -230,10 +230,11 @@ max-line-length = 120
 # pattern silently missed everything under test/layers/ and friends.
 "test/**" = ["ALL"]
 "docs/**" = ["ALL"]
-# Developer entry points: printing to stdout is the point, and they are not
-# part of the published API surface.
-"scripts/**" = ["T20", "ANN", "D", "S603", "S607"]
-"examples/**" = ["T20", "ANN", "D"]
+# Developer entry points: printing to stdout is the point, os.path is fine in a
+# one-off script, and they are not part of the published API surface.
+"scripts/**" = ["T20", "ANN", "D", "N806", "PTH", "S603", "S607"]
+# `X_train` and friends are the conventional ML spelling.
+"examples/**" = ["T20", "ANN", "D", "N806", "PTH"]
 # Keras fixes the signatures of `call`, `build` and `__init__`: `training` and
 # `**kwargs` must be accepted whether or not a given layer reads them, and the
 # `tf.while_loop` condition callable must accept the full loop-variable tuple.

@@ -36,6 +36,11 @@ class MissingValueHandlerLayer(Layer):
         extrapolate=True,
         **kwargs,
     ):
+        """Initialize the MissingValueHandlerLayer.
+
+        See the class docstring for the accepted arguments and what
+        each one controls.
+        """
         super().__init__(**kwargs)
         self.mask_value = mask_value
         self.strategy = strategy
@@ -101,7 +106,7 @@ class MissingValueHandlerLayer(Layer):
 
         return result
 
-    def _numpy_impute_2d(self, inputs_tensor):
+    def _numpy_impute_2d(self, inputs_tensor) -> np.ndarray:
         """Numpy-based implementation of imputation for 2D tensors."""
         # Convert to numpy
         inputs = inputs_tensor.numpy()
@@ -135,7 +140,7 @@ class MissingValueHandlerLayer(Layer):
         else:
             return imputed
 
-    def _numpy_impute_3d(self, inputs_tensor):
+    def _numpy_impute_3d(self, inputs_tensor) -> np.ndarray:
         """Numpy-based implementation of imputation for 3D tensors."""
         # Convert to numpy
         inputs = inputs_tensor.numpy()
@@ -183,7 +188,7 @@ class MissingValueHandlerLayer(Layer):
         else:
             return imputed
 
-    def _numpy_forward_fill(self, data, mask):
+    def _numpy_forward_fill(self, data, mask) -> None:
         """Forward fill missing values in-place."""
         # For each batch
         for b in range(data.shape[0]):
@@ -209,7 +214,7 @@ class MissingValueHandlerLayer(Layer):
                     # Valid value, update last_valid
                     last_valid = series[t]
 
-    def _numpy_backward_fill(self, data, mask):
+    def _numpy_backward_fill(self, data, mask) -> None:
         """Backward fill missing values in-place."""
         # For each batch
         for b in range(data.shape[0]):
@@ -235,7 +240,7 @@ class MissingValueHandlerLayer(Layer):
                     # Valid value, update next_valid
                     next_valid = series[t]
 
-    def _numpy_linear_interpolation(self, data, mask):
+    def _numpy_linear_interpolation(self, data, mask) -> None:
         """Linear interpolation between valid values in-place."""
         # For each batch
         for b in range(data.shape[0]):
@@ -299,7 +304,7 @@ class MissingValueHandlerLayer(Layer):
                 else:
                     next_valid = series[t]
 
-    def _numpy_mean_imputation(self, data, mask):
+    def _numpy_mean_imputation(self, data, mask) -> None:
         """Mean imputation in-place."""
         # For each batch
         for b in range(data.shape[0]):
@@ -319,7 +324,7 @@ class MissingValueHandlerLayer(Layer):
                 # Fill missing values with mean
                 series[series_mask] = mean_value
 
-    def _numpy_median_imputation(self, data, mask):
+    def _numpy_median_imputation(self, data, mask) -> None:
         """Median imputation in-place."""
         # For each batch
         for b in range(data.shape[0]):
@@ -339,7 +344,7 @@ class MissingValueHandlerLayer(Layer):
                 # Fill missing values with median
                 series[series_mask] = median_value
 
-    def _numpy_rolling_mean_imputation(self, data, mask):
+    def _numpy_rolling_mean_imputation(self, data, mask) -> None:
         """Rolling mean imputation in-place."""
         # For each batch
         for b in range(data.shape[0]):
@@ -377,7 +382,7 @@ class MissingValueHandlerLayer(Layer):
                     if len(valid_values) > 0:
                         series[t] = np.mean(valid_values)
 
-    def _numpy_seasonal_imputation(self, data, mask):
+    def _numpy_seasonal_imputation(self, data, mask) -> None:
         """Seasonal imputation in-place."""
         # For each batch
         for b in range(data.shape[0]):

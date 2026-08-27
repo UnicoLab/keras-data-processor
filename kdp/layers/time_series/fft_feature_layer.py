@@ -34,6 +34,11 @@ class FFTFeatureLayer(Layer):
         normalize=True,
         **kwargs,
     ):
+        """Initialize the FFTFeatureLayer.
+
+        See the class docstring for the accepted arguments and what
+        each one controls.
+        """
         super().__init__(**kwargs)
         self.num_features = num_features
         self.feature_type = feature_type
@@ -53,6 +58,11 @@ class FFTFeatureLayer(Layer):
             )
 
     def build(self, input_shape) -> None:
+        """Build the layer's weights for a given input shape.
+
+        Args:
+            input_shape: Shape of the input tensor.
+        """
         super().build(input_shape)
 
     def call(self, inputs, training=None) -> tf.Tensor:
@@ -130,7 +140,7 @@ class FFTFeatureLayer(Layer):
 
         return result
 
-    def _apply_window(self, series):
+    def _apply_window(self, series) -> tf.Tensor:
         """Apply window function to the time series."""
         time_steps = tf.shape(series)[1]
 
@@ -153,7 +163,7 @@ class FFTFeatureLayer(Layer):
         # Apply window function (broadcast window across batches)
         return series * window
 
-    def _compute_fft_features(self, series):
+    def _compute_fft_features(self, series) -> tf.Tensor:
         """Compute FFT features based on the selected feature type."""
         # Compute FFT
         fft_result = tf.signal.rfft(series)
@@ -184,7 +194,7 @@ class FFTFeatureLayer(Layer):
             # Extract statistical features from frequency domain
             return self._extract_statistical_features(power_spectrum)
 
-    def _extract_power_features(self, power_spectrum):
+    def _extract_power_features(self, power_spectrum) -> tf.Tensor:
         """Extract power at evenly spaced frequencies."""
         # Get dimensions
         spectrum_length = tf.shape(power_spectrum)[1]
@@ -200,7 +210,7 @@ class FFTFeatureLayer(Layer):
         # Gather power at selected indices
         return tf.gather(power_spectrum, indices, axis=1)
 
-    def _extract_dominant_features(self, power_spectrum, fft_result):
+    def _extract_dominant_features(self, power_spectrum, fft_result) -> tf.Tensor:
         """Extract dominant frequencies and their power."""
         # Get top K frequencies by power
         _, indices = tf.math.top_k(power_spectrum, k=self.num_features)
@@ -233,7 +243,7 @@ class FFTFeatureLayer(Layer):
         # Flatten the features
         return tf.reshape(features, [tf.shape(power_spectrum)[0], -1])
 
-    def _extract_statistical_features(self, power_spectrum):
+    def _extract_statistical_features(self, power_spectrum) -> tf.Tensor:
         """Extract statistical features from the power spectrum."""
         # Mean power
         mean_power = tf.reduce_mean(power_spectrum, axis=1, keepdims=True)

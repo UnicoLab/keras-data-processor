@@ -308,7 +308,7 @@ class FeatureMoE(keras.layers.Layer):
             # Create a fixed assignment matrix for predefined routing
             self._create_assignment_matrix()
 
-    def _create_assignment_matrix(self):
+    def _create_assignment_matrix(self) -> None:
         """Create a fixed assignment matrix for predefined routing."""
         if not self.feature_names or not self.predefined_assignments:
             return
@@ -338,7 +338,7 @@ class FeatureMoE(keras.layers.Layer):
         # Convert to a constant tensor for efficiency
         self.assignment_matrix = tf.constant(self.assignment_matrix)
 
-    def _compute_routing_weights(self, inputs, training=None):
+    def _compute_routing_weights(self, inputs, training=None) -> tf.Tensor:
         """Compute routing weights for each feature.
 
         Args:

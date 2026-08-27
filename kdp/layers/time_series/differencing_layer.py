@@ -24,6 +24,11 @@ class DifferencingLayer(Layer):
         keep_original=False,
         **kwargs,
     ):
+        """Initialize the DifferencingLayer.
+
+        See the class docstring for the accepted arguments and what
+        each one controls.
+        """
         super().__init__(**kwargs)
         self.order = order
         self.drop_na = drop_na
@@ -35,6 +40,11 @@ class DifferencingLayer(Layer):
             raise ValueError(f"Order must be positive. Got {order}")
 
     def build(self, input_shape) -> None:
+        """Build the layer's weights for a given input shape.
+
+        Args:
+            input_shape: Shape of the input tensor.
+        """
         super().build(input_shape)
 
     def call(self, inputs) -> tf.Tensor:
@@ -109,6 +119,11 @@ class DifferencingLayer(Layer):
         return (time_steps, n_output_features)
 
     def get_config(self) -> dict:
+        """Return the configuration needed to re-create this layer.
+
+        Returns:
+            The layer configuration.
+        """
         config = {
             "order": self.order,
             "drop_na": self.drop_na,

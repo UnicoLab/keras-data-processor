@@ -28,6 +28,11 @@ class RollingStatsLayer(Layer):
         keep_original=False,
         **kwargs,
     ):
+        """Initialize the RollingStatsLayer.
+
+        See the class docstring for the accepted arguments and what
+        each one controls.
+        """
         super().__init__(**kwargs)
         self.window_size = window_size
         self.statistics = statistics if isinstance(statistics, list) else [statistics]
@@ -50,6 +55,11 @@ class RollingStatsLayer(Layer):
                 raise ValueError(f"Statistic must be one of {valid_stats}. Got {stat}")
 
     def build(self, input_shape) -> None:
+        """Build the layer's weights for a given input shape.
+
+        Args:
+            input_shape: Shape of the input tensor.
+        """
         super().build(input_shape)
 
     def call(self, inputs) -> tf.Tensor:
@@ -201,6 +211,11 @@ class RollingStatsLayer(Layer):
         return (time_steps, n_columns)
 
     def get_config(self) -> dict:
+        """Return the configuration needed to re-create this layer.
+
+        Returns:
+            The layer configuration.
+        """
         config = {
             "window_size": self.window_size,
             "statistics": self.statistics,

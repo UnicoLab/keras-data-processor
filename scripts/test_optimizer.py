@@ -16,7 +16,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Any
-import xml.etree.ElementTree as ET
+from xml.etree import ElementTree  # noqa: S405 - parses our own pytest output
 
 
 class TestOptimizer:
@@ -36,7 +36,9 @@ class TestOptimizer:
             return {}
 
         try:
-            tree = ET.parse(junit_xml_path)
+            tree = ElementTree.parse(  # noqa: S314 - input is this script's own JUnit report
+                junit_xml_path,
+            )
             root = tree.getroot()
 
             test_results = []

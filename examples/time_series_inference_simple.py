@@ -40,12 +40,12 @@ def generate_sample_data(num_stores=3, days_per_store=30, add_noise=True):
             date = base_date + timedelta(days=day)
 
             # Calculate sales based on pattern
-            if store_id < 2:
-                # Linear pattern
-                sales = base_sales + (day * growth)
-            else:
-                # Sinusoidal pattern
-                sales = base_sales + 50 * np.sin(day * 0.2)
+            # Linear pattern for the first stores, sinusoidal for the rest.
+            sales = (
+                base_sales + (day * growth)
+                if store_id < 2
+                else base_sales + 50 * np.sin(day * 0.2)
+            )
 
             # Add noise if requested
             if add_noise:
@@ -93,7 +93,7 @@ def create_preprocessor(train_data):
     # We just need the features_specs and validation methods
 
 
-def example_single_point_inference_failure(preprocessor, formatter):
+def example_single_point_inference_failure(formatter):
     """Example showing how single-point inference fails with time series features."""
     print("\n=== Single-Point Inference with Time Series Features ===")
 
@@ -210,7 +210,7 @@ def main():
     formatter = TimeSeriesInferenceFormatter(preprocessor)
 
     # Example 1: Single-point inference (will fail, showing why we need the formatter)
-    example_single_point_inference_failure(preprocessor, formatter)
+    example_single_point_inference_failure(formatter)
 
     # Example 2: Inference with historical context
     example_with_historical_context(formatter, train_data)

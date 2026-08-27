@@ -24,6 +24,11 @@ class MovingAverageLayer(Layer):
         keep_original=False,
         **kwargs,
     ):
+        """Initialize the MovingAverageLayer.
+
+        See the class docstring for the accepted arguments and what
+        each one controls.
+        """
         super().__init__(**kwargs)
         self.periods = periods if isinstance(periods, list) else [periods]
         self.drop_na = drop_na
@@ -145,6 +150,11 @@ class MovingAverageLayer(Layer):
         return (time_steps, n_columns)
 
     def get_config(self) -> dict:
+        """Return the configuration needed to re-create this layer.
+
+        Returns:
+            The layer configuration.
+        """
         config = {
             "periods": self.periods,
             "drop_na": self.drop_na,

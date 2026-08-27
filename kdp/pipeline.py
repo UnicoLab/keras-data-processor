@@ -134,7 +134,7 @@ class FeaturePreprocessor:
             step = ProcessingStep(layer_creator=layer_creator, **layer_kwargs)
             self.pipeline.add_step(step=step)
 
-    def _run_dynamic(self, input_data):
+    def _run_dynamic(self, input_data) -> tf.Tensor:
         """Run the dynamic pipeline over a single tensor and return its output.
 
         The dynamic pipeline keys its data by layer name, so the input is handed
