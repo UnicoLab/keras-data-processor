@@ -9,6 +9,8 @@ for various feature types in the KDP framework.
 import keras
 import os
 import sys
+import tempfile
+from pathlib import Path
 
 # Add the project root to the Python path to allow module imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -115,6 +117,45 @@ class StringCleaningLayer(keras.layers.Layer):
 #################################################
 
 
+JOB_DESCRIPTION_SECTORS = [
+    "tech",
+    "finance",
+    "healthcare",
+    "education",
+    "manufacturing",
+]
+JOB_DESCRIPTION_SKILLS = [
+    "programming",
+    "analysis",
+    "management",
+    "communication",
+    "design",
+]
+# The words a hand-built TextVectorization has to know about. KDP's own text
+# path derives this from the computed statistics; a custom pipeline supplies it.
+JOB_DESCRIPTION_VOCABULARY = [
+    "this",
+    "job",
+    "in",
+    "requires",
+    "skills",
+    "and",
+    "experience",
+    "level",
+    *JOB_DESCRIPTION_SECTORS,
+    *JOB_DESCRIPTION_SKILLS,
+]
+
+JOB_SECTORS = [
+    "Technology",
+    "Finance",
+    "Healthcare",
+    "Education",
+    "Manufacturing",
+    "Other",
+]
+
+
 def generate_sample_data(n_samples=1000):
     """Generate a synthetic dataset for demonstration."""
 
@@ -129,15 +170,12 @@ def generate_sample_data(n_samples=1000):
         ["High School", "Bachelor's", "Master's", "PhD", "Other"],
         n_samples,
     )
-    job_sector = np.random.choice(
-        ["Technology", "Finance", "Healthcare", "Education", "Manufacturing", "Other"],
-        n_samples,
-    )
+    job_sector = np.random.choice(JOB_SECTORS, n_samples)
 
     # Text feature with some variations
     job_descriptions = []
-    sectors = ["tech", "finance", "healthcare", "education", "manufacturing"]
-    skills = ["programming", "analysis", "management", "communication", "design"]
+    sectors = JOB_DESCRIPTION_SECTORS
+    skills = JOB_DESCRIPTION_SKILLS
     for _ in range(n_samples):
         sector = np.random.choice(sectors)
         skill1, skill2 = np.random.choice(skills, 2, replace=False)
@@ -204,14 +242,18 @@ def define_features():
             max_value=20,  # for ClippingLayer
             scale=0.1,  # for Rescaling
         ),
-        # Expense ratio: Beta distribution, apply special binning
+        # Expense ratio: Beta distribution, apply special binning.
+        # Note that the keyword arguments below are offered to *every* layer in
+        # the pipeline, and each takes the ones its constructor accepts. Both
+        # Discretization and CategoryEncoding accept `output_mode`, so chaining
+        # them here would one-hot the values twice; Discretization alone already
+        # emits the one-hot encoding.
         "expense_ratio": NumericalFeature(
             name="expense_ratio",
             feature_type=FeatureType.FLOAT,
-            preprocessors=["Discretization", "CategoryEncoding"],
+            preprocessors=["Discretization"],
             bin_boundaries=[0.1, 0.2, 0.3, 0.4, 0.5],  # for Discretization
-            output_mode="one_hot",  # for CategoryEncoding
-            num_tokens=6,  # 5 bins + 1 for values outside bins
+            output_mode="one_hot",  # for Discretization
         ),
         # Education: Standard categorical with embedding
         "education": CategoricalFeature(
@@ -225,7 +267,12 @@ def define_features():
             name="job_sector",
             feature_type=FeatureType.STRING_CATEGORICAL,
             preprocessors=["StringLookup", "Embedding", "Dense"],
+            # A raw StringLookup in a custom pipeline needs its vocabulary up
+            # front: KDP's own categorical path fills this in from the computed
+            # statistics, but a hand-built pipeline has to supply it.
+            vocabulary=JOB_SECTORS,  # for StringLookup
             num_oov_indices=1,  # for StringLookup
+            input_dim=len(JOB_SECTORS) + 1,  # for Embedding: vocabulary + OOV
             output_dim=12,  # for Embedding
             units=8,  # for Dense
             activation="relu",
@@ -241,8 +288,11 @@ def define_features():
                 "GlobalAveragePooling1D",
             ],
             patterns_to_remove=["[0-9]+", "years"],  # for StringCleaningLayer
-            max_tokens=5000,  # for TextVectorization
+            vocabulary=JOB_DESCRIPTION_VOCABULARY,  # for TextVectorization
             output_sequence_length=30,  # for TextVectorization
+            # Embedding must cover the vocabulary plus the padding and OOV slots
+            # TextVectorization prepends.
+            input_dim=len(JOB_DESCRIPTION_VOCABULARY) + 2,  # for Embedding
             output_dim=32,  # for Embedding
         ),
     }
@@ -254,6 +304,7 @@ def define_features():
 
 
 def main():
+    """Build a preprocessor from custom pipelines and train a model on its output."""
     # Generate sample data
     print("Generating sample data...")
     data = generate_sample_data()
@@ -271,18 +322,34 @@ def main():
     print("\nDefining features with custom preprocessing pipelines...")
     features = define_features()
 
-    # Create preprocessing model
+    # KDP computes its statistics from data on disk, so the training split is
+    # written out first and the preprocessor is pointed at that file.
+    work_dir = Path(tempfile.mkdtemp(prefix="kdp_custom_preprocessing_"))
+    train_csv = work_dir / "train.csv"
+    X_train.to_csv(train_csv, index=False)
+
     print("Creating preprocessing model...")
-    preprocessor = PreprocessingModel(features=features, output_mode="concat")
+    preprocessor = PreprocessingModel(
+        path_data=str(train_csv),
+        features_specs=features,
+        features_stats_path=str(work_dir / "features_stats.json"),
+        overwrite_stats=True,
+        output_mode="concat",
+    )
 
-    # Fit preprocessing model
-    print("Fitting preprocessing model...")
-    preprocessor.fit(X_train)
+    print("Building preprocessing model...")
+    preprocessor.build_preprocessor()
 
-    # Transform data
+    def to_model_inputs(frame: pd.DataFrame) -> dict:
+        """Turn a DataFrame into the per-feature tensors the model expects."""
+        return {
+            column: tf.constant(frame[column].to_numpy().reshape(-1, 1))
+            for column in features
+        }
+
     print("Transforming data with custom preprocessing...")
-    X_train_processed = preprocessor.transform(X_train)
-    X_test_processed = preprocessor.transform(X_test)
+    X_train_processed = np.asarray(preprocessor.model(to_model_inputs(X_train)))
+    X_test_processed = np.asarray(preprocessor.model(to_model_inputs(X_test)))
 
     print(f"Processed training data shape: {X_train_processed.shape}")
     print(f"Processed testing data shape: {X_test_processed.shape}")
@@ -322,8 +389,8 @@ def main():
 
     # Save the preprocessing model and prediction model
     print("\nSaving models...")
-    preprocessor.save("custom_preprocessing_model")
-    model.save("credit_score_prediction_model")
+    preprocessor.save_model(str(work_dir / "custom_preprocessing_model"))
+    model.save(str(work_dir / "credit_score_prediction_model.keras"))
 
     print(
         "Done! The preprocessor with custom pipelines and prediction model are saved.",
@@ -346,7 +413,7 @@ def main():
     )
 
     # Preprocess the new sample
-    new_sample_processed = preprocessor.transform(new_sample)
+    new_sample_processed = np.asarray(preprocessor.model(to_model_inputs(new_sample)))
 
     # Make prediction
     prediction = model.predict(new_sample_processed)

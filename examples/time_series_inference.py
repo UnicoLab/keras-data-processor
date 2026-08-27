@@ -5,6 +5,9 @@ Example script showing how to use the InferenceDataFormatter to prepare data for
 This demonstrates how to handle single-point inference, batch inference, forecasting, etc.
 """
 
+import tempfile
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -84,10 +87,18 @@ def train_preprocessor(train_data):
         "store_id": FeatureType.STRING_CATEGORICAL,
     }
 
+    # KDP computes its statistics from data on disk, so `path_data` is a file
+    # path rather than a DataFrame; write the frame out first.
+    work_dir = Path(tempfile.mkdtemp(prefix="kdp_time_series_inference_"))
+    train_csv = work_dir / "train.csv"
+    train_data.to_csv(train_csv, index=False)
+
     # Create a preprocessor with dict output to see results
     preprocessor = PreprocessingModel(
-        path_data=train_data,
+        path_data=str(train_csv),
         features_specs=features_specs,
+        features_stats_path=str(work_dir / "features_stats.json"),
+        overwrite_stats=True,
         output_mode="dict",
     )
 

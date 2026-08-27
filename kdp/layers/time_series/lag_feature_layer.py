@@ -53,9 +53,11 @@ class LagFeatureLayer(Layer):
         Returns:
             Tensor with original and/or lagged features depending on configuration
         """
-        # Get the input shape and determine if reshaping is needed
-        original_rank = tf.rank(inputs)
-        if original_rank == 1:
+        inputs = tf.convert_to_tensor(inputs)
+        # Static rank: `tf.rank` returns a tensor, which cannot drive a Python
+        # `if` once the layer is traced into a graph.
+        input_is_1d = inputs.shape.rank == 1
+        if input_is_1d:
             # Reshape to 2D for consistent processing
             inputs = tf.reshape(inputs, (-1, 1))
 
@@ -87,8 +89,9 @@ class LagFeatureLayer(Layer):
             max_lag = max(self.lag_indices)
             result = result[max_lag:]
 
-        # Reshape back to original rank if needed
-        if original_rank == 1 and not self.keep_original and len(self.lag_indices) == 1:
+        # A 1-D series producing a single column is returned as 1-D, matching
+        # the rank the caller passed in.
+        if input_is_1d and not self.keep_original and len(self.lag_indices) == 1:
             result = tf.reshape(result, (-1,))
 
         return result
@@ -102,30 +105,23 @@ class LagFeatureLayer(Layer):
         Returns:
             The corresponding output shape.
         """
-        output_shape = list(input_shape)
-        feature_dim = 0
+        input_shape = tuple(input_shape)
+        input_is_1d = len(input_shape) == 1
+        time_steps = input_shape[0]
+        n_features = 1 if input_is_1d else input_shape[-1]
 
-        if self.keep_original:
-            feature_dim += 1
+        # Dropping the warm-up rows costs the largest lag; a symbolic batch
+        # dimension stays None.
+        if self.drop_na and time_steps is not None:
+            time_steps = max(time_steps - max(self.lag_indices), 0)
 
-        feature_dim += len(self.lag_indices)
+        n_columns = n_features * (
+            len(self.lag_indices) + (1 if self.keep_original else 0)
+        )
 
-        if len(output_shape) == 1:
-            if feature_dim == 1 and not self.keep_original:
-                # Just return the same shape if we only have one feature and not keeping original
-                return tuple(output_shape)
-            else:
-                # Add feature dimension
-                output_shape.append(feature_dim)
-        else:
-            # Update the last dimension for feature count
-            output_shape[-1] = feature_dim
-
-        # For symbolic shape (where batch dim is None), we can't modify the batch size
-        # None batch dimension means variable batch size at runtime
-        # So we just return the shape with the updated feature dimension
-
-        return tuple(output_shape)
+        if input_is_1d and not self.keep_original and len(self.lag_indices) == 1:
+            return (time_steps,)
+        return (time_steps, n_columns)
 
     def get_config(self) -> dict:
         """Return the configuration needed to re-create this layer.

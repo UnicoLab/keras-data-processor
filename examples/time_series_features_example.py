@@ -51,17 +51,16 @@ def generate_sample_data(n_samples=1000, n_features=1):
             signals.append(variation)
         signal = np.column_stack(signals)
 
-    # Create test/train split
-    train_size = int(0.8 * n_samples)
-    X_train = signal[:train_size]
-    X_test = signal[train_size:]
+    # Target variable: the next value in the series. Predicting one step ahead
+    # means the final row has no target, so it is dropped from the inputs too --
+    # otherwise X and y differ by one row and Keras rejects the pair.
+    targets = signal[1:, 0] if n_features > 1 else signal[1:]
+    features = signal[:-1]
 
-    # Create target variable (for regression task)
-    # We'll predict the next value in the series
-    y_train = (
-        signal[1 : train_size + 1, 0] if n_features > 1 else signal[1 : train_size + 1]
-    )
-    y_test = signal[train_size + 1 :, 0] if n_features > 1 else signal[train_size + 1 :]
+    # Create test/train split
+    train_size = int(0.8 * len(features))
+    X_train, X_test = features[:train_size], features[train_size:]
+    y_train, y_test = targets[:train_size], targets[train_size:]
 
     return X_train, y_train, X_test, y_test
 

@@ -537,15 +537,40 @@ class PreprocessingModel:
         """
         # getting feature object
         _feature = self.features_specs[feature_name]
-        for preprocessor_step in feature.preprocessors:
+        for position, preprocessor_step in enumerate(feature.preprocessors):
             logger.info(
                 f"Adding custom {preprocessor_step} for {feature_name}, {_feature.kwargs}",
             )
-            preprocessor.add_processing_step(
-                layer_class=preprocessor_step,
-                name=f"{preprocessor_step.__name__}_{feature_name}",
-                **_feature.kwargs,
-            )
+            # A step may be given three ways, and the docs lead with the first:
+            # a layer name, a layer class, or an already-built layer. Only the
+            # class form has `__name__`, so reading it directly crashed on the
+            # documented spelling.
+            if isinstance(preprocessor_step, str):
+                step_name = preprocessor_step
+            elif isinstance(preprocessor_step, keras.layers.Layer):
+                step_name = preprocessor_step.name
+            else:
+                step_name = getattr(
+                    preprocessor_step,
+                    "__name__",
+                    type(preprocessor_step).__name__,
+                )
+
+            # Layer names have to be unique inside a model, and the same layer
+            # type may legitimately appear twice in one pipeline.
+            layer_name = f"{step_name}_{feature_name}_{position}"
+
+            if isinstance(preprocessor_step, keras.layers.Layer):
+                preprocessor.add_processing_step(
+                    layer_creator=lambda _layer=preprocessor_step, **_: _layer,
+                    name=layer_name,
+                )
+            else:
+                preprocessor.add_processing_step(
+                    layer_class=preprocessor_step,
+                    name=layer_name,
+                    **_feature.kwargs,
+                )
         return preprocessor
 
     def _process_feature_batch(
@@ -2705,6 +2730,28 @@ class PreprocessingModel:
 
         return feature_importances
 
+    @staticmethod
+    def _is_value_sequence(value) -> bool:
+        """Report whether a value carries several time steps rather than one.
+
+        Tensors count: `TimeSeriesInferenceFormatter` hands back tensors when
+        asked to, and rejecting them meant KDP refused the output of its own
+        companion formatter.
+
+        Args:
+            value: The value supplied for a time series feature.
+
+        Returns:
+            True when the value holds a sequence of time steps.
+        """
+        if isinstance(value, list | tuple | np.ndarray):
+            return True
+        if tf.is_tensor(value):
+            rank = value.shape.rank
+            return rank is None or rank >= 1
+        # pandas Series and anything else sized, but not a bare string.
+        return hasattr(value, "__len__") and not isinstance(value, str | bytes)
+
     def _validate_time_series_inference_data(self, data) -> bool:
         """Validate that the provided data meets minimum requirements for time series inference.
 
@@ -2730,13 +2777,10 @@ class PreprocessingModel:
         if not time_series_features:
             return True
 
-        # Convert data to DataFrame if it's a dict
+        # Each time series feature needs a sequence of past values, not a scalar.
         if isinstance(data, dict):
             for key, value in data.items():
-                if (
-                    not isinstance(value, list | np.ndarray)
-                    and key in time_series_features
-                ):
+                if key in time_series_features and not self._is_value_sequence(value):
                     raise ValueError(
                         f"Time series feature '{key}' requires historical context. "
                         f"Please provide a list or array of values, not a single value.",
