@@ -197,7 +197,8 @@ class ExpertBlock(keras.layers.Layer):
 
         for layer in self.hidden_layers:
             if isinstance(
-                layer, keras.layers.Dropout | keras.layers.BatchNormalization
+                layer,
+                keras.layers.Dropout | keras.layers.BatchNormalization,
             ):
                 x = layer(x, training=training)
             else:

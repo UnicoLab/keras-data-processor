@@ -166,7 +166,7 @@ extra:
     - icon: fontawesome/brands/github
       link: https://github.com/UnicoLab/keras-data-processor
     - icon: fontawesome/brands/python
-      link: https://pypi.org/project/keras-data-processor/
+      link: https://pypi.org/project/kdp/
 
 extra_javascript:
   - assets/js/fix-image-paths.js

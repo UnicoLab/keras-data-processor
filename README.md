@@ -73,29 +73,29 @@ We've built an extensive documentation system to help you get the most from KDP:
 
 ### Core Guides
 
-- [🚀 Quick Start Guide](docs/quick_start.md) - Get up and running in minutes
-- [📊 Feature Processing](docs/features.md) - Learn about all supported feature types
-- [🧙‍♂️ Auto-Configuration](docs/auto_configuration.md) - Let KDP configure itself for your data
+- [🚀 Quick Start Guide](docs/getting-started/quick-start.md) - Get up and running in minutes
+- [📊 Feature Processing](docs/features/overview.md) - Learn about all supported feature types
+- [🧙‍♂️ Auto-Configuration](docs/optimization/auto-configuration.md) - Let KDP configure itself for your data
 
 ### Advanced Topics
 
-- [📈 Distribution-Aware Encoding](docs/distribution_aware_encoder.md) - Smart handling of different distributions
-- [👁️ Tabular Attention](docs/tabular_attention.md) - Capture complex feature interactions
-- [🔢 Advanced Numerical Embeddings](docs/advanced_numerical_embeddings.md) - Rich representations for numbers
-- [🤖 Transformer Blocks](docs/transformer_blocks.md) - Apply transformer architecture to tabular data
-- [🎯 Feature Selection](docs/feature_selection.md) - Focus on what matters in your data
-- [🧠 Feature-wise Mixture of Experts](docs/feature_moe.md) - Specialized processing per feature
+- [📈 Distribution-Aware Encoding](docs/advanced/distribution-aware-encoding.md) - Smart handling of different distributions
+- [👁️ Tabular Attention](docs/advanced/tabular-attention.md) - Capture complex feature interactions
+- [🔢 Advanced Numerical Embeddings](docs/advanced/numerical-embeddings.md) - Rich representations for numbers
+- [🤖 Transformer Blocks](docs/advanced/transformer-blocks.md) - Apply transformer architecture to tabular data
+- [🎯 Feature Selection](docs/optimization/feature-selection.md) - Focus on what matters in your data
+- [🧠 Feature-wise Mixture of Experts](docs/advanced/feature-moe.md) - Specialized processing per feature
 
 ### Integration & Performance
 
-- [🔗 Integration Guide](docs/integrations.md) - Use KDP with existing ML pipelines
-- [🚀 Tabular Optimization](docs/tabular_optimization.md) - Supercharge your preprocessing
-- [📈 Performance Tips](docs/complex_examples.md) - Handling large datasets efficiently
+- [🔗 Integration Guide](docs/integrations/overview.md) - Use KDP with existing ML pipelines
+- [🚀 Tabular Optimization](docs/optimization/tabular-optimization.md) - Supercharge your preprocessing
+- [📈 Performance Tips](docs/examples/complex-examples.md) - Handling large datasets efficiently
 
 ### Background & Resources
 
-- [💡 Motivation](docs/motivation.md) - Why we built KDP
-- [🤝 Contributing](docs/contributing.md) - Help improve KDP
+- [💡 Motivation](docs/getting-started/motivation.md) - Why we built KDP
+- [🤝 Contributing](docs/contributing/overview.md) - Help improve KDP
 
 ## 🖼️ Model Architecture
 
@@ -116,7 +116,7 @@ KDP outperforms alternative preprocessing approaches, especially as data size in
 
 ## 🤝 Contributing
 
-We welcome contributions! Please check out our [Contributing Guide](docs/contributing.md) for guidelines on how to proceed.
+We welcome contributions! Please check out our [Contributing Guide](docs/contributing/overview.md) for guidelines on how to proceed.
 
 ## 💬 Join Our Community
 

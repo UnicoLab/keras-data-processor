@@ -9,19 +9,28 @@ authors = ["Piotr Laczkowski <piotr.laczkowski@gmail.com>"]
 license = "MIT"
 readme = "README.md"
 include = ["docs/getting-started/imgs/kdp_logo.png"]
+keywords = ["keras", "tensorflow", "preprocessing", "tabular", "feature-engineering"]
+# Poetry derives the Python-version and license classifiers from the fields
+# above; only the ones it cannot infer are listed here.
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.dependencies]
-python = ">=3.9,<4.0"
+# The package uses PEP 604 unions (`X | Y`) in annotations that are evaluated at
+# import time, so 3.10 is the real floor -- `import kdp` fails on 3.9.
+python = ">=3.10,<4.0"
 tensorflow = "^2.18.0"
-tf-keras = "^2.18.0"
 numpy = ">=1.22.0"
 pandas = "^2.2.0"
 loguru = "^0.7.2"
-parameterized = "^0.9.0"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.6.0"
@@ -35,6 +44,7 @@ pytest-timeout = "^2.2.0"
 pytest-sugar = "^0.9.7"
 pytest-html = "^4.1.1"
 pytest-parallel = "^0.1.1"
+parameterized = "^0.9.0"
 psutil = "^5.9.0"
 ipykernel = "^6.29.3"
 pydot = "^2.0.0"
@@ -51,52 +61,12 @@ mkdocs-redirects = "^1.2.2"
 mike = ">=2.0.0"
 griffe = "^0.25.0"
 
-[tool.pytest.ini_options]
-python_paths = "kdp"
-testpaths = "test"
-# Enable maximum parallel execution for ALL tests with optimizations
-addopts = [
-    "-n", "auto",
-    "--strict-markers",
-    "--strict-config",
-    "--tb=short",
-    "--cov=kdp",
-    "--cov-report=term-missing:skip-covered",
-    "--cov-report=html:htmlcov",
-    "--cov-report=xml",
-    "--cov-fail-under=75",
-    "--durations=10",
-    "--timeout=180",
-    "--maxfail=10",
-    "--disable-warnings"
-]
-# Test markers for categorization
-markers = [
-    "unit: Unit tests that run quickly",
-    "integration: Integration tests that may take longer",
-    "slow: Tests that take a long time to run",
-    "fast: Tests that run very quickly",
-    "time_series: Time series specific tests",
-    "layers: Layer-specific tests",
-    "processor: Processor-specific tests",
-    "inference: Inference-related tests",
-    "performance: Performance benchmark tests"
-]
-# Minimum version requirements
-minversion = "6.0"
-# Test discovery patterns
-python_files = ["test_*.py", "*_test.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
-# Timeout for individual tests (5 minutes)
-timeout = 300
-# Parallel execution settings
-filterwarnings = [
-    "ignore::DeprecationWarning",
-    "ignore::PendingDeprecationWarning",
-    "ignore::UserWarning:tensorflow.*",
-    "ignore::FutureWarning:tensorflow.*"
-]
+# Pytest is configured by pytest.ini (plus the pytest-fast/parallel/ultrafast
+# variants). A [tool.pytest.ini_options] block used to live here too, but
+# pytest.ini takes precedence over pyproject.toml, so it never applied -- which
+# hid the fact that it set the invalid key `python_paths` (the option is
+# `pythonpath`) and omitted the `micro` and `smoke` markers that CI selects
+# under --strict-markers.
 
 [tool.coverage.run]
 branch = true
@@ -142,7 +112,7 @@ ensure_newline_before_comments = true
 # Matches the formatter default the codebase is written against.
 line-length = 88
 indent-width = 4
-target-version = "py311"
+target-version = "py310"
 extend-unsafe-fixes = ["D"]
 
 [tool.ruff.lint]
