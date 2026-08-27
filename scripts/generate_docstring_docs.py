@@ -4,6 +4,7 @@ Script to extract docstrings from the codebase and generate Markdown documentati
 This allows for automatic documentation generation directly from the code.
 """
 
+import importlib
 import os
 import re
 import inspect
@@ -15,7 +16,17 @@ project_root = str(Path(__file__).resolve().parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-# Import required modules
+MODULES_TO_DOCUMENT = [
+    "kdp.processor",
+    "kdp.dynamic_pipeline",
+    "kdp.features",
+    "kdp.layers.distribution_aware_encoder_layer",
+    "kdp.layers.distribution_transform_layer",
+    "kdp.layers.global_numerical_embedding_layer",
+    "kdp.layers.numerical_embedding_layer",
+    "kdp.layers.tabular_attention_layer",
+    "kdp.layers.multi_resolution_tabular_attention_layer",
+]
 
 
 def docstring_to_markdown(docstring):
@@ -212,18 +223,10 @@ def extract_docstrings():
     # Define output directory
     output_dir = "docs/generated"
 
-    # List of modules to document
-    modules = [
-        sys.modules["kdp.processor"],
-        sys.modules["kdp.dynamic_pipeline"],
-        sys.modules["kdp.features"],
-        sys.modules["kdp.layers.distribution_aware_encoder_layer"],
-        sys.modules["kdp.layers.distribution_transform_layer"],
-        sys.modules["kdp.layers.global_numerical_embedding_layer"],
-        sys.modules["kdp.layers.numerical_embedding_layer"],
-        sys.modules["kdp.layers.tabular_attention_layer"],
-        sys.modules["kdp.layers.multi_resolution_tabular_attention_layer"],
-    ]
+    # Import the modules rather than reading them out of sys.modules: nothing
+    # here imported them, so every lookup raised KeyError and this script --
+    # which `make generate_doc_content` runs -- could never complete.
+    modules = [importlib.import_module(name) for name in MODULES_TO_DOCUMENT]
 
     # Process each module
     for module in modules:
