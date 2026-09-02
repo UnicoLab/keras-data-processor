@@ -189,10 +189,20 @@ class ModelAdvisor:
 
         elif dist_type == "uniform":
             recommendation["preprocessing"].append("FLOAT_RESCALED")
-            recommendation["config"]["min"] = stats.get("min", 0)
-            recommendation["config"]["max"] = stats.get("max", 1)
+            # `FLOAT_RESCALED` multiplies by `scale`, which defaults to 1.0 --
+            # recommending the type while recording only `min` and `max`, which
+            # the feature does not read, produced a configuration that left the
+            # column untouched. The factor is derived from the observed range so
+            # the recommendation does what its note says.
+            low = float(stats.get("min", 0.0))
+            high = float(stats.get("max", 1.0))
+            span = high - low
+            recommendation["config"]["scale"] = (
+                round(1.0 / span, 10) if span > 0 else 1.0
+            )
             recommendation["notes"] = [
-                "Uniform distribution detected, rescaling recommended",
+                "Uniform distribution detected, rescaling by "
+                f"1/{span:g} to bring the range near unit width",
             ]
 
         elif dist_type == "heavy_tailed":
@@ -688,6 +698,9 @@ class ModelAdvisor:
                     code.append("        feature_type=FeatureType.FLOAT_NORMALIZED,")
                 elif "FLOAT_RESCALED" in preprocessing:
                     code.append("        feature_type=FeatureType.FLOAT_RESCALED,")
+                    # Without `scale` this feature type is the identity.
+                    if "scale" in config:
+                        code.append(f"        scale={config['scale']},")
                 elif "FLOAT_DISCRETIZED" in preprocessing:
                     code.append("        feature_type=FeatureType.FLOAT_DISCRETIZED,")
                 if config.get("use_embedding", False):

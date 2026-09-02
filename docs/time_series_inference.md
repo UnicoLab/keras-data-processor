@@ -215,14 +215,24 @@ formatted_data = formatter.prepare_inference_data(
 # Manual control of tensor conversion
 tf_data = formatter._convert_to_tensors(formatted_data)
 
-# Getting generated multi-step forecast
+# Build the frame to forecast into. This returns one row per future date with
+# the sort column filled in and every time series feature set to NaN -- it does
+# not predict anything. Fill each row in turn with your model's output so that
+# row becomes history for the next step.
 forecast_df = formatter.generate_multi_step_forecast(
     history=historical_data,
     future_dates=future_dates_list,
     group_id="Store_A",
-    steps=7  # Generate 7 steps ahead
+    steps=7  # Generate 7 placeholder rows
 )
 ```
+
+!!! note "KDP preprocesses; it does not forecast"
+    `generate_multi_step_forecast` prepares the rows and validates that the
+    history is long enough for the lookback each feature needs. Producing the
+    numbers is your model's job &mdash; see
+    `examples/time_series_inference.py`, which puts a small head on top of the
+    preprocessor to complete the loop.
 
 ## Example Code
 

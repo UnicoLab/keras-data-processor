@@ -443,7 +443,10 @@ class TimeSeriesInferenceFormatter(InferenceFormatter):
 
         # The history has to satisfy the same lookback the preprocessor needs,
         # otherwise the frame built here cannot be fed back through it.
-        self._check_history_requirements(self._convert_to_dict(history))
+        # The method is `_check_inference_data_sufficiency`; the name used here
+        # never existed, so this public entry point raised AttributeError on
+        # every call.
+        self._check_inference_data_sufficiency(self._convert_to_dict(history))
 
         # Get the first time series feature to determine sort and group columns
         feature_name = next(iter(self.time_series_features))
