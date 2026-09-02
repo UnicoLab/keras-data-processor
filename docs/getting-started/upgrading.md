@@ -29,6 +29,7 @@ configuration changes, but the numbers coming out of the preprocessor do.
 | Feature MoE in `concat` mode | Only `feature_moe_num_experts`, `feature_moe_expert_dim` and `feature_moe_routing` reached the layer; `feature_moe_hidden_dims`, `feature_moe_sparsity`, `feature_moe_freeze_experts` and `feature_moe_dropout` were dropped on the floor | Every option reaches the mixture, so a model that set them now has the network it asked for |
 | `feature_moe_use_residual` | Stored on the model and read nowhere, so the residual connection it names never existed | The original feature is added back onto its expert output wherever the widths match |
 | `feature_moe_freeze_experts` | Passed `training=False` to the experts, which only changes dropout and batch norm; the weights still received gradients | The experts are marked non-trainable, which is what the option says |
+| `feature_moe_sparsity` | The top-k mask that enforces it sat behind `routing_activation != "softmax"`, which `PreprocessingModel` never exposes, so every feature was routed densely to every expert | Each feature reaches at most `feature_moe_sparsity` experts, as documented. With the defaults (4 experts, sparsity 2) a learned-routing model produces different values than it did |
 
 !!! warning "Re-train downstream models"
     If you trained a model on top of KDP output from 1.11.x and any of the
@@ -100,6 +101,28 @@ rather than silently ignored.
 Note also that `BOUNDED`, `ORDINAL` and `POISSON` can be requested explicitly
 but are never returned by automatic detection: the detector scores no evidence
 for them.
+
+## 📊 `FeatureMoE.get_expert_assignments()`
+
+It returned an empty dictionary for learned routing -- the default -- so the
+documented way to see which expert handles which feature reported nothing. It
+answers for both routing modes now, as `{feature: {expert_index: weight}}`.
+Learned routing decides from the data, so pass it a batch:
+
+<div class="code-container">
+
+```python
+moe = preprocessor.model.get_layer("feature_moe_concat")
+
+moe.get_expert_assignments()            # predefined routing
+moe.get_expert_assignments(batch)       # learned routing
+```
+
+</div>
+
+Predefined routing used to return the map you passed in, unchanged. It now
+returns the same information as weights: `{"age": 0}` reads back as
+`{"age": {0: 1.0}}`.
 
 ## 🆕 Methods the documentation promised
 

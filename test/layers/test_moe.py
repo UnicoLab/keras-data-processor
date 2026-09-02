@@ -300,7 +300,13 @@ class TestFeatureMoE(unittest.TestCase):
             self.assertEqual(np.sum(assignment_matrix[i]), 1.0)
 
     def test_sparse_routing(self):
-        """Test sparse routing in FeatureMoE."""
+        """Each feature must reach exactly `sparsity` experts.
+
+        This test used to assert only the output shape, which is the same
+        whether routing is sparse or dense -- and it was dense: the top-k mask
+        sat behind `routing_activation != "softmax"`, a knob nothing exposes,
+        so `sparsity` had no effect at all.
+        """
         batch_size = 16
         num_features = 5
         feature_dim = 8
@@ -308,23 +314,45 @@ class TestFeatureMoE(unittest.TestCase):
         expert_dim = 32
         sparsity = 2  # Only use top 2 experts per feature
 
-        # Create inputs
         inputs = tf.random.normal(shape=(batch_size, num_features, feature_dim))
 
-        # Create MoE with sparse routing
         moe = FeatureMoE(
             num_experts=num_experts,
             expert_dim=expert_dim,
             routing="learned",
             sparsity=sparsity,
-            routing_activation="sparse",  # This should trigger sparse routing
+            feature_names=[f"feat{i}" for i in range(num_features)],
         )
 
-        # Forward pass
         outputs = moe(inputs, training=True)
-
-        # Check output shape
         self.assertEqual(outputs.shape, (batch_size, num_features, expert_dim))
+
+        for name, experts in moe.get_expert_assignments(inputs).items():
+            self.assertEqual(len(experts), sparsity, f"{name} used {experts}")
+            self.assertAlmostEqual(sum(experts.values()), 1.0, places=4)
+
+    def test_dense_routing_when_sparsity_covers_every_expert(self):
+        """`sparsity >= num_experts` means no expert is masked out."""
+        inputs = tf.random.normal(shape=(8, 3, 8))
+        moe = FeatureMoE(
+            num_experts=3,
+            expert_dim=16,
+            routing="learned",
+            sparsity=3,
+            feature_names=["a", "b", "c"],
+        )
+        moe(inputs)
+        for experts in moe.get_expert_assignments(inputs).values():
+            self.assertEqual(len(experts), 3)
+
+    def test_sparsity_changes_the_output(self):
+        """Routing to fewer experts has to produce a different tensor."""
+        inputs = tf.random.normal(shape=(8, 3, 8))
+        keras.utils.set_random_seed(0)
+        sparse = FeatureMoE(num_experts=4, expert_dim=16, sparsity=1)(inputs)
+        keras.utils.set_random_seed(0)
+        dense = FeatureMoE(num_experts=4, expert_dim=16, sparsity=4)(inputs)
+        self.assertFalse(np.allclose(sparse.numpy(), dense.numpy()))
 
     def test_expert_freeze(self):
         """Test freezing experts in FeatureMoE."""
@@ -350,8 +378,7 @@ class TestFeatureMoE(unittest.TestCase):
         self.assertEqual(outputs.shape, (batch_size, num_features, expert_dim))
 
     def test_get_expert_assignments(self):
-        """Test getting expert assignments from FeatureMoE."""
-        # For predefined routing
+        """Predefined assignments come back as per-expert weights."""
         feature_names = ["feat1", "feat2", "feat3"]
         assignments = {"feat1": 0, "feat2": 1, "feat3": 2}
 
@@ -363,8 +390,57 @@ class TestFeatureMoE(unittest.TestCase):
             predefined_assignments=assignments,
         )
 
-        retrieved_assignments = moe.get_expert_assignments()
-        self.assertEqual(retrieved_assignments, assignments)
+        self.assertEqual(
+            moe.get_expert_assignments(),
+            {"feat1": {0: 1.0}, "feat2": {1: 1.0}, "feat3": {2: 1.0}},
+        )
+
+    def test_get_expert_assignments_keeps_explicit_weights(self):
+        """A feature split across experts keeps the split it was given."""
+        moe = FeatureMoE(
+            num_experts=2,
+            expert_dim=16,
+            routing="predefined",
+            feature_names=["feat1", "feat2"],
+            predefined_assignments={"feat1": {0: 0.7, 1: 0.3}, "feat2": 1},
+        )
+        self.assertEqual(
+            moe.get_expert_assignments(),
+            {"feat1": {0: 0.7, 1: 0.3}, "feat2": {1: 1.0}},
+        )
+
+    def test_learned_assignments_need_a_batch(self):
+        """This returned an empty dict, so the documented plot had no data."""
+        moe = FeatureMoE(num_experts=3, expert_dim=16, routing="learned")
+        with self.assertRaises(ValueError) as caught:
+            moe.get_expert_assignments()
+        self.assertIn("batch", str(caught.exception))
+
+    def test_learned_assignments_are_reported_for_every_feature(self):
+        """The router decides from the data, so a batch answers the question."""
+        inputs = tf.random.normal(shape=(8, 3, 8))
+        moe = FeatureMoE(
+            num_experts=3,
+            expert_dim=16,
+            routing="learned",
+            sparsity=3,
+            feature_names=["age", "income", "city"],
+        )
+        moe(inputs)
+        reported = moe.get_expert_assignments(inputs)
+        self.assertEqual(sorted(reported), ["age", "city", "income"])
+        for experts in reported.values():
+            self.assertAlmostEqual(sum(experts.values()), 1.0, places=4)
+
+    def test_unnamed_features_get_positional_names(self):
+        """The layer can be built without names; the report still works."""
+        inputs = tf.random.normal(shape=(4, 2, 8))
+        moe = FeatureMoE(num_experts=2, expert_dim=16, routing="learned", sparsity=2)
+        moe(inputs)
+        self.assertEqual(
+            sorted(moe.get_expert_assignments(inputs)),
+            ["feature_0", "feature_1"],
+        )
 
     def test_moe_config(self):
         """Test FeatureMoE configuration and serialization."""

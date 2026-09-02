@@ -198,15 +198,29 @@ Get layer configuration for serialization.
 ## get_expert_assignments
 
 ```python
-get_expert_assignments(self) -> dict
+get_expert_assignments(self, inputs=None) -> dict
 ```
 
-Get the current expert assignments for each feature.
+Report how much of each feature each expert handles.
 
-For predefined routing, this returns the predefined_assignments dictionary.
-For learned routing, this calculates the current assignments based on router weights.
+Learned routing used to return an empty dictionary here, so the
+documented way to see which expert handles which feature reported
+nothing at all for the default routing mode. The router decides from
+the feature representations rather than from its weights alone, so a
+batch is needed to answer the question.
 
-### Returns- **dict**: Feature assignments to experts
+### Parameters- **inputs**: A batch shaped like the one `call` receives,
+        `[batch_size, num_features, feature_dim]`. Required for learned
+        routing; ignored for predefined routing, whose assignments are
+        fixed.
+
+### Returns
+- **dict**: `{feature_name: {expert_index: weight}}`, keeping only the
+    experts with a non-zero share. Feature names fall back to
+    `feature_0`, `feature_1`, ... when the layer was built without them.
+
+### Raises
+- **ValueError**: If learned routing is in use and no batch is given.
 
 
 ---

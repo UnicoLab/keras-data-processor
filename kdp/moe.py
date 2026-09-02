@@ -426,10 +426,13 @@ class FeatureMoE(keras.layers.Layer):
             # Get logits from router
             routing_logits = self.router(feature_reprs)  # [num_features, num_experts]
 
-            # Apply activation
-            if self.routing_activation == "softmax":
-                weights = tf.nn.softmax(routing_logits, axis=-1)
-            else:  # Implement sparse routing
+            # `sparsity` names how many experts each feature may use, and the
+            # top-k mask below is what enforces it. It used to sit behind
+            # `routing_activation != "softmax"`, a knob `PreprocessingModel`
+            # never exposed, so the branch was unreachable and the documented
+            # "use only top k experts" never happened: every feature was routed
+            # densely to all of them.
+            if self.sparsity < self.num_experts:
                 # Sort logits and keep only top-k
                 top_logits, top_indices = tf.nn.top_k(
                     routing_logits,
@@ -438,11 +441,11 @@ class FeatureMoE(keras.layers.Layer):
                 )
 
                 # Create a mask for the top-k logits
-                batch_size = tf.shape(feature_reprs)[0]
+                num_features = tf.shape(feature_reprs)[0]
                 mask = tf.scatter_nd(
                     indices=tf.stack(
                         [
-                            tf.repeat(tf.range(batch_size), self.sparsity),
+                            tf.repeat(tf.range(num_features), self.sparsity),
                             tf.reshape(top_indices, [-1]),
                         ],
                         axis=1,
@@ -454,6 +457,8 @@ class FeatureMoE(keras.layers.Layer):
                 # Apply mask and softmax
                 masked_logits = routing_logits * mask - 1e9 * (1.0 - mask)
                 weights = tf.nn.softmax(masked_logits, axis=-1)
+            else:
+                weights = tf.nn.softmax(routing_logits, axis=-1)
 
             # Expand dims for broadcasting
             return tf.expand_dims(weights, 0)  # [1, num_features, num_experts]
@@ -510,27 +515,58 @@ class FeatureMoE(keras.layers.Layer):
             axis=-2,
         )  # [batch_size, num_features, expert_dim]
 
-    def get_expert_assignments(self) -> dict:
-        """Get the current expert assignments for each feature.
+    def get_expert_assignments(self, inputs=None) -> dict:
+        """Report how much of each feature each expert handles.
 
-        For predefined routing, this returns the predefined_assignments dictionary.
-        For learned routing, this calculates the current assignments based on router weights.
+        Learned routing used to return an empty dictionary here, so the
+        documented way to see which expert handles which feature reported
+        nothing at all for the default routing mode. The router decides from
+        the feature representations rather than from its weights alone, so a
+        batch is needed to answer the question.
+
+        Args:
+            inputs: A batch shaped like the one `call` receives,
+                `[batch_size, num_features, feature_dim]`. Required for learned
+                routing; ignored for predefined routing, whose assignments are
+                fixed.
 
         Returns:
-            dict: Feature assignments to experts
+            dict: `{feature_name: {expert_index: weight}}`, keeping only the
+            experts with a non-zero share. Feature names fall back to
+            `feature_0`, `feature_1`, ... when the layer was built without them.
+
+        Raises:
+            ValueError: If learned routing is in use and no batch is given.
         """
         if self.routing == "predefined":
-            return self.predefined_assignments
-        elif self.routing == "learned":
-            # Extract feature to expert assignments from learned router
-            # Get the router weights and determine dominant expert(s) for each feature
-            # Commenting out unused variable
-            # router_weights = self.router.kernel  # [feature_dim, num_experts]
+            assignments = {}
+            for name, target in (self.predefined_assignments or {}).items():
+                if isinstance(target, dict):
+                    assignments[name] = {
+                        int(index): float(weight) for index, weight in target.items()
+                    }
+                else:
+                    assignments[name] = {int(target): 1.0}
+            return assignments
 
-            # For now, return empty dict - this is a placeholder for learned routing
-            return {}
-        else:
-            return {}
+        if inputs is None:
+            raise ValueError(
+                "Learned routing decides the assignments from the data, so a "
+                "batch of stacked features is needed to report them. Pass the "
+                "same tensor you would pass to the layer.",
+            )
+
+        weights = self._compute_routing_weights(inputs, training=False)[0]
+        rows = weights.numpy()
+        names = self.feature_names or [f"feature_{i}" for i in range(len(rows))]
+        return {
+            name: {
+                index: float(weight)
+                for index, weight in enumerate(row)
+                if float(weight) > 0
+            }
+            for name, row in zip(names, rows, strict=False)
+        }
 
     def get_config(self) -> dict:
         """Get layer configuration for serialization."""

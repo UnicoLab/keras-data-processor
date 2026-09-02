@@ -86,7 +86,7 @@ model = result["model"]
       </tr>
       <tr>
         <td><code>feature_moe_sparsity</code></td>
-        <td>Use only top k experts</td>
+        <td>How many experts each feature may use. Setting it to <code>feature_moe_num_experts</code> routes densely.</td>
         <td>2</td>
         <td>1-3 (lower = faster, higher = more accurate)</td>
       </tr>
@@ -239,6 +239,28 @@ result = preprocessor.build_preprocessor()
     different width pass through the expert output alone &mdash; no error, no
     silent reshape.
 
+### Reading the routing back
+
+`get_expert_assignments()` on the mixture layer reports, per feature, how much
+of it each expert handles. Predefined routing answers from the map you gave it;
+learned routing decides from the data, so hand it a batch.
+
+<div class="code-container">
+
+```python
+moe = preprocessor.model.get_layer("feature_moe_concat")
+
+# Predefined routing: the map you supplied, normalised to weights.
+print(moe.get_expert_assignments())
+# {"age": {0: 1.0}, "income": {1: 1.0}, ...}
+```
+
+</div>
+
+With learned routing, pass the stacked features the layer sees. Each row keeps
+only the experts with a non-zero share, so a run with `feature_moe_sparsity=2`
+lists two experts per feature and their weights sum to one.
+
 ## 💡 Pro Tips for Feature MoE
 
 <div class="pro-tips-grid">
@@ -249,7 +271,7 @@ result = preprocessor.build_preprocessor()
 
   <div class="pro-tip-card">
     <h3>Visualize Expert Assignments</h3>
-    <p>Examine which experts handle which features by plotting the assignments as a heatmap to understand your model's internal decisions.</p>
+    <p>Read the routing off the layer with <code>get_expert_assignments()</code> and plot it as a heatmap. See the section below for the call.</p>
   </div>
 
   <div class="pro-tip-card">
