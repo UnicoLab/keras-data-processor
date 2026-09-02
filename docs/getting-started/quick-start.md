@@ -106,9 +106,9 @@ preprocessor = PreprocessingModel(
 
     # Power features - each adds capability
     use_distribution_aware=True,        # Smart distribution handling
-    use_numerical_embedding=True,       # Neural embeddings for numbers
-    tabular_attention=True,             # Learn feature relationships
-    feature_selection_placement="all",  # Automatic feature importance
+    use_advanced_numerical_embedding=True,       # Neural embeddings for numbers
+    tabular_attention=True,                      # Learn feature relationships
+    feature_selection_placement="all_features",  # Automatic feature importance
 
     # Add transformers for state-of-the-art performance
     transfo_nr_blocks=2,                # Two transformer blocks
@@ -169,8 +169,8 @@ preprocessor = PreprocessingModel(
         "sector": FeatureType.STRING_CATEGORICAL,
         "date": FeatureType.DATE
     },
-    use_numerical_embedding=True,        # Neural embeddings for price data
-    numerical_embedding_dim=32,          # Larger embeddings for complex patterns
+    use_advanced_numerical_embedding=True,  # Neural embeddings for price data
+    embedding_dim=32,                       # Larger embeddings for complex patterns
     tabular_attention_heads=4            # Multiple attention heads
 )
 ```
@@ -185,18 +185,30 @@ preprocessor = PreprocessingModel(
   <div class="code-container">
 
 ```python
-# Save your preprocessor after building
+import tensorflow as tf
+
+# Save your preprocessor after building. This writes model.keras and
+# metadata.json into the directory you name.
+preprocessor.build_preprocessor()
 preprocessor.save_model("customer_churn_preprocessor")
 
 # --- Later in production ---
 
-# Load your preprocessor
 from kdp import PreprocessingModel
-preprocessor = PreprocessingModel.load_model("customer_churn_preprocessor")
 
-# Process new data
-new_customer = {"age": 35, "income": 75000, ...}
-features = preprocessor(new_customer)
+# load_model returns the Keras model AND the metadata it was saved with
+loaded_model, metadata = PreprocessingModel.load_model("customer_churn_preprocessor")
+
+# metadata carries features_specs, features_stats, output_mode and use_feature_moe
+print(metadata["output_mode"])
+
+# Process new data. Every feature is a column, so each value is a batch of rows.
+new_customer = {
+    "age": tf.constant([[35.0]]),
+    "income": tf.constant([[75000.0]]),
+    "city": tf.constant([["paris"]]),
+}
+features = loaded_model(new_customer)
 
 # Use with your prediction model
 prediction = my_model(features)
@@ -241,7 +253,7 @@ advanced = PreprocessingModel(
 # For large datasets
 preprocessor = PreprocessingModel(
     features_specs=features,
-    enable_caching=True,        # Speed up repeated processing
+    use_caching=True,           # Speed up repeated processing
     batch_size=10000            # Process in manageable chunks
 )
 ```

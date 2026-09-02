@@ -177,7 +177,7 @@ The diagram shows how tabular attention transforms features through a multi-head
 
 ```python
 from kdp import PreprocessingModel, FeatureType
-from kdp.enums import TabularAttentionPlacementOptions
+from kdp import TabularAttentionPlacementOptions
 
 features_specs = {
     "customer_age": FeatureType.FLOAT_NORMALIZED,
@@ -203,7 +203,7 @@ preprocessor = PreprocessingModel(
 
 ```python
 from kdp import PreprocessingModel, FeatureType
-from kdp.enums import TabularAttentionPlacementOptions
+from kdp import TabularAttentionPlacementOptions
 
 features_specs = {
     # Numerical features

@@ -1278,7 +1278,14 @@ class PreprocessingModel:
                     name=f"text_preprocessor_{feature_name}",
                     **_feature.kwargs,
                 )
-            if "output_sequence_length" not in _feature.kwargs:
+            # `output_sequence_length` only applies to the "int" output mode;
+            # TextVectorization rejects it outright for multi_hot, count and
+            # tf_idf, so defaulting it unconditionally made those modes
+            # unreachable.
+            if (
+                _feature.kwargs.get("output_mode", "int") == "int"
+                and "output_sequence_length" not in _feature.kwargs
+            ):
                 _feature.kwargs["output_sequence_length"] = 35
 
             # adding text vectorization

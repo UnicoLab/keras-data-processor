@@ -39,7 +39,7 @@ preprocessor = PreprocessingModel(
     feature_selection_placement="all",  # Remove noise automatically
 
     # Performance optimizations
-    enable_caching=True,               # Speed up repeated processing
+    use_caching=True,               # Speed up repeated processing
     batch_size=10000                   # Process in manageable chunks
 )
 
@@ -98,7 +98,7 @@ preprocessor = PreprocessingModel(
 
     # Memory optimization
     batch_size=50000,                         # Adjust based on available RAM
-    enable_caching=True,                      # Cache intermediate results
+    use_caching=True,                      # Cache intermediate results
     cache_location="memory",                  # Options: "memory", "disk"
 
     # Computational efficiency
@@ -134,7 +134,7 @@ preprocessor = PreprocessingModel(
 
     # Performance optimizations
     feature_selection_placement="all",       # Focus on relevant signals
-    enable_caching=True,
+    use_caching=True,
     batch_size=5000                          # Smaller batches for complex processing
 )
 ```
@@ -162,7 +162,7 @@ preprocessor = PreprocessingModel(
     use_feature_moe=True,                    # Mixture of Experts for different features
 
     # Performance optimizations
-    enable_caching=True,
+    use_caching=True,
     use_mixed_precision=True                 # Faster computation with mixed precision
 )
 ```
@@ -249,7 +249,7 @@ plt.show()
    basic = PreprocessingModel(
        features_specs=features,
        use_distribution_aware=True,
-       enable_caching=True
+       use_caching=True
    )
 
    # Step 2: Add interaction learning
@@ -257,7 +257,7 @@ plt.show()
        features_specs=features,
        use_distribution_aware=True,
        tabular_attention=True,
-       enable_caching=True
+       use_caching=True
    )
 
    # Step 3: Full optimization
@@ -268,7 +268,7 @@ plt.show()
        transfo_nr_blocks=2,
        feature_selection_placement="all",
        use_mixed_precision=True,
-       enable_caching=True
+       use_caching=True
    )
 
    # Compare metrics at each stage

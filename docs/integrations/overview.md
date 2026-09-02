@@ -293,7 +293,7 @@ tf.saved_model.save(
    # Make preprocessing faster in production
    preprocessor = PreprocessingModel(
        features_specs=features,
-       enable_caching=True,        # Cache intermediate results
+       use_caching=True,        # Cache intermediate results
        batch_size=100,             # Process in batches
        output_dtypes="float32"     # Use smaller precision if possible
    )

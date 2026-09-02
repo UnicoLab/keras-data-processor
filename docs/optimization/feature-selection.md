@@ -142,8 +142,8 @@ preprocessor = PreprocessingModel(
     feature_selection_dropout=0.2,
 
     # Medical applications benefit from careful regularization
-    use_numerical_embedding=True,
-    numerical_embedding_dim=32
+    use_advanced_numerical_embedding=True,
+    embedding_dim=32
 )
 ```
 
@@ -182,7 +182,7 @@ top_features = preprocessor.get_top_features(n=10)
    preprocessor = PreprocessingModel(
        features_specs=many_features,
        feature_selection_placement="numeric",  # Start with just numerical
-       enable_caching=True  # Speed up repeated processing
+       use_caching=True  # Speed up repeated processing
    )
    ```
 

@@ -100,7 +100,7 @@ preprocessor = PreprocessingModel(
     feature_selection_units=32,
 
     # Enable caching for better performance
-    enable_caching=True
+    use_caching=True
 )
 
 # Build the preprocessor
@@ -186,8 +186,8 @@ financial_preprocessor = PreprocessingModel(
     features_specs=features,
 
     # Enable advanced numerical embeddings for better pattern detection
-    use_numerical_embedding=True,
-    numerical_embedding_dim=32,
+    use_advanced_numerical_embedding=True,
+    embedding_dim=32,
 
     # Enable distribution-aware encoding for market data
     use_distribution_aware=True,

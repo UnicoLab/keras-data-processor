@@ -92,9 +92,9 @@ features_specs = {
 preprocessor = PreprocessingModel(
     path_data="data/my_data.csv",
     features_specs=features_specs,
-    use_numerical_embedding=True,  # Enable numerical embeddings
-    numerical_embedding_dim=8,     # Size of each feature's embedding
-    numerical_num_bins=10          # Number of bins for discretization
+    use_advanced_numerical_embedding=True,  # Enable numerical embeddings
+    embedding_dim=8,     # Size of each feature's embedding
+    num_bins=10          # Number of bins for discretization
 )
 ```
 
@@ -111,7 +111,7 @@ preprocessor = PreprocessingModel(
 ```python
 from kdp import PreprocessingModel
 from kdp.features import NumericalFeature
-from kdp.enums import FeatureType
+from kdp import FeatureType
 
 # Define numerical features with customized embeddings
 features_specs = {
@@ -139,10 +139,10 @@ features_specs = {
 preprocessor = PreprocessingModel(
     path_data="data/my_data.csv",
     features_specs=features_specs,
-    use_numerical_embedding=True,
-    numerical_mlp_hidden_units=16,   # Hidden layer size for continuous branch
-    numerical_dropout_rate=0.1,      # Regularization
-    numerical_use_batch_norm=True    # Normalize activations
+    use_advanced_numerical_embedding=True,
+    mlp_hidden_units=16,   # Hidden layer size for continuous branch
+    dropout_rate=0.1,      # Regularization
+    use_batch_norm=True    # Normalize activations
 )
 ```
 
@@ -211,14 +211,14 @@ This approach is ideal for:
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `use_numerical_embedding` | bool | False | Enable numerical embeddings |
-| `numerical_embedding_dim` | int | 8 | Size of each feature's embedding |
-| `numerical_mlp_hidden_units` | int | 16 | Hidden layer size for continuous branch |
-| `numerical_num_bins` | int | 10 | Number of bins for discretization |
+| `use_advanced_numerical_embedding` | bool | False | Enable numerical embeddings |
+| `embedding_dim` | int | 8 | Size of each feature's embedding |
+| `mlp_hidden_units` | int | 16 | Hidden layer size for continuous branch |
+| `num_bins` | int | 10 | Number of bins for discretization |
 | `numerical_init_min` | float/list | -3.0 | Initial minimum for scaling |
 | `numerical_init_max` | float/list | 3.0 | Initial maximum for scaling |
-| `numerical_dropout_rate` | float | 0.1 | Dropout rate for regularization |
-| `numerical_use_batch_norm` | bool | True | Apply batch normalization |
+| `dropout_rate` | float | 0.1 | Dropout rate for regularization |
+| `use_batch_norm` | bool | True | Apply batch normalization |
 
 ### Global Embeddings
 
@@ -259,7 +259,7 @@ This approach is ideal for:
 ```python
 from kdp import PreprocessingModel
 from kdp.features import NumericalFeature
-from kdp.enums import FeatureType
+from kdp import FeatureType
 
 # Define financial features with domain knowledge
 features_specs = {
@@ -305,10 +305,10 @@ features_specs = {
 preprocessor = PreprocessingModel(
     path_data="data/financial_data.csv",
     features_specs=features_specs,
-    use_numerical_embedding=True,
-    numerical_mlp_hidden_units=16,
-    numerical_dropout_rate=0.2,  # Higher dropout for financial data
-    numerical_use_batch_norm=True
+    use_advanced_numerical_embedding=True,
+    mlp_hidden_units=16,
+    dropout_rate=0.2,  # Higher dropout for financial data
+    use_batch_norm=True
 )
 ```
 
@@ -317,7 +317,7 @@ preprocessor = PreprocessingModel(
 ```python
 from kdp import PreprocessingModel
 from kdp.features import NumericalFeature
-from kdp.enums import FeatureType
+from kdp import FeatureType
 
 # Define patient features
 features_specs = {
