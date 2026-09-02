@@ -7,6 +7,17 @@
   </div>
 </div>
 
+!!! note "Output width"
+    With the default placements the model's output is
+    `tabular_attention_dim` columns wide &mdash; attention projects every
+    feature into one shared space rather than concatenating them.
+    `multi_resolution` runs a numeric and a categorical branch and concatenates
+    the two, giving `2 x tabular_attention_dim`.
+
+    `tabular_attention_embedding_dim` sizes the categorical embedding inside
+    the multi-resolution branch, so it changes the parameter count but not the
+    output width.
+
 ## 📋 Overview
 
 <div class="overview-card">
