@@ -322,8 +322,12 @@ class DatasetStatistics:
         self.date_stats = {col: DateAccumulator() for col in self.date_features}
         self.time_series_stats = {}
 
-    def _get_csv_file_pattern(self, path) -> str:
+    @staticmethod
+    def _get_csv_file_pattern(path) -> str:
         """Get the csv file pattern that will handle directories and file paths.
+
+        Nothing here depends on the instance, and `PreprocessingModel` needs the
+        same resolution to adapt a text vectorizer on the data.
 
         Args:
             path (str): Path to the csv file (can be a directory or a file)

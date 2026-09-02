@@ -826,8 +826,16 @@ class PreprocessingModel:
                     stats,
                 )
 
-        # Check for advanced numerical embedding.
-        if self.use_advanced_numerical_embedding:
+        # Check for advanced numerical embedding. `NumericalFeature` carries a
+        # `use_embedding` flag with an `embedding_dim` beside it, and nothing
+        # read it: a feature asking for its own embedding was handed straight
+        # through at its original width. It turns the embedding on for that one
+        # feature now, as the model-level switch does for all of them.
+        if self.use_advanced_numerical_embedding or getattr(
+            _feature,
+            "use_embedding",
+            False,
+        ):
             self._add_advanced_numerical_embedding(
                 preprocessor,
                 feature_name,
@@ -1256,6 +1264,46 @@ class PreprocessingModel:
                 name=f"cast_to_float_{feature_name}",
             )
 
+    def _adapted_text_vectorizer(
+        self,
+        feature_name: str,
+        **kwargs: Any,
+    ) -> keras.layers.TextVectorization:
+        """Build a `TextVectorization` adapted on one column of the data.
+
+        Args:
+            feature_name: The column to read.
+            **kwargs: Passed to `TextVectorization`.
+
+        Returns:
+            A layer whose vocabulary and IDF weights come from the data.
+
+        Raises:
+            ValueError: If there is no data to adapt on.
+        """
+        if not self.path_data:
+            raise ValueError(
+                f"{feature_name}: output_mode='tf_idf' needs the data to compute "
+                "IDF weights from, so `path_data` is required.",
+            )
+
+        vectorizer = keras.layers.TextVectorization(**kwargs)
+        pattern = DatasetStatistics._get_csv_file_pattern(path=self.path_data)
+        dataset = tf.data.experimental.make_csv_dataset(
+            file_pattern=pattern,
+            num_epochs=1,
+            shuffle=False,
+            ignore_errors=True,
+            batch_size=self.batch_size,
+            select_columns=[feature_name],
+        )
+        vectorizer.adapt(dataset.map(lambda batch: batch[feature_name]))
+        logger.info(
+            f"Adapted the text vectorizer for {feature_name} on the data; "
+            f"vocabulary size {len(vectorizer.get_vocabulary())}",
+        )
+        return vectorizer
+
     @_monitor_performance
     def _add_pipeline_text(self, feature_name: str, input_layer, stats: dict) -> None:
         """Add a text preprocessing step to the pipeline.
@@ -1303,13 +1351,31 @@ class PreprocessingModel:
             ):
                 _feature.kwargs["output_sequence_length"] = 35
 
-            # adding text vectorization
-            preprocessor.add_processing_step(
-                layer_class="TextVectorization",
-                name=f"text_vactorizer_{feature_name}",
-                vocabulary=_vocab,
-                **_feature.kwargs,
-            )
+            # `tf_idf` weights every token by how rare it is across documents,
+            # and Keras refuses a vocabulary in that mode without the matching
+            # `idf_weights`, which KDP's statistics do not collect -- so the
+            # documented, exported `TF_IDF` output mode could not build at all.
+            # Letting the layer adapt on the column computes both the vocabulary
+            # and the weights, from the same data the statistics came from.
+            if _feature.kwargs.get("output_mode") == TextVectorizerOutputOptions.TF_IDF:
+                vectorizer = self._adapted_text_vectorizer(
+                    feature_name=feature_name,
+                    name=f"text_vactorizer_{feature_name}",
+                    **_feature.kwargs,
+                )
+                preprocessor.add_processing_step(
+                    layer_creator=lambda _vectorizer=vectorizer, **kwargs: _vectorizer,
+                    layer_class="TextVectorization",
+                    name=f"text_vactorizer_{feature_name}",
+                )
+            else:
+                # adding text vectorization
+                preprocessor.add_processing_step(
+                    layer_class="TextVectorization",
+                    name=f"text_vactorizer_{feature_name}",
+                    vocabulary=_vocab,
+                    **_feature.kwargs,
+                )
             # for concatenation we need the same format
             # so the cast to float 32 is necessary
             preprocessor.add_processing_step(
@@ -1534,19 +1600,29 @@ class PreprocessingModel:
                 feature_name=feature_name,
             )
         else:
-            # Default time series processing
-            # Cast to float32 for concatenation compatibility
-            preprocessor.add_processing_step(
-                layer_creator=PreprocessorLayerFactory.cast_to_float32_layer,
-                name=f"cast_to_float_{feature_name}",
+            # A calendar feature arrives as date strings, so the numeric front of
+            # this pipeline has to be skipped: casting a date to float raised
+            # "Cast string to float is not supported" and made the option
+            # unusable. `CalendarFeatureLayer` returns numbers, so the cast
+            # happens after it instead.
+            reads_dates = getattr(feature, "calendar_feature_config", None) and (
+                getattr(feature, "dtype", None) == tf.string
             )
 
-            # Add normalization if specified
-            if feature.kwargs.get("normalize", True):
+            if not reads_dates:
+                # Default time series processing
+                # Cast to float32 for concatenation compatibility
                 preprocessor.add_processing_step(
-                    layer_class="Normalization",
-                    name=f"norm_{feature_name}",
+                    layer_creator=PreprocessorLayerFactory.cast_to_float32_layer,
+                    name=f"cast_to_float_{feature_name}",
                 )
+
+                # Add normalization if specified
+                if feature.kwargs.get("normalize", True):
+                    preprocessor.add_processing_step(
+                        layer_class="Normalization",
+                        name=f"norm_{feature_name}",
+                    )
 
             # Add time series transformation layers
             if hasattr(feature, "build_layers"):
@@ -1562,6 +1638,14 @@ class PreprocessingModel:
                     logger.info(
                         f"Adding time series layer: {layer_name} to the pipeline",
                     )
+
+            if reads_dates:
+                # The calendar layer turns the dates into numbers; everything
+                # downstream concatenates floats.
+                preprocessor.add_processing_step(
+                    layer_creator=PreprocessorLayerFactory.cast_to_float32_layer,
+                    name=f"cast_to_float_{feature_name}",
+                )
 
         # Process the feature
         _output_pipeline = preprocessor.chain(input_layer=input_layer)

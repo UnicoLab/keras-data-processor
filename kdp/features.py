@@ -482,6 +482,34 @@ class TimeSeriesFeature(Feature):
         self.wavelet_transform_config = wavelet_transform_config
         self.tsfresh_feature_config = tsfresh_feature_config
         self.calendar_feature_config = calendar_feature_config
+
+        # Calendar features are read from date *strings*, so a feature that asks
+        # for them takes a string column. It used to be declared float like
+        # every other time series feature, and the cast in front of the pipeline
+        # failed with "Cast string to float is not supported" -- the option
+        # could not be used at all. The numeric configs read a number from the
+        # same column, so they cannot be combined with it.
+        if calendar_feature_config:
+            numeric_configs = {
+                "lag_config": lag_config,
+                "rolling_stats_config": rolling_stats_config,
+                "differencing_config": differencing_config,
+                "moving_average_config": moving_average_config,
+                "wavelet_transform_config": wavelet_transform_config,
+                "tsfresh_feature_config": tsfresh_feature_config,
+            }
+            conflicting = sorted(
+                name for name, value in numeric_configs.items() if value
+            )
+            if conflicting:
+                raise ValueError(
+                    f"{name}: calendar_feature_config reads dates from a string "
+                    f"column, so it cannot be combined with {conflicting}, which "
+                    "read numbers from the same column. Declare them as separate "
+                    "features.",
+                )
+            self.dtype = tf.string
+
         self.sequence_length = sequence_length
         self.sort_by = sort_by
         self.sort_ascending = sort_ascending

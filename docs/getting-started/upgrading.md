@@ -112,6 +112,58 @@ than a `(10, 8)` block.
     when you build the affected combination, and the case is kept as a failing
     test rather than quietly skipped.
 
+## 🔤 `output_mode="tf_idf"` works
+
+TF-IDF weights each token by how rare it is across documents, and Keras refuses
+a vocabulary in that mode without matching `idf_weights` -- which KDP's
+statistics never collected. The documented, exported `TF_IDF` mode therefore
+could not build at all. The vectorizer is adapted on the column now, which
+computes the vocabulary and the weights together from the same data the
+statistics came from.
+
+## 🧮 `NumericalFeature(use_embedding=True)` is honoured
+
+The flag was stored on the feature and read nowhere, so a feature asking for its
+own embedding came through at its original width. It now turns the embedding on
+for that feature alone, the way `use_advanced_numerical_embedding` does for all
+of them:
+
+<div class="code-container">
+
+```python
+from kdp.features import FeatureType, NumericalFeature
+
+NumericalFeature(
+    name="revenue",
+    feature_type=FeatureType.FLOAT_NORMALIZED,
+    use_embedding=True,
+    embedding_dim=6,      # this feature is six columns wide now, not one
+)
+```
+
+</div>
+
+## 📅 Calendar features read dates, not floats
+
+`calendar_feature_config` on a `TimeSeriesFeature` failed with "Cast string to
+float is not supported": the pipeline declared the column float and cast it
+before the calendar layer ever saw it. Such a feature declares a string column
+now and skips the numeric front of the pipeline. Because one column cannot be
+both a date and a number, combining it with `lag_config`,
+`rolling_stats_config`, `differencing_config`, `moving_average_config`,
+`wavelet_transform_config` or `tsfresh_feature_config` raises -- declare those
+as separate features.
+
+## 〰️ `wavelet_transform_config` needs a window
+
+The wavelet layer computed `min(window, time_steps // 2)`, which is `0` for the
+one-column input a time series feature hands it, and the empty coefficients
+failed to broadcast. It also wrote the window sizes back onto itself, so the
+first batch pinned them for good. Both are fixed, and a wavelet with only one
+step to work on now raises instead of emitting a constant column of zeros:
+combine it with `lag_config`, `rolling_stats_config` or `moving_average_config`
+so there is a window to decompose.
+
 ## 🚫 Configurations that are now rejected
 
 Two configurations used to be accepted and then silently do the wrong thing.

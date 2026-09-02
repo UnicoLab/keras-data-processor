@@ -111,9 +111,17 @@ Add a weight variable to the layer.
 build(self, input_shape) -> None
 ```
 
-Build the layer's weights for a given input shape.
+Check the input carries enough time steps to decompose.
 
-### Parameters- **input_shape**: Shape of the input tensor.
+### Parameters- **input_shape**: Shape of the input tensor. Axis 1 is the time axis,
+        whether the input is `(batch, time)` or
+        `(batch, time, features)`.
+
+### Raises
+- **ValueError**: If there is only one step to decompose. A wavelet needs
+        a window of history; on one step every detail coefficient is
+        zero, so the layer used to emit a constant column of zeros --
+        an input that reaches the model carrying no information at all.
 
 
 ---

@@ -54,11 +54,30 @@ class WaveletTransformLayer(Layer):
             )
 
     def build(self, input_shape) -> None:
-        """Build the layer's weights for a given input shape.
+        """Check the input carries enough time steps to decompose.
 
         Args:
-            input_shape: Shape of the input tensor.
+            input_shape: Shape of the input tensor. Axis 1 is the time axis,
+                whether the input is `(batch, time)` or
+                `(batch, time, features)`.
+
+        Raises:
+            ValueError: If there is only one step to decompose. A wavelet needs
+                a window of history; on one step every detail coefficient is
+                zero, so the layer used to emit a constant column of zeros --
+                an input that reaches the model carrying no information at all.
         """
+        time_steps = tuple(input_shape)[1] if len(input_shape) > 1 else None
+        if time_steps is not None and time_steps < 2:
+            raise ValueError(
+                "WaveletTransformLayer needs at least two time steps on axis 1 "
+                f"and received {time_steps}. In a `TimeSeriesFeature` this means "
+                "combining `wavelet_transform_config` with a config that widens "
+                "the feature first -- `lag_config`, `rolling_stats_config` or "
+                "`moving_average_config` -- so the wavelet has a window to "
+                "decompose. Used directly, pass `(batch, time_steps)` or "
+                "`(batch, time_steps, features)`.",
+            )
         super().build(input_shape)
 
     def call(self, inputs, training=None) -> tf.Tensor:
@@ -92,12 +111,22 @@ class WaveletTransformLayer(Layer):
                 batch_size, time_steps, n_features = inputs_np.shape
                 # multi_feature = True
 
-            # Determine window sizes for each level if not provided
+            # Determine window sizes for each level if not provided. These used
+            # to be written back onto `self`, so the first batch permanently
+            # pinned them -- and `min(w, time_steps // 2)` produced a window of
+            # 0 for any series of one or two steps, which is the shape KDP's
+            # row-wise pipeline feeds. A zero-length window makes the detail
+            # coefficients empty and the arithmetic below fails to broadcast.
             if self.window_sizes is None:
                 # Use powers of 2 for window sizes: 2, 4, 8, 16, ...
-                self.window_sizes = [2 ** (i + 1) for i in range(self.levels)]
-                # Ensure that window sizes are not larger than the time series length
-                self.window_sizes = [min(w, time_steps // 2) for w in self.window_sizes]
+                window_sizes = [2 ** (i + 1) for i in range(self.levels)]
+            else:
+                window_sizes = list(self.window_sizes)
+            # A window has to span at least two steps to smooth anything, and
+            # cannot be longer than the series it is applied to.
+            window_sizes = [
+                max(2, min(int(w), max(2, time_steps))) for w in window_sizes
+            ]
 
             # Process each sample in the batch
             all_coeffs = []
@@ -115,7 +144,7 @@ class WaveletTransformLayer(Layer):
 
                     for level in range(self.levels):
                         # Use a window size appropriate for this level
-                        window_size = self.window_sizes[level]
+                        window_size = window_sizes[level]
 
                         # Apply moving average to get approximation coefficients
                         new_approx = self._moving_average(approx_coeffs, window_size)
