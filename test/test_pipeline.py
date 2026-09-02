@@ -42,10 +42,12 @@ class TestPipeline(unittest.TestCase):
         self.pipeline.add_step(mock_step)
 
         input_data = tf.constant([1, 2, 3])
-        self.pipeline.chain(input_data)
+        result = self.pipeline.chain(input_data)
 
-        # TODO: Fix this test
-        # mock_step.chain.assert_called_once_with(input_data=input_data)
+        # `chain` calls `connect` on each step, not `chain`; the assertion was
+        # commented out under a TODO because it named the wrong method.
+        mock_step.connect.assert_called_once_with(input_data)
+        self.assertIs(result, mock_step.connect.return_value)
 
     def test_chain_steps(self):
         """Test chaining steps together."""

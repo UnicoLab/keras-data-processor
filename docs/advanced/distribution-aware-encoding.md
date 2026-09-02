@@ -285,6 +285,24 @@ These two are the whole model-level surface:
 Per feature, set `preferred_distribution` on a `NumericalFeature` to skip
 automatic detection and force a specific distribution.
 
+!!! warning "Automatic detection is a heuristic, and it is not always right"
+    Measured over six seeded samples, detection identifies `heavy_tailed`,
+    `log_normal`, `discrete`, `periodic`, `sparse` and `beta` correctly and
+    consistently. Four shapes are consistently confused with a neighbour:
+
+    | Actual | Detected as |
+    |---|---|
+    | `normal` | `multimodal` |
+    | `uniform` | `multimodal` |
+    | `multimodal` | `periodic` |
+    | `exponential` | `log_normal` |
+
+    The encoding still works &mdash; a neighbouring distribution's transform is
+    usually a reasonable choice &mdash; but if a column's shape matters to you,
+    set `preferred_distribution` on the feature rather than relying on
+    detection. `test/layers/test_distribution_aware_encoder.py` pins this
+    behaviour, so it cannot change without being noticed.
+
 ### Available transformations
 
 `transform_type` accepts these; anything else raises. `auto` is the default on
