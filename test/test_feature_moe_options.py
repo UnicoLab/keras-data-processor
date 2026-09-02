@@ -68,6 +68,141 @@ class TestFeatureMoEOptionsInConcatMode(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, self.assertRaises(ValueError):
             _build(Path(tmp), feature_moe_routing="predefined")
 
+    def test_features_are_split_at_their_real_boundaries(self):
+        """The split used to be an equal division of the concatenated width.
+
+        `processed_features_dims` was written as a flat `{name: dim}` mapping
+        and read as a nested one keyed by "numeric"/"categorical", so the
+        lookup always missed and the fallback cut `concat_all` into equal
+        parts. With features of unequal width every slice the router saw
+        spanned several real features.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            rng = np.random.default_rng(0)
+            csv_path = directory / "mixed.csv"
+            pd.DataFrame(
+                {
+                    "narrow": rng.normal(50, 10, 200),
+                    "wide": rng.normal(100, 25, 200),
+                },
+            ).to_csv(csv_path, index=False)
+
+            keras.backend.clear_session()
+            preprocessor = PreprocessingModel(
+                path_data=str(csv_path),
+                features_specs={
+                    "narrow": FeatureType.FLOAT_NORMALIZED,  # one column
+                    "wide": FeatureType.FLOAT_DISCRETIZED,  # ten one-hot columns
+                },
+                features_stats_path=str(directory / "stats.json"),
+                overwrite_stats=True,
+                use_feature_moe=True,
+                feature_moe_num_experts=2,
+                feature_moe_expert_dim=8,
+            )
+            preprocessor.build_preprocessor()
+            dims = preprocessor.model.get_layer("split_layer").feature_dims
+
+        # The real widths, in the order the features were concatenated -- not
+        # two equal halves of eleven.
+        self.assertEqual(sorted(dims), [1, 10])
+
+    def test_the_split_matches_the_names_given_to_the_router(self):
+        """Predefined routing names features, so the slices must line up."""
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            rng = np.random.default_rng(0)
+            csv_path = directory / "mixed.csv"
+            pd.DataFrame(
+                {
+                    "narrow": rng.normal(50, 10, 200),
+                    "wide": rng.normal(100, 25, 200),
+                },
+            ).to_csv(csv_path, index=False)
+
+            keras.backend.clear_session()
+            preprocessor = PreprocessingModel(
+                path_data=str(csv_path),
+                features_specs={
+                    "narrow": FeatureType.FLOAT_NORMALIZED,
+                    "wide": FeatureType.FLOAT_DISCRETIZED,
+                },
+                features_stats_path=str(directory / "stats.json"),
+                overwrite_stats=True,
+                use_feature_moe=True,
+                feature_moe_num_experts=2,
+            )
+            preprocessor.build_preprocessor()
+            dims = preprocessor.model.get_layer("split_layer").feature_dims
+            names = preprocessor.model.get_layer("feature_moe_concat").feature_names
+            widths = preprocessor.processed_features_dims
+
+        self.assertEqual(len(names), len(dims))
+        self.assertEqual([widths[name] for name in names], list(dims))
+        self.assertEqual(widths, {"narrow": 1, "wide": 10})
+
+    def test_unequal_widths_are_padded_rather_than_rejected(self):
+        """Stacking needs one width; padding keeps each feature whole."""
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            rng = np.random.default_rng(0)
+            csv_path = directory / "mixed.csv"
+            pd.DataFrame(
+                {
+                    "narrow": rng.normal(50, 10, 200),
+                    "wide": rng.normal(100, 25, 200),
+                },
+            ).to_csv(csv_path, index=False)
+
+            keras.backend.clear_session()
+            preprocessor = PreprocessingModel(
+                path_data=str(csv_path),
+                features_specs={
+                    "narrow": FeatureType.FLOAT_NORMALIZED,
+                    "wide": FeatureType.FLOAT_DISCRETIZED,
+                },
+                features_stats_path=str(directory / "stats.json"),
+                overwrite_stats=True,
+                use_feature_moe=True,
+                feature_moe_num_experts=2,
+                feature_moe_expert_dim=8,
+            )
+            preprocessor.build_preprocessor()
+            padded = [
+                layer.name
+                for layer in preprocessor.model.layers
+                if layer.name.startswith("moe_pad_")
+            ]
+            output = preprocessor.model(
+                {
+                    "narrow": tf.constant([[50.0]]),
+                    "wide": tf.constant([[100.0]]),
+                },
+            )
+
+        # Only the narrower feature needs padding.
+        self.assertEqual(padded, ["moe_pad_narrow"])
+        self.assertEqual(int(output.shape[-1]), 2 * 8)
+
+    def test_a_uniform_width_model_is_not_padded(self):
+        """Padding must not appear where every feature is already one width."""
+        with tempfile.TemporaryDirectory() as tmp:
+            preprocessor = _build(Path(tmp), feature_moe_num_experts=2)
+            padded = [
+                layer.name
+                for layer in preprocessor.model.layers
+                if layer.name.startswith("moe_pad_")
+            ]
+        self.assertEqual(padded, [])
+
+    def test_global_numerical_embedding_is_rejected(self):
+        """It merges every numeric feature, leaving no slices to route."""
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(ValueError) as caught:
+                _build(Path(tmp), use_global_numerical_embedding=True)
+        self.assertIn("global embedding", str(caught.exception))
+
     def test_an_unassigned_feature_is_rejected(self):
         """It used to be zeroed out: an all-zero routing row erases the feature."""
         with tempfile.TemporaryDirectory() as tmp:

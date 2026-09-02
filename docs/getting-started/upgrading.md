@@ -36,6 +36,49 @@ configuration changes, but the numbers coming out of the preprocessor do.
     rows above apply to your feature set, the preprocessor now feeds it
     different numbers. Re-fit before you compare metrics.
 
+## 🧩 Feature MoE routed slices, not features
+
+Three defects compounded here, and together they meant the mixture was rarely
+routing what it claimed to.
+
+`processed_features_dims` was written as a flat `{name: dim}` mapping and read
+back as a nested one keyed by `"numeric"`/`"categorical"`, so the lookup always
+missed. The code then fell back to cutting the concatenated tensor into equal
+parts. With features of unequal width -- a normalised float is one column, a
+discretised one is ten -- that split lands mid-feature: given widths 1, 1 and
+10 it cut 12 columns as `[4, 4, 4]`, so every "feature" the router saw was a
+slice spanning several real ones, and `feature_moe_assignments` named the wrong
+thing. Nothing raised; the model built, trained and produced numbers.
+
+In `dict` output mode the same mismatch raised instead, on the first batch
+rather than at build time: `StackFeaturesLayer` reported the *first* feature's
+width whatever the others were, so Keras built a graph the layer could not
+execute.
+
+Both are fixed by taking the widths and names from the tensors that were
+actually concatenated, and padding features up to a common width before
+stacking. Padding is parameter-free, so a model whose features are all the same
+width is unchanged; a model with mixed widths was previously routing scrambled
+input and now routes real features.
+
+!!! warning "Retrain any model that used Feature MoE with mixed-width features"
+    Its inputs were being sliced at the wrong offsets. The numbers coming out
+    of the mixture are different now, and correct.
+
+`use_feature_moe` combined with `use_global_numerical_embedding` raises rather
+than producing nonsense: the global embedding merges every numeric feature into
+one vector, leaving no per-feature slices for the mixture to route.
+
+## 🔢 Advanced numerical embedding on discretised features
+
+`NumericalEmbedding` embeds each column it receives, so a feature arriving one
+column wide came back rank 2 and a discretised one -- ten one-hot columns --
+came back rank 3. Mixing the two failed in `Concatenate`, and a model built only
+from discretised features silently produced a three-dimensional output. The
+embedding output is flattened now, so every numeric feature is rank 2:
+a discretised feature with `embedding_dim=8` contributes 80 columns rather
+than a `(10, 8)` block.
+
 ## 🚫 Configurations that are now rejected
 
 Two configurations used to be accepted and then silently do the wrong thing.

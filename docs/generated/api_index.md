@@ -50,6 +50,7 @@ This section provides detailed API documentation extracted directly from the cod
 
 - [ExpertBlock](api/moe_ExpertBlock.md)
 - [FeatureMoE](api/moe_FeatureMoE.md)
+- [PadFeatureLayer](api/moe_PadFeatureLayer.md)
 - [StackFeaturesLayer](api/moe_StackFeaturesLayer.md)
 - [UnstackLayer](api/moe_UnstackLayer.md)
 

@@ -9,6 +9,63 @@ import keras
 
 
 @keras.saving.register_keras_serializable(package="kdp.moe")
+class PadFeatureLayer(keras.layers.Layer):
+    """Right-pad a feature with zeros so every feature stacks to one width.
+
+    `StackFeaturesLayer` needs `[batch, num_features, feature_dim]`, which means
+    every feature must be the same width. Real feature sets are not: a
+    normalised float is one column and a discretised one is ten. Padding keeps
+    each feature whole and identifiable, and costs no parameters -- a feature
+    already at the target width is returned untouched.
+    """
+
+    def __init__(self, width: int, **kwargs):
+        """Initialize the layer.
+
+        Args:
+            width: The width every feature is padded up to.
+            **kwargs: Passed to the parent layer.
+        """
+        super().__init__(**kwargs)
+        self.width = int(width)
+
+    def call(self, inputs) -> tf.Tensor:
+        """Pad the last axis up to `width`.
+
+        Args:
+            inputs: A tensor shaped `[batch, feature_dim]`.
+
+        Returns:
+            The tensor padded on the right to `[batch, width]`.
+        """
+        missing = self.width - int(inputs.shape[-1])
+        if missing <= 0:
+            return inputs
+        return tf.pad(inputs, [[0, 0], [0, missing]])
+
+    def compute_output_shape(self, input_shape) -> tuple:
+        """Report the padded shape.
+
+        Args:
+            input_shape: Shape of the input tensor.
+
+        Returns:
+            The same shape with the last axis set to `width`.
+        """
+        return (*tuple(input_shape[:-1]), self.width)
+
+    def get_config(self) -> dict:
+        """Return the configuration needed to rebuild this layer.
+
+        Returns:
+            The layer configuration.
+        """
+        config = super().get_config()
+        config.update({"width": self.width})
+        return config
+
+
+@keras.saving.register_keras_serializable(package="kdp.moe")
 class StackFeaturesLayer(keras.layers.Layer):
     """Layer to stack individual features along a new axis (dim 1) for use with Feature MoE."""
 
@@ -45,6 +102,16 @@ class StackFeaturesLayer(keras.layers.Layer):
         """
         if not isinstance(input_shape, list):
             raise ValueError("Input must be a list of tensors")
+
+        # This reported the *first* feature's width whatever the others were,
+        # so Keras built a graph on a shape `tf.stack` cannot produce and the
+        # model failed on its first real batch instead of at build time.
+        widths = {shape[-1] for shape in input_shape if shape[-1] is not None}
+        if len(widths) > 1:
+            raise ValueError(
+                "Every feature must be the same width to stack. Got "
+                f"{sorted(widths)}; pad them to a common width first.",
+            )
 
         batch_size = input_shape[0][0]
         feature_dim = input_shape[0][-1]

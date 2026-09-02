@@ -642,3 +642,63 @@ class TestMoEIntegration(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestPadFeatureLayer(unittest.TestCase):
+    """Padding is what lets features of different widths stack."""
+
+    def test_a_narrower_feature_is_right_padded_with_zeros(self):
+        """The values must survive; only zeros are added."""
+        from kdp.moe import PadFeatureLayer
+
+        values = tf.constant([[1.0, 2.0], [3.0, 4.0]])
+        padded = PadFeatureLayer(5)(values).numpy()
+        self.assertEqual(padded.shape, (2, 5))
+        np.testing.assert_array_equal(padded[:, :2], values.numpy())
+        np.testing.assert_array_equal(padded[:, 2:], np.zeros((2, 3)))
+
+    def test_a_feature_already_at_the_width_is_untouched(self):
+        """A uniform-width model must be bit-identical to before."""
+        from kdp.moe import PadFeatureLayer
+
+        values = tf.constant([[1.0, 2.0, 3.0]])
+        np.testing.assert_array_equal(
+            PadFeatureLayer(3)(values).numpy(), values.numpy()
+        )
+
+    def test_output_shape_agrees_with_the_call(self):
+        """Keras builds the graph from this."""
+        from kdp.moe import PadFeatureLayer
+
+        layer = PadFeatureLayer(6)
+        self.assertEqual(layer.compute_output_shape((None, 2)), (None, 6))
+        self.assertEqual(tuple(layer(tf.zeros((4, 2))).shape), (4, 6))
+
+    def test_config_round_trip(self):
+        """The width has to survive saving."""
+        from kdp.moe import PadFeatureLayer
+
+        layer = PadFeatureLayer(7, name="pad")
+        restored = PadFeatureLayer.from_config(layer.get_config())
+        self.assertEqual(restored.width, 7)
+        self.assertEqual(restored.name, "pad")
+
+
+class TestStackFeaturesLayerRejectsRaggedWidths(unittest.TestCase):
+    """The stack used to report a shape it could not produce."""
+
+    def test_mismatched_widths_are_reported_at_build_time(self):
+        """`compute_output_shape` returned the first feature's width, so the
+        graph built and `tf.stack` raised on the first real batch instead."""
+        layer = StackFeaturesLayer()
+        with self.assertRaises(ValueError) as caught:
+            layer.compute_output_shape([(None, 1), (None, 10)])
+        self.assertIn("same width", str(caught.exception))
+
+    def test_matching_widths_are_accepted(self):
+        """The ordinary case still reports the stacked shape."""
+        layer = StackFeaturesLayer()
+        self.assertEqual(
+            layer.compute_output_shape([(None, 4), (None, 4), (None, 4)]),
+            (None, 3, 4),
+        )

@@ -37,7 +37,7 @@ from kdp.features import (
 from kdp.layers_factory import PreprocessorLayerFactory
 from kdp.pipeline import FeaturePreprocessor
 from kdp.stats import DatasetStatistics
-from kdp.moe import FeatureMoE, StackFeaturesLayer, UnstackLayer
+from kdp.moe import FeatureMoE, PadFeatureLayer, StackFeaturesLayer, UnstackLayer
 
 
 def _to_tensor_mapping(data: dict) -> dict:
@@ -1043,6 +1043,20 @@ class PreprocessingModel:
             name=f"advanced_embedding_{feature_name}",
         )
 
+        # `NumericalEmbedding` embeds each column it is given, so a feature that
+        # arrives one column wide comes back rank 2 while a discretised one --
+        # ten one-hot columns -- comes back rank 3. Mixing the two then failed
+        # in `Concatenate`, and a model of only discretised features silently
+        # produced a three-dimensional output. Flattening makes every numeric
+        # feature rank 2; it is a no-op for the ones already there.
+        preprocessor.add_processing_step(
+            layer_creator=lambda **kwargs: keras.layers.Flatten(
+                name=f"flatten_advanced_embedding_{feature_name}",
+            ),
+            layer_class="Flatten",
+            name=f"flatten_advanced_embedding_{feature_name}",
+        )
+
     @_monitor_performance
     def _add_pipeline_categorical(
         self,
@@ -1623,63 +1637,38 @@ class PreprocessingModel:
         # Combine all features
         self._combine_all_features(concat_num, concat_cat)
 
-        # Store output dimensions needed for Feature MoE
+        # Store output dimensions needed for Feature MoE. These used to be read
+        # off `norm_<name>` / `flatten_<name>` layers, keyed by looking feature
+        # *tensors* up in `self.inputs`, which is a mapping of names -- so the
+        # dictionary was always empty and the mixture fell back to cutting
+        # `concat_all` into equal parts. With features of unequal width that
+        # split lands mid-feature: every "feature" the router sees is a slice
+        # spanning several real ones. The widths come from the tensors that
+        # were actually concatenated now.
         if self.use_feature_moe and self.concat_all is not None:
-            # Get the processed features and their dimensions
-            self.processed_features_dims = {}
+            # `GlobalNumericalEmbedding` replaces the whole numeric block with a
+            # single learned vector, so the per-feature slices no longer exist
+            # inside `concat_all` and there is nothing to route feature-wise.
+            if self.use_global_numerical_embedding and self.numeric_features:
+                raise ValueError(
+                    "use_feature_moe cannot be combined with "
+                    "use_global_numerical_embedding when numeric features are "
+                    "present: the global embedding merges every numeric feature "
+                    "into one vector, leaving no per-feature slices for the "
+                    "mixture to route.",
+                )
 
-            # Add numeric features
-            if numeric_features:
-                for feature_name in numeric_features:
-                    if feature_name in self.inputs:
-                        # Get the shape from the corresponding normalization layer
-                        norm_layer = (
-                            self.preprocessors.get(feature_name, {})
-                            .get("layers", {})
-                            .get(f"norm_{feature_name}")
-                        )
-                        if norm_layer is not None:
-                            self.processed_features_dims[
-                                feature_name
-                            ] = norm_layer.output.shape[-1]
-                        else:
-                            self.processed_features_dims[
-                                feature_name
-                            ] = 1  # Default dimension
-
-            # Add categorical features
-            if categorical_features:
-                for feature_name in categorical_features:
-                    if feature_name in self.inputs:
-                        # Get shape from the corresponding flatten layer
-                        flatten_layer = (
-                            self.preprocessors.get(feature_name, {})
-                            .get("layers", {})
-                            .get(f"flatten_{feature_name}")
-                        )
-                        if flatten_layer is not None:
-                            self.processed_features_dims[
-                                feature_name
-                            ] = flatten_layer.output.shape[-1]
-                        else:
-                            self.processed_features_dims[
-                                feature_name
-                            ] = 10  # Default dimension
-
-            # Create output_dims with None for batch dimension
-            if self.processed_features_dims:
-                self.output_dims = [
-                    (None, dim) for dim in self.processed_features_dims.values()
-                ]
-                # If we have concat_all but no individual dimensions, we'll use equal splits
-                if not self.output_dims and self.concat_all is not None:
-                    total_dim = self.concat_all.shape[-1]
-                    num_features = len(self.inputs)
-                    if num_features > 0:
-                        split_size = total_dim // num_features
-                        self.output_dims = [
-                            (None, split_size) for _ in range(num_features)
-                        ]
+            self.processed_features_dims = {
+                name: int(tensor.shape[-1])
+                for name, tensor in zip(
+                    self._concat_feature_names,
+                    self._concat_feature_tensors,
+                    strict=True,
+                )
+            }
+            self.output_dims = [
+                (None, dim) for dim in self.processed_features_dims.values()
+            ]
 
         # Apply transformations if needed
         if self.use_feature_moe:
@@ -1738,6 +1727,15 @@ class PreprocessingModel:
         passthrough_features_numeric = []
         passthrough_features_string = []
 
+        # The names behind those tensors, in the same order. The mixture of
+        # experts has to cut the concatenated tensor back into features, and it
+        # can only do that correctly if it knows which feature each slice is
+        # and how wide it is. It previously guessed an equal split.
+        numeric_names = []
+        categorical_names = []
+        passthrough_names_numeric = []
+        passthrough_names_string = []
+
         # Group processed features by type
         for feature_name, feature in self.processed_features.items():
             # Skip feature weights
@@ -1758,12 +1756,14 @@ class PreprocessingModel:
             ):
                 logger.debug(f"Adding {feature_name} to numeric features")
                 numeric_features.append(feature)
+                numeric_names.append(feature_name)
             elif (
                 feature_name in self.categorical_features
                 or feature_name in self.text_features
             ):
                 logger.debug(f"Adding {feature_name} to categorical features")
                 categorical_features.append(feature)
+                categorical_names.append(feature_name)
             elif feature_name in self.passthrough_features:
                 # Only include passthrough features in concatenation if they're meant to be in output
                 # When include_passthrough_in_output=False, they should be stored separately
@@ -1775,11 +1775,13 @@ class PreprocessingModel:
                             f"Adding {feature_name} to string passthrough features",
                         )
                         passthrough_features_string.append(feature)
+                        passthrough_names_string.append(feature_name)
                     else:
                         logger.debug(
                             f"Adding {feature_name} to numeric passthrough features",
                         )
                         passthrough_features_numeric.append(feature)
+                        passthrough_names_numeric.append(feature_name)
                 else:
                     logger.debug(
                         f"Skipping {feature_name} from concatenation (stored separately)",
@@ -1790,11 +1792,18 @@ class PreprocessingModel:
         # Add numeric passthrough features to numeric features (only if include_passthrough_in_output=True)
         if passthrough_features_numeric:
             numeric_features.extend(passthrough_features_numeric)
+            numeric_names.extend(passthrough_names_numeric)
 
         # Add string passthrough features to categorical features (only if include_passthrough_in_output=True)
         # (since categorical features are typically strings and handled separately)
         if passthrough_features_string:
             categorical_features.extend(passthrough_features_string)
+            categorical_names.extend(passthrough_names_string)
+
+        # `concat_all` is numeric first, then categorical, so this is the order
+        # of the slices inside it.
+        self._concat_feature_names = [*numeric_names, *categorical_names]
+        self._concat_feature_tensors = [*numeric_features, *categorical_features]
 
         return numeric_features, categorical_features
 
@@ -2164,6 +2173,27 @@ class PreprocessingModel:
             logger.warning("No individual features found for Feature MoE in dict mode.")
             return
 
+        # Same padding as the concat branch: stacking needs one width, and
+        # dict mode hands over the processed features untouched, so a
+        # normalised float (one column) and a discretised one (ten) were
+        # stacked together. The build succeeded -- `StackFeaturesLayer` used to
+        # report the first feature's width whatever the rest were -- and the
+        # model raised on its first real batch.
+        widths = [int(feature.shape[-1]) for feature in individual_features]
+        if len(set(widths)) > 1:
+            target_width = max(widths)
+            individual_features = [
+                feature
+                if width == target_width
+                else PadFeatureLayer(target_width, name=f"moe_pad_dict_{name}")(feature)
+                for name, feature, width in zip(
+                    feature_names,
+                    individual_features,
+                    widths,
+                    strict=True,
+                )
+            ]
+
         # Stack the features along a new axis
         stacked_features = StackFeaturesLayer(name="stacked_features_for_moe_dict")(
             individual_features,
@@ -2228,59 +2258,47 @@ class PreprocessingModel:
             logger.warning("No concatenated features found to apply Feature MoE")
             return
 
-        # Get dimensions of the output
-        output_dims = None
-        if hasattr(self, "processed_features_dims") and self.processed_features_dims:
-            output_dims = []
-            for feature_type in ["numeric", "categorical"]:
-                if feature_type in self.processed_features_dims:
-                    for dims in self.processed_features_dims[feature_type].values():
-                        if dims is not None:
-                            output_dims.append(dims)
+        # The concatenation order and the real width of every slice, recorded
+        # when the features were grouped. Reading them off layer names and
+        # falling back to an equal split cut features mid-value.
+        moe_feature_names = list(getattr(self, "_concat_feature_names", []) or [])
+        feature_dims = [
+            int(dim)
+            for dim in (getattr(self, "processed_features_dims", {}) or {}).values()
+        ]
+        if not moe_feature_names or not feature_dims:
+            logger.warning("No features found to apply Feature MoE")
+            return
 
-        # If output_dims not available, calculate equal splits
-        if not output_dims:
-            logger.warning("Output dimensions not found, calculating equal splits")
-            if hasattr(self, "numeric_features") and self.numeric_features:
-                num_numeric = len(self.numeric_features)
-            else:
-                num_numeric = 0
+        logger.info(
+            f"Splitting concat_all into {len(feature_dims)} features "
+            f"for Feature MoE: {dict(zip(moe_feature_names, feature_dims, strict=False))}",
+        )
+        feature_outputs = SplitLayer(feature_dims, name="split_layer")(self.concat_all)
 
-            if hasattr(self, "categorical_features") and self.categorical_features:
-                num_categorical = len(self.categorical_features)
-            else:
-                num_categorical = 0
-
-            total_features = num_numeric + num_categorical
-            if total_features == 0:
-                logger.warning("No features found to apply Feature MoE")
-                return
-
-            # Set equal dimensions for all features if actual dimensions are not available
-            feature_dim = int(self.concat_all.shape[-1]) // total_features
-            output_dims = [feature_dim] * total_features
-
-            # Store these calculated dimensions for future use
-            logger.info(f"Using equal split sizes: {output_dims}")
-
-        # Split the concatenated tensor back into individual features. An
-        # earlier branch here looked for `self.pipeline_<name>` attributes,
-        # which nothing ever sets, so it always fell through to this split.
-        logger.info("Splitting concat_all into individual features for Feature MoE")
-        feature_dims = output_dims if output_dims else [feature_dim] * total_features
-        feature_outputs = SplitLayer(feature_dims)(self.concat_all)
+        # Stacking needs one width for every feature, and a real feature set has
+        # several -- one column for a normalised float, ten for a discretised
+        # one. Padding keeps each feature whole; projecting would cost
+        # parameters and a feature already at the target width is untouched, so
+        # a uniform-width model is unaffected.
+        target_width = max(feature_dims)
+        if len(set(feature_dims)) > 1:
+            feature_outputs = [
+                output
+                if width == target_width
+                else PadFeatureLayer(target_width, name=f"moe_pad_{name}")(output)
+                for name, output, width in zip(
+                    moe_feature_names,
+                    feature_outputs,
+                    feature_dims,
+                    strict=True,
+                )
+            ]
 
         # Stack the features for the MoE layer
         stacked_features = StackFeaturesLayer(name="stacked_features_for_moe")(
             feature_outputs,
         )
-
-        # The features were stacked in this order, so predefined routing has to
-        # name them in the same order.
-        moe_feature_names = [
-            *(getattr(self, "numeric_features", None) or []),
-            *(getattr(self, "categorical_features", None) or []),
-        ]
 
         # Only `num_experts`, `expert_dim` and `routing` used to be forwarded
         # here, so `feature_moe_hidden_dims`, `feature_moe_sparsity`,
