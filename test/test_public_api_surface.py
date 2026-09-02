@@ -5,15 +5,25 @@ documented as standalone starting points, and each had a defect that only shows
 up when they are used that way rather than through the processor's own wiring.
 """
 
+import ast
 import unittest
+from pathlib import Path
 
 import keras
 import numpy as np
 import pandas as pd
+import pytest
 import tensorflow as tf
 
+import kdp
+import kdp.features
+import kdp.processor
 from kdp import DatasetStatistics, PreprocessingModel, auto_configure
 from kdp.features import FeatureType
+from kdp.layers.distribution_aware_encoder_layer import (
+    DistributionAwareEncoder,
+    DistributionType as EncoderDistributionType,
+)
 
 SPECS = {
     "age": FeatureType.FLOAT_NORMALIZED,
@@ -304,3 +314,48 @@ class TestStatisticsAreOnlyComputedWhenNeeded(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@pytest.mark.unit
+class TestNoDuplicatePublicClasses(unittest.TestCase):
+    """One name must mean one class across the package.
+
+    `TextVectorizerOutputOptions` and `DistributionType` were each defined
+    twice, in modules users import from interchangeably, with members that did
+    not agree. Whichever one you happened to import decided whether your option
+    was honoured or silently replaced.
+    """
+
+    def test_every_public_class_is_defined_once(self):
+        """A second definition of a name is how the members diverged."""
+        definitions: dict[str, list[str]] = {}
+        for path in sorted(Path(kdp.__file__).parent.rglob("*.py")):
+            for node in ast.walk(ast.parse(path.read_text())):
+                if isinstance(node, ast.ClassDef) and not node.name.startswith("_"):
+                    definitions.setdefault(node.name, []).append(
+                        node.name and str(path)
+                    )
+        duplicated = {
+            name: paths for name, paths in definitions.items() if len(paths) > 1
+        }
+        self.assertEqual(duplicated, {}, f"defined more than once: {duplicated}")
+
+    def test_distribution_type_is_the_encoder_s_own(self):
+        """The encoder decides which values are valid, so it owns the enum."""
+        self.assertIs(kdp.DistributionType, EncoderDistributionType)
+        self.assertIs(kdp.features.DistributionType, EncoderDistributionType)
+
+    def test_every_distribution_member_is_accepted_by_the_encoder(self):
+        """`WEIBULL` was not, and fell back to "normal" with a warning."""
+        encoder = DistributionAwareEncoder()
+        for member in kdp.DistributionType:
+            self.assertIn(member.value, encoder._valid_distributions)
+
+    def test_text_output_options_are_the_strings_keras_takes(self):
+        """Integer members matched no comparison anywhere in KDP or Keras."""
+        self.assertIs(
+            kdp.TextVectorizerOutputOptions,
+            kdp.processor.TextVectorizerOutputOptions,
+        )
+        for member in kdp.TextVectorizerOutputOptions:
+            self.assertIsInstance(member.value, str)

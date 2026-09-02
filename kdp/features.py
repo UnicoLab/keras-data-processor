@@ -5,6 +5,9 @@ import keras
 import tensorflow as tf
 from loguru import logger
 
+from kdp.layers.distribution_aware_encoder_layer import (
+    DistributionType as _EncoderDistributionType,
+)
 from kdp.layers_factory import PreprocessorLayerFactory
 
 
@@ -75,26 +78,12 @@ class FeatureType(Enum):
             raise ValueError(f"Unknown feature type: {type_str}")
 
 
-class DistributionType(str, Enum):
-    """Supported distribution types for feature encoding."""
-
-    NORMAL = "normal"
-    HEAVY_TAILED = "heavy_tailed"
-    MULTIMODAL = "multimodal"
-    UNIFORM = "uniform"
-    EXPONENTIAL = "exponential"
-    LOG_NORMAL = "log_normal"
-    DISCRETE = "discrete"
-    PERIODIC = "periodic"
-    SPARSE = "sparse"
-    BETA = "beta"
-    GAMMA = "gamma"
-    POISSON = "poisson"
-    WEIBULL = "weibull"
-    CAUCHY = "cauchy"
-    ZERO_INFLATED = "zero_inflated"
-    BOUNDED = "bounded"
-    ORDINAL = "ordinal"
+# `kdp.features` defined a second `DistributionType` whose members differed from
+# the encoder's own: it carried a `WEIBULL` the encoder does not know, so
+# `preferred_distribution=DistributionType.WEIBULL` was warned about and
+# silently replaced with "normal". The encoder's class is the one that decides
+# what is valid, so it is the one re-exported here.
+DistributionType = _EncoderDistributionType
 
 
 class Feature:

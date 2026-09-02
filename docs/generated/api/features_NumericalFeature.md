@@ -5,7 +5,7 @@ NumericalFeature with dynamic kwargs passing and embedding support.
 ## Constructor
 
 ```python
-__init__(self, name: str, feature_type: kdp.features.FeatureType = <FeatureType.FLOAT_NORMALIZED: 2>, preferred_distribution: kdp.features.DistributionType | None = None, use_embedding: bool = False, embedding_dim: int | kdp.features._Unset = <unset>, num_bins: int | kdp.features._Unset = <unset>, **kwargs) -> None
+__init__(self, name: str, feature_type: kdp.features.FeatureType = <FeatureType.FLOAT_NORMALIZED: 2>, preferred_distribution: kdp.layers.distribution_aware_encoder_layer.DistributionType | None = None, use_embedding: bool = False, embedding_dim: int | kdp.features._Unset = <unset>, num_bins: int | kdp.features._Unset = <unset>, **kwargs) -> None
 ```
 
 Initializes a NumericalFeature instance.

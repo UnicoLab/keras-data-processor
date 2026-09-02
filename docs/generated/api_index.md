@@ -10,7 +10,6 @@ This section provides detailed API documentation extracted directly from the cod
 - [PreprocessingModel](api/processor_PreprocessingModel.md)
 - [SplitLayer](api/processor_SplitLayer.md)
 - [TabularAttentionPlacementOptions](api/processor_TabularAttentionPlacementOptions.md)
-- [TextVectorizerOutputOptions](api/processor_TextVectorizerOutputOptions.md)
 - [TransformerBlockPlacementOptions](api/processor_TransformerBlockPlacementOptions.md)
 
 ## kdp.dynamic_pipeline
@@ -23,7 +22,6 @@ This section provides detailed API documentation extracted directly from the cod
 - [CategoryEncodingOptions](api/features_CategoryEncodingOptions.md)
 - [CrossFeatureOutputOptions](api/features_CrossFeatureOutputOptions.md)
 - [DateFeature](api/features_DateFeature.md)
-- [DistributionType](api/features_DistributionType.md)
 - [Feature](api/features_Feature.md)
 - [FeatureSpaceConverter](api/features_FeatureSpaceConverter.md)
 - [FeatureType](api/features_FeatureType.md)

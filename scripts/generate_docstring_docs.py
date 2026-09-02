@@ -187,7 +187,21 @@ def extract_module_docs(module, output_dir):
     module_name = module.__name__.split(".")[-1]
 
     # Create output directory if it doesn't exist
-    (Path(output_dir) / "api").mkdir(exist_ok=True, parents=True)
+    api_dir = Path(output_dir) / "api"
+    api_dir.mkdir(exist_ok=True, parents=True)
+
+    # The index is built by globbing this directory, so a page left behind by a
+    # class that has since been removed or moved stays in the published API
+    # reference forever. Clear this module's pages and write only what exists.
+    current = {
+        f"{module_name}_{name}.md"
+        for name, obj in inspect.getmembers(module, predicate=inspect.isclass)
+        if obj.__module__ == module.__name__ and not name.startswith("_")
+    }
+    for stale in api_dir.glob(f"{module_name}_*.md"):
+        if stale.name not in current:
+            stale.unlink()
+            print(f"Removed stale page {stale}")
 
     # Find all classes in the module
     for name, obj in inspect.getmembers(module, predicate=inspect.isclass):

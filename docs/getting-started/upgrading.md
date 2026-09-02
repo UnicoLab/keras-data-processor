@@ -88,6 +88,19 @@ TextVectorizerOutputOptions.TF_IDF == "tf_idf"      # True, was False
 If you compared against `.value` and got `1`, `2` or `3`, that comparison now
 sees `"tf_idf"`, `"int"` and `"multi_hot"`.
 
+## 📐 `DistributionType`
+
+Like `TextVectorizerOutputOptions`, this enum existed twice. The `kdp.features`
+copy carried a `WEIBULL` member the encoder has never known, so
+`preferred_distribution=DistributionType.WEIBULL` was warned about and replaced
+with `"normal"`. There is one class now -- the encoder's own -- and every
+member it exposes is a distribution the encoder accepts. `WEIBULL` is gone
+rather than silently ignored.
+
+Note also that `BOUNDED`, `ORDINAL` and `POISSON` can be requested explicitly
+but are never returned by automatic detection: the detector scores no evidence
+for them.
+
 ## 🆕 Methods the documentation promised
 
 `get_timing_metrics()`, `get_memory_usage()` and `plot_model()` appeared in the
