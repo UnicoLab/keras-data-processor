@@ -102,6 +102,28 @@ Note also that `BOUNDED`, `ORDINAL` and `POISSON` can be requested explicitly
 but are never returned by automatic detection: the detector scores no evidence
 for them.
 
+## 🕳️ `MissingValueHandlerLayer` and NaN
+
+Missing values were found with `inputs == mask_value`, and NaN compares equal
+to nothing -- not even itself -- so a series carrying the marker pandas and
+numpy actually use passed through untouched, and those NaNs then poisoned
+every statistic computed from it. No value of `mask_value` could select them.
+Setting `mask_value` to NaN now does:
+
+<div class="code-container">
+
+```python
+from kdp.layers.time_series.missing_value_handler_layer import (
+    MissingValueHandlerLayer,
+)
+
+MissingValueHandlerLayer(mask_value=float("nan"), strategy="linear_interpolation")
+```
+
+</div>
+
+A sentinel such as `0.0` behaves exactly as before.
+
 ## 📊 `FeatureMoE.get_expert_assignments()`
 
 It returned an empty dictionary for learned routing -- the default -- so the

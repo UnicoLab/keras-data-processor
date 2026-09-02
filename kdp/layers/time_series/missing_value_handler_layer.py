@@ -107,13 +107,32 @@ class MissingValueHandlerLayer(Layer):
 
         return result
 
+    def _missing_mask(self, inputs: np.ndarray) -> np.ndarray:
+        """Mark the entries this layer should treat as missing.
+
+        Missing values were found with `inputs == self.mask_value`, and NaN is
+        equal to nothing -- not even itself -- so a series carrying the marker
+        pandas and numpy actually use passed through untouched, and the NaNs
+        then poisoned every downstream statistic. Setting `mask_value` to NaN
+        selects NaN detection here.
+
+        Args:
+            inputs: The batch to inspect.
+
+        Returns:
+            A boolean array, True wherever a value counts as missing.
+        """
+        if isinstance(self.mask_value, float) and np.isnan(self.mask_value):
+            return np.isnan(inputs)
+        return inputs == self.mask_value
+
     def _numpy_impute_2d(self, inputs_tensor) -> np.ndarray:
         """Numpy-based implementation of imputation for 2D tensors."""
         # Convert to numpy
         inputs = inputs_tensor.numpy()
 
         # Create missing mask
-        missing_mask = inputs == self.mask_value
+        missing_mask = self._missing_mask(inputs)
 
         # Make a copy to avoid modifying the input
         imputed = inputs.copy()
@@ -147,7 +166,7 @@ class MissingValueHandlerLayer(Layer):
         inputs = inputs_tensor.numpy()
 
         # Create missing mask
-        missing_mask = inputs == self.mask_value
+        missing_mask = self._missing_mask(inputs)
 
         # Get dimensions
         batch_size, time_steps, n_features = inputs.shape

@@ -839,6 +839,112 @@ patient_monitor = PreprocessingModel(
   </div>
 </div>
 
+## 🧰 Layers you can use directly
+
+`TimeSeriesFeature` covers the seven transformations configured above. Four
+more ship with KDP and are used as ordinary Keras layers, so you can drop them
+into a model of your own rather than configure them on a feature.
+
+<div class="code-container">
+
+```python
+import numpy as np
+import tensorflow as tf
+
+from kdp.layers.time_series.fft_feature_layer import FFTFeatureLayer
+from kdp.layers.time_series.seasonal_decomposition_layer import (
+    SeasonalDecompositionLayer,
+)
+from kdp.layers.time_series.missing_value_handler_layer import (
+    MissingValueHandlerLayer,
+)
+from kdp.layers.time_series.auto_lag_selection_layer import AutoLagSelectionLayer
+
+steps = np.arange(120, dtype="float32")
+series = 10 + 3 * np.sin(2 * np.pi * steps / 12) + 0.05 * steps
+
+# Frequency content: the strongest components of the signal, appended to it.
+spectrum = FFTFeatureLayer(num_features=3)(tf.constant(series.reshape(-1, 1)))
+
+# Trend, seasonal and residual components of a series with a known period.
+parts = SeasonalDecompositionLayer(period=12)(tf.constant(series.reshape(-1, 1)))
+
+# Lags chosen by autocorrelation rather than by hand.
+lags = AutoLagSelectionLayer(max_lag=10, n_lags=3)
+lagged = lags(tf.constant(series.reshape(-1, 1)))
+print("selected lags:", lags.selected_lags.numpy())
+```
+
+</div>
+
+`MissingValueHandlerLayer` fills gaps before any of the above. It takes a
+`(batch, time)` batch -- one row per series -- and `mask_value` names what
+counts as missing:
+
+<div class="code-container">
+
+```python
+import numpy as np
+import tensorflow as tf
+
+from kdp.layers.time_series.missing_value_handler_layer import (
+    MissingValueHandlerLayer,
+)
+
+gappy = np.arange(1.0, 13.0, dtype="float32").reshape(1, -1)
+gappy[0, 3] = np.nan
+
+filled = MissingValueHandlerLayer(
+    mask_value=float("nan"),      # or 0.0, or any sentinel your data uses
+    strategy="linear_interpolation",
+    add_indicators=True,          # appends a column flagging what was filled
+)(tf.constant(gappy))
+```
+
+</div>
+
+<div class="table-container">
+  <table class="config-table">
+    <thead>
+      <tr>
+        <th>Layer</th>
+        <th>What it produces</th>
+        <th>Main options</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>FFTFeatureLayer</code></td>
+        <td>The strongest frequency components of each series</td>
+        <td><code>num_features</code>, <code>feature_type</code>, <code>window_function</code>, <code>keep_original</code>, <code>normalize</code></td>
+      </tr>
+      <tr>
+        <td><code>SeasonalDecompositionLayer</code></td>
+        <td>Trend, seasonal and residual components</td>
+        <td><code>period</code> (required), <code>method</code>, <code>trend_window</code>, <code>extrapolate_trend</code>, <code>keep_original</code></td>
+      </tr>
+      <tr>
+        <td><code>MissingValueHandlerLayer</code></td>
+        <td>The series with gaps filled, optionally with indicator columns</td>
+        <td><code>mask_value</code>, <code>strategy</code>, <code>window_size</code>, <code>seasonal_period</code>, <code>add_indicators</code></td>
+      </tr>
+      <tr>
+        <td><code>AutoLagSelectionLayer</code></td>
+        <td>Lags picked by autocorrelation, readable from <code>selected_lags</code></td>
+        <td><code>max_lag</code>, <code>n_lags</code>, <code>threshold</code>, <code>method</code>, <code>keep_original</code></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+!!! note "Strategies for missing values"
+    `forward_fill`, `backward_fill`, `linear_interpolation`, `mean`, `median`,
+    `rolling_mean` and `seasonal`. Until this release only a literal sentinel
+    such as `0.0` could be detected; `NaN` matched nothing, because it does not
+    compare equal to itself.
+
+Full signatures for all of them are in the [API reference](../generated/api_index.md).
+
 ## 💎 Pro Tips
 
 <div class="pro-tips-grid">
