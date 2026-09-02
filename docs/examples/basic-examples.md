@@ -5,6 +5,8 @@ Let us go trough some different examples of case scenarios. To get a feeling how
 ## Example 1: Numerical features
 
 ```python
+import tensorflow as tf
+
 from kdp.features import NumericalFeature, FeatureType
 from kdp.processor import PreprocessingModel, OutputModeOptions
 
@@ -88,6 +90,8 @@ ppr = PreprocessingModel(
 result = ppr.build_preprocessor()
 
 # Transform data using direct model prediction
+# A batch is one entry per feature, each a column of rows
+test_batch = {name: tf.constant([[0.0]]) for name in features}
 transformed_data = ppr.model.predict(test_batch)
 
 # Get feature importances
@@ -181,6 +185,8 @@ ppr = PreprocessingModel(
 result = ppr.build_preprocessor()
 
 # Transform data using direct model prediction
+# A batch is one entry per feature, each a column of rows
+test_batch = {name: tf.constant([[0.0]]) for name in features}
 transformed_data = ppr.model.predict(test_batch)
 
 # Get feature importances
@@ -296,6 +302,8 @@ Normally the distribution aware encoder works well in automatic mode, once use_d
 However we can also manually set the prefered distribution for each numerical feature if we would like to.
 
 ```python
+import tensorflow as tf
+
 from kdp.features import NumericalFeature, FeatureType
 from kdp.processor import PreprocessingModel, OutputModeOptions
 from kdp.layers.distribution_aware_encoder_layer import DistributionAwareEncoder
@@ -323,7 +331,7 @@ features = {
         preprocessors=[
             tf.keras.layers.Rescaling,
             tf.keras.layers.Normalization,
-            DistributionAwareEncoder,
+            DistributionAwareEncoder,  # from kdp.layers
         ],
         bin_boundaries=[0.0, 1.0, 2.0],
         mean=0.0,
@@ -355,6 +363,8 @@ ppr = PreprocessingModel(
 result = ppr.build_preprocessor()
 
 # Transform data using direct model prediction
+# A batch is one entry per feature, each a column of rows
+test_batch = {name: tf.constant([[0.0]]) for name in features}
 transformed_data = ppr.model.predict(test_batch)
 
 # Get feature importances
@@ -374,6 +384,8 @@ Numerical embedding is a technique that allows us to embed numerical features in
 This can be useful for capturing non-linear relationships within/between numerical feature/s.
 
 ```python
+import tensorflow as tf
+
 from kdp.features import NumericalFeature, FeatureType
 from kdp.processor import PreprocessingModel, OutputModeOptions
 
@@ -397,7 +409,7 @@ features = {
         preprocessors=[
             tf.keras.layers.Rescaling,
             tf.keras.layers.Normalization,
-            DistributionAwareEncoder,
+            DistributionAwareEncoder,  # from kdp.layers
         ],
     ),
 }
@@ -422,6 +434,8 @@ ppr = PreprocessingModel(
 result = ppr.build_preprocessor()
 
 # Transform data using direct model prediction
+# A batch is one entry per feature, each a column of rows
+test_batch = {name: tf.constant([[0.0]]) for name in features}
 transformed_data = ppr.model.predict(test_batch)
 
 # Get feature importances

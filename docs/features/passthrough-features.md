@@ -280,6 +280,9 @@ model = preprocessor.build_preprocessor()
 <div class="code-container">
 
 ```python
+import tensorflow as tf
+from kdp import FeatureType, PassthroughFeature, PreprocessingModel
+
 # Handles both string and numeric IDs without concatenation errors
 features = {
     'product_id': PassthroughFeature(name='product_id', dtype=tf.string),
@@ -301,6 +304,9 @@ preprocessor = PreprocessingModel(
 <div class="code-container">
 
 ```python
+import tensorflow as tf
+from kdp import FeatureType, PassthroughFeature, PreprocessingModel
+
 # Include pre-computed features in model processing
 features = {
     'text_embedding': PassthroughFeature(
@@ -327,6 +333,9 @@ preprocessor = PreprocessingModel(
 <div class="code-container">
 
 ```python
+import tensorflow as tf
+from kdp import FeatureType, PassthroughFeature, PreprocessingModel
+
 # Keep metadata for post-processing without affecting the model
 features = {
     'timestamp': PassthroughFeature(name='timestamp', dtype=tf.string),

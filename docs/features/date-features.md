@@ -158,6 +158,8 @@ Date features participate in learned feature selection:
 <div class="code-container">
 
 ```python
+from kdp import FeatureType, PreprocessingModel
+
 preprocessor = PreprocessingModel(
     path_data="data.csv",
     features_specs={
@@ -180,6 +182,8 @@ Valid `feature_selection_placement` values are `"none"`, `"numeric"`,
 <div class="code-container">
 
 ```python
+from kdp import FeatureType, PreprocessingModel
+
 preprocessor = PreprocessingModel(
     path_data="data.csv",
     features_specs={

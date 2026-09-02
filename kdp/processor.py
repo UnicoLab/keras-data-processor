@@ -236,6 +236,7 @@ class PreprocessingModel:
         feature_moe_freeze_experts: bool = False,
         feature_moe_use_residual: bool = True,
         include_passthrough_in_output: bool = True,
+        name: str = "preprocessor",
     ) -> None:
         """Initialize a preprocessing model.
 
@@ -298,6 +299,10 @@ class PreprocessingModel:
             feature_moe_dropout (float): Dropout rate applied inside the mixture of experts.
             feature_moe_freeze_experts (bool): Whether expert weights are frozen during training.
             feature_moe_use_residual (bool): Whether to add a residual connection around the mixture.
+            name (str): Name given to the built Keras model. Keras requires
+                operation names to be unique within a graph, so give each
+                preprocessor its own name when combining several in one model
+                (a two-tower recommender, for example).
             include_passthrough_in_output (bool): Whether passthrough features appear in the model output.
         """
         self.path_data = path_data
@@ -375,6 +380,7 @@ class PreprocessingModel:
 
         # Passthrough features control
         self.include_passthrough_in_output = include_passthrough_in_output
+        self.model_name = name
 
         # Initialize feature type lists
         self.numeric_features = []
@@ -2588,7 +2594,7 @@ class PreprocessingModel:
                     self.model = keras.Model(
                         inputs=self.inputs,
                         outputs=self.passthrough_outputs,
-                        name="preprocessor",
+                        name=self.model_name,
                     )
                     _output_dims = "passthrough_only"
                 elif self.concat_all is None:
@@ -2617,7 +2623,7 @@ class PreprocessingModel:
                     self.model = keras.Model(
                         inputs=self.inputs,
                         outputs=model_outputs,
-                        name="preprocessor",
+                        name=self.model_name,
                     )
                     _output_dims = (
                         self.model.output_shape[1]
@@ -2648,7 +2654,7 @@ class PreprocessingModel:
                 self.model = keras.Model(
                     inputs=self.inputs,
                     outputs=final_outputs,
-                    name="preprocessor",
+                    name=self.model_name,
                 )
                 _output_dims = self.model.output_shape
 
@@ -2800,11 +2806,23 @@ class PreprocessingModel:
             # Apply preprocessing
             yield self.model(batch)
 
-    def get_feature_importances(self) -> dict:
+    def get_feature_importances(self, data: dict | None = None) -> dict:
         """Get feature importance weights if feature selection was enabled.
 
+        The selection layer computes a softmax over features for every row, so
+        the importances depend on the data rather than being fixed weights.
+        Pass a batch to get numbers; without one there is nothing to score and
+        only a description of each weight tensor can be returned.
+
+        Args:
+            data: Optional mapping of feature name to a batch of values. When
+                given, the model is run and the mean importance per feature is
+                returned as a float.
+
         Returns:
-            Dictionary mapping feature names to their importance weights information
+            dict: Feature name to mean importance (a float) when `data` is
+                supplied, otherwise feature name to a description of its weight
+                tensor.
 
         Raises:
             ValueError: If feature selection was not enabled or model hasn't been built
@@ -2823,14 +2841,31 @@ class PreprocessingModel:
                 feature_name = key.replace("_weights", "")
                 tensor = self.processed_features[key]
 
-                # Instead of returning the KerasTensor directly, provide its description
+                # Without data there is nothing to score, so describe the
+                # tensor the weights will come from.
                 feature_importances[feature_name] = {
                     "shape": str(tensor.shape),
                     "dtype": str(tensor.dtype),
                     "layer_name": tensor.name if hasattr(tensor, "name") else "unknown",
                 }
 
-        return feature_importances
+        if data is None:
+            return feature_importances
+
+        weight_tensors = {
+            key.replace("_weights", ""): self.processed_features[key]
+            for key in self.processed_features
+            if key.endswith("_weights")
+        }
+        if not weight_tensors:
+            return {}
+
+        weights_model = keras.Model(inputs=self.inputs, outputs=weight_tensors)
+        scored = weights_model(_to_tensor_mapping(data))
+        return {
+            name: float(tf.reduce_mean(tf.cast(value, tf.float32)))
+            for name, value in scored.items()
+        }
 
     @staticmethod
     def _is_value_sequence(value) -> bool:

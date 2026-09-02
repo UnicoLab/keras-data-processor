@@ -133,6 +133,8 @@ This example demonstrates using KDP to preprocess financial time series data for
 ### Setting Up Features
 
 ```python
+from kdp import CategoricalFeature, DateFeature, FeatureType, NumericalFeature, PreprocessingModel
+
 # Define financial features
 features = {
     # Price data with custom distribution handling
@@ -205,6 +207,8 @@ This example shows how to preprocess user behavior data for churn prediction or 
 ### Setting Up Features
 
 ```python
+from kdp import CategoricalFeature, DateFeature, FeatureType, NumericalFeature, PreprocessingModel, TextFeature
+
 # Define user behavior features
 features = {
     # User demographics

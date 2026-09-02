@@ -108,6 +108,8 @@ preprocessor = PreprocessingModel(
 <div class="code-container">
 
 ```python
+from kdp import FeatureType, PreprocessingModel
+
 from kdp.features import NumericalFeature
 from kdp.layers.distribution_aware_encoder_layer import DistributionType
 
@@ -431,6 +433,8 @@ preprocessor = PreprocessingModel(
     <div class="code-container">
 
 ```python
+from kdp import DistributionType, FeatureType, NumericalFeature, PreprocessingModel
+
 features_specs = {
     "temperature": NumericalFeature(
         name="temperature",

@@ -42,13 +42,18 @@ preprocessor = PreprocessingModel(
 result = preprocessor.build_preprocessor()
 model = result["model"]
 
-# Now you can see which features matter most!
-importances = preprocessor.get_feature_importances()
-print("Top features:", sorted(
-    importances.items(),
-    key=lambda x: x[1],
-    reverse=True
-)[:3])  # Shows your 3 most important features
+# Importances are a per-row softmax, so they need a batch to score
+import tensorflow as tf
+
+importances = preprocessor.get_feature_importances({
+    "age": tf.constant([[35.0]]),
+    "income": tf.constant([[70000.0]]),
+    "education": tf.constant([["bsc"]]),
+    "occupation": tf.constant([["engineer"]]),
+    "marital_status": tf.constant([["single"]]),
+    "last_purchase": tf.constant([["2021-06-15"]]),
+})
+print(sorted(importances.items(), key=lambda x: x[1], reverse=True)[:3])
 ```
 
 ## 🧩 Architecture
@@ -71,6 +76,18 @@ There is no correlation filter or threshold; `feature_selection_placement`
 chooses which feature groups get the layer, and the two parameters above size
 it. Valid placements are `"none"`, `"numeric"`, `"categorical"`, `"text"`,
 `"date"` and `"all_features"`.*
+
+!!! warning "The weights do not currently rank features"
+    Each feature gets its **own** selection layer covering a single feature, so
+    the softmax that produces its weight runs over one element and is `1.0` by
+    definition &mdash; for every feature, on every input. The layer still
+    applies a learned gated residual transform, which is a real
+    transformation, but the reported importances carry no ranking information
+    yet. `get_feature_importances()` returns them faithfully; do not read a
+    ranking into equal numbers.
+
+    Calling it without a batch returns a description of each weight tensor
+    instead, which is what earlier releases always returned.
 
 ## 🎛️ Configuration Options
 
@@ -98,6 +115,8 @@ Choose where to apply feature selection with the `feature_selection_placement` p
 ### Customer Churn Prediction
 
 ```python
+from kdp import FeatureType, PreprocessingModel
+
 # Perfect for churn prediction with many potential factors
 preprocessor = PreprocessingModel(
     path_data="customer_data.csv",
@@ -122,12 +141,15 @@ preprocessor = PreprocessingModel(
 )
 
 # After building, analyze what drives churn
+preprocessor.build_preprocessor()
 importances = preprocessor.get_feature_importances()
 ```
 
 ### Medical Diagnosis Support
 
 ```python
+from kdp import FeatureType, PreprocessingModel
+
 # For medical applications where feature interpretation is critical
 preprocessor = PreprocessingModel(
     path_data="patient_data.csv",
@@ -217,7 +239,8 @@ top_features = preprocessor.get_top_features(n=10)
 
    # Save importance scores with timestamp
    def log_importances(preprocessor, name):
-       importances = preprocessor.get_feature_importances()
+       preprocessor.build_preprocessor()
+importances = preprocessor.get_feature_importances()
        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
        with open(f"importance_{name}_{timestamp}.json", "w") as f:
            json.dump(importances, f, indent=2)

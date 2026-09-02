@@ -130,6 +130,8 @@ preprocessor = PreprocessingModel(
     <div class="code-container">
 
 ```python
+from kdp import FeatureType, PreprocessingModel
+
 # Perfect setup for churn prediction
 preprocessor = PreprocessingModel(
     path_data="customer_data.csv",
@@ -158,6 +160,8 @@ preprocessor = PreprocessingModel(
     <div class="code-container">
 
 ```python
+from kdp import FeatureType, PreprocessingModel
+
 # Setup for financial forecasting
 preprocessor = PreprocessingModel(
     path_data="stock_data.csv",

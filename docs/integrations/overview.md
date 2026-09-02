@@ -144,19 +144,24 @@ model.fit(
 ### E-Commerce Recommendation System
 
 ```python
+import tensorflow as tf
+from kdp import FeatureType, PreprocessingModel
+
 # Create a recommendation system with KDP preprocessing
 def build_recommendation_system(user_features, item_features):
     # User branch
     user_inputs = {k: tf.keras.Input(shape=(1,), name=k) for k in user_features}
     user_preprocessor = PreprocessingModel(
-        features_specs=user_features
+        features_specs=user_features,
+        name="user_preprocessor",   # each model in one graph needs its own name
     ).build_preprocessor()["model"]
     user_vector = user_preprocessor(user_inputs)
 
     # Item branch
     item_inputs = {k: tf.keras.Input(shape=(1,), name=k) for k in item_features}
     item_preprocessor = PreprocessingModel(
-        features_specs=item_features
+        features_specs=item_features,
+        name="item_preprocessor",
     ).build_preprocessor()["model"]
     item_vector = item_preprocessor(item_inputs)
 
@@ -191,6 +196,9 @@ rec_model = build_recommendation_system(user_features, item_features)
 ### Fraud Detection System
 
 ```python
+import tensorflow as tf
+from kdp import FeatureType, NumericalFeature, PreprocessingModel
+
 # Build a fraud detection pipeline with KDP
 preprocessor = PreprocessingModel(
     path_data="transactions.csv",

@@ -200,6 +200,8 @@ TextFeature(
 <div class="code-container">
 
 ```python
+from kdp import FeatureType, PreprocessingModel
+
 preprocessor = PreprocessingModel(
     path_data="reviews.csv",
     features_specs={

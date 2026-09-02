@@ -192,6 +192,8 @@ cardinality and unseen values without growing. Collisions are the trade-off.
 <div class="code-container">
 
 ```python
+from kdp import CategoricalFeature, CategoryEncodingOptions, FeatureType, PreprocessingModel
+
 # Builds with no dataset at all
 preprocessor = PreprocessingModel(
     features_specs={
@@ -246,6 +248,8 @@ preprocessor.build_preprocessor()
 <div class="code-container">
 
 ```python
+from kdp import FeatureType, PreprocessingModel
+
 preprocessor = PreprocessingModel(
     path_data="data.csv",
     features_specs={
@@ -263,6 +267,8 @@ preprocessor = PreprocessingModel(
 <div class="code-container">
 
 ```python
+from kdp import FeatureType, PreprocessingModel
+
 preprocessor = PreprocessingModel(
     path_data="data.csv",
     features_specs={"city": FeatureType.STRING_CATEGORICAL},

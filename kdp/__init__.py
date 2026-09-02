@@ -1,4 +1,6 @@
 # project plugin
+from importlib.metadata import PackageNotFoundError, version as _package_version
+
 from kdp.features import (
     CategoricalFeature,
     DateFeature,
@@ -25,7 +27,13 @@ from kdp.auto_config import auto_configure
 from kdp.inference.base import InferenceFormatter
 from kdp.time_series.inference import TimeSeriesInferenceFormatter
 
+try:
+    __version__ = _package_version("kdp")
+except PackageNotFoundError:  # running from a source checkout without install
+    __version__ = "0.0.0.dev0"
+
 __all__ = [
+    "__version__",
     "ProcessingStep",
     "Pipeline",
     "FeaturePreprocessor",

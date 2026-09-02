@@ -356,6 +356,41 @@ preprocessor = PreprocessingModel(
   </table>
 </div>
 
+### Calendar features
+
+`calendar_feature_config={"features": [...]}` accepts these names, and nothing
+else &mdash; an unrecognised one raises `ValueError: Invalid feature: <name>`.
+Holiday detection is not among them; KDP ships no holiday calendar.
+
+<div class="table-container">
+  <table>
+    <thead>
+      <tr>
+        <th>Group</th>
+        <th>Names</th>
+        <th>Encoding</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Cyclic</td>
+        <td><code>month</code>, <code>day</code>, <code>day_of_week</code>, <code>day_of_year</code>, <code>week_of_year</code>, <code>quarter</code>, <code>hour</code>, <code>minute</code>, <code>second</code></td>
+        <td>sin/cos pair each. Append <code>_sin</code> or <code>_cos</code> to a name to take just one half.</td>
+      </tr>
+      <tr>
+        <td>Scalar</td>
+        <td><code>year</code></td>
+        <td>Single value.</td>
+      </tr>
+      <tr>
+        <td>Boolean flags</td>
+        <td><code>is_weekend</code>, <code>is_month_start</code>, <code>is_month_end</code>, <code>is_quarter_start</code>, <code>is_quarter_end</code>, <code>is_year_start</code>, <code>is_year_end</code></td>
+        <td>0.0 or 1.0.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
 !!! note "Four parameters are metadata, not behaviour"
     `sequence_length`, `is_target`, `exclude_from_input` and `input_type` are
     stored on the feature and serialized by `get_config()`, so they survive a
@@ -584,7 +619,7 @@ features = {
         },
         # Calendar features for seasonal patterns
         calendar_feature_config={
-            "features": ["month", "day_of_week", "is_weekend", "is_holiday"],
+            "features": ["month", "day_of_week", "is_weekend", "is_year_start"],
             "cyclic_encoding": True
         }
     ),

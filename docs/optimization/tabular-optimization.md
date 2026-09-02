@@ -123,6 +123,8 @@ are already processed in parallel internally &mdash; there is no flag for it.
 ### Financial Fraud Detection
 
 ```python
+from kdp import FeatureType, PreprocessingModel
+
 # Optimize for fraud detection (imbalanced, complex distributions)
 preprocessor = PreprocessingModel(
     path_data="transactions.csv",
@@ -152,6 +154,8 @@ preprocessor = PreprocessingModel(
 ### E-Commerce Recommendations
 
 ```python
+from kdp import FeatureType, PreprocessingModel
+
 # Optimize for recommendation systems (high-dimensional, sparse)
 preprocessor = PreprocessingModel(
     path_data="user_product_interactions.csv",

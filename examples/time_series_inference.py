@@ -8,8 +8,10 @@ This demonstrates how to handle single-point inference, batch inference, forecas
 import tempfile
 from pathlib import Path
 
+import keras
 import numpy as np
 import pandas as pd
+import tensorflow as tf
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 
@@ -180,6 +182,21 @@ def example_multi_step_forecast(preprocessor, formatter, train_data):
         (last_date + pd.Timedelta(days=i + 1)).strftime("%Y-%m-%d") for i in range(7)
     ]
 
+    # KDP is a preprocessor: it turns each row into a feature vector, it does
+    # not forecast. A forecast needs a model on top. This tiny untrained head
+    # stands in for the one you would train, so the loop below demonstrates the
+    # part KDP is responsible for -- feeding each new row through with the
+    # correct historical context.
+    forecaster = keras.Sequential([keras.layers.Dense(1)])
+
+    def forecast_next(preprocessed):
+        """Reduce the preprocessed feature block for the newest row to a number."""
+        block = (
+            preprocessed["sales"] if isinstance(preprocessed, dict) else preprocessed
+        )
+        newest = tf.convert_to_tensor(block)[-1:]  # keep the batch dimension
+        return float(tf.reshape(forecaster(newest), []))
+
     # Manually implement multi-step forecast
     forecast_rows = []
     history = store_0_data.copy()
@@ -202,10 +219,9 @@ def example_multi_step_forecast(preprocessor, formatter, train_data):
         # Make prediction
         prediction = preprocessor.predict(formatted_data)
 
-        # Extract the prediction value (last value in the sales array)
-        predicted_value = (
-            prediction["sales"][-1] if isinstance(prediction, dict) else prediction[-1]
-        )
+        # The preprocessor returns a feature block per column, not a scalar, so
+        # the newest row's block goes through the forecasting head.
+        predicted_value = forecast_next(prediction)
 
         # Create a result row for the forecast
         forecast_row = {
@@ -305,8 +321,10 @@ def example_batch_inference(preprocessor, formatter, train_data):
         for store in ["Store_0", "Store_1", "Store_2"]:
             if store_indices[store]:
                 last_idx = store_indices[store][-1]
+                # predict() returns NumPy arrays, so no .numpy() call is needed.
                 print(
-                    f"Predicted sales for {store}: {prediction['sales'][last_idx].numpy()}",
+                    f"Preprocessed sales features for {store}: "
+                    f"{np.asarray(prediction['sales'])[last_idx]}",
                 )
     else:
         print(

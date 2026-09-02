@@ -156,6 +156,8 @@ preprocessor = PreprocessingModel(
     <div class="code-container">
 
 ```python
+from kdp import FeatureType, PreprocessingModel
+
 # Creating categorical crosses
 preprocessor = PreprocessingModel(
     features_specs={
@@ -177,6 +179,8 @@ preprocessor = PreprocessingModel(
     <div class="code-container">
 
 ```python
+from kdp import FeatureType, PreprocessingModel
+
 # Creating categorical × numerical crosses
 preprocessor = PreprocessingModel(
     features_specs={
@@ -223,6 +227,8 @@ preprocessor = PreprocessingModel(
     <div class="code-container">
 
 ```python
+from kdp import FeatureType, PreprocessingModel
+
 # Creating multiple crosses
 preprocessor = PreprocessingModel(
     features_specs={
@@ -278,6 +284,8 @@ preprocessor = PreprocessingModel(
     <div class="code-container">
 
 ```python
+from kdp import FeatureType, PreprocessingModel
+
 # Each cross is a pair. For three-way interactions, cross every pair and let
 # the model combine them -- a cross cannot be crossed again.
 preprocessor = PreprocessingModel(

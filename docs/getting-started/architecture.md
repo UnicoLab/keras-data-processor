@@ -91,6 +91,8 @@
   <div class="code-container">
 
 ```python
+from kdp import FeatureType, NumericalFeature, PreprocessingModel
+
 # This is your blueprint - tell KDP what you're working with
 features = {
     "age": FeatureType.FLOAT_NORMALIZED,          # Simple definition

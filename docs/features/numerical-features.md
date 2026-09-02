@@ -205,6 +205,8 @@ preprocessor = PreprocessingModel(
       <div class="code-container">
 
 ```python
+from kdp import FeatureType, NumericalFeature, PreprocessingModel
+
 # Configure numerical embeddings
 preprocessor = PreprocessingModel(
     features_specs={
@@ -235,6 +237,8 @@ preprocessor = PreprocessingModel(
     <div class="code-container">
 
 ```python
+from kdp import FeatureType, NumericalFeature, PreprocessingModel
+
 # 📈 Financial metrics with appropriate processing
 preprocessor = PreprocessingModel(
     features_specs={
@@ -270,6 +274,8 @@ preprocessor = PreprocessingModel(
     <div class="code-container">
 
 ```python
+from kdp import FeatureType, NumericalFeature, PreprocessingModel
+
 # 📡 Processing sensor readings
 preprocessor = PreprocessingModel(
     features_specs={

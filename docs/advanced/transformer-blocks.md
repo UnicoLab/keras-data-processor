@@ -140,6 +140,8 @@ preprocessor = PreprocessingModel(
     <div class="code-container">
 
 ```python
+from kdp import FeatureType, PreprocessingModel
+
 features_specs = {
     "age": FeatureType.FLOAT_NORMALIZED,
     "income": FeatureType.FLOAT_RESCALED,
@@ -167,6 +169,8 @@ preprocessor = PreprocessingModel(
     <div class="code-container">
 
 ```python
+from kdp import FeatureType, PreprocessingModel
+
 features_specs = {
     "user_id": FeatureType.INTEGER_CATEGORICAL,
     "item_id": FeatureType.INTEGER_CATEGORICAL,
