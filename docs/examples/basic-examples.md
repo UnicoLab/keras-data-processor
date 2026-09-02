@@ -90,8 +90,22 @@ ppr = PreprocessingModel(
 result = ppr.build_preprocessor()
 
 # Transform data using direct model prediction
-# A batch is one entry per feature, each a column of rows
-test_batch = {name: tf.constant([[0.0]]) for name in features}
+# A batch is one entry per feature. String features need string values, so
+# build each column from the feature's own type.
+def _sample(feature):
+    ft = getattr(feature, "feature_type", feature)
+    name = ft.name if hasattr(ft, "name") else str(ft)
+    if name == "STRING_CATEGORICAL":
+        return tf.constant([["a"]])
+    if name == "INTEGER_CATEGORICAL":
+        return tf.constant([[0]], dtype=tf.int32)
+    if name == "TEXT":
+        return tf.constant([["some text"]])
+    if name == "DATE":
+        return tf.constant([["2021-06-15"]])
+    return tf.constant([[0.0]])
+
+test_batch = {name: _sample(feature) for name, feature in features.items()}
 transformed_data = ppr.model.predict(test_batch)
 
 # Get feature importances
@@ -185,8 +199,22 @@ ppr = PreprocessingModel(
 result = ppr.build_preprocessor()
 
 # Transform data using direct model prediction
-# A batch is one entry per feature, each a column of rows
-test_batch = {name: tf.constant([[0.0]]) for name in features}
+# A batch is one entry per feature. String features need string values, so
+# build each column from the feature's own type.
+def _sample(feature):
+    ft = getattr(feature, "feature_type", feature)
+    name = ft.name if hasattr(ft, "name") else str(ft)
+    if name == "STRING_CATEGORICAL":
+        return tf.constant([["a"]])
+    if name == "INTEGER_CATEGORICAL":
+        return tf.constant([[0]], dtype=tf.int32)
+    if name == "TEXT":
+        return tf.constant([["some text"]])
+    if name == "DATE":
+        return tf.constant([["2021-06-15"]])
+    return tf.constant([[0.0]])
+
+test_batch = {name: _sample(feature) for name, feature in features.items()}
 transformed_data = ppr.model.predict(test_batch)
 
 # Get feature importances
@@ -363,8 +391,22 @@ ppr = PreprocessingModel(
 result = ppr.build_preprocessor()
 
 # Transform data using direct model prediction
-# A batch is one entry per feature, each a column of rows
-test_batch = {name: tf.constant([[0.0]]) for name in features}
+# A batch is one entry per feature. String features need string values, so
+# build each column from the feature's own type.
+def _sample(feature):
+    ft = getattr(feature, "feature_type", feature)
+    name = ft.name if hasattr(ft, "name") else str(ft)
+    if name == "STRING_CATEGORICAL":
+        return tf.constant([["a"]])
+    if name == "INTEGER_CATEGORICAL":
+        return tf.constant([[0]], dtype=tf.int32)
+    if name == "TEXT":
+        return tf.constant([["some text"]])
+    if name == "DATE":
+        return tf.constant([["2021-06-15"]])
+    return tf.constant([[0.0]])
+
+test_batch = {name: _sample(feature) for name, feature in features.items()}
 transformed_data = ppr.model.predict(test_batch)
 
 # Get feature importances
@@ -384,6 +426,7 @@ Numerical embedding is a technique that allows us to embed numerical features in
 This can be useful for capturing non-linear relationships within/between numerical feature/s.
 
 ```python
+from kdp.layers import DistributionAwareEncoder
 import tensorflow as tf
 
 from kdp.features import NumericalFeature, FeatureType
@@ -434,8 +477,22 @@ ppr = PreprocessingModel(
 result = ppr.build_preprocessor()
 
 # Transform data using direct model prediction
-# A batch is one entry per feature, each a column of rows
-test_batch = {name: tf.constant([[0.0]]) for name in features}
+# A batch is one entry per feature. String features need string values, so
+# build each column from the feature's own type.
+def _sample(feature):
+    ft = getattr(feature, "feature_type", feature)
+    name = ft.name if hasattr(ft, "name") else str(ft)
+    if name == "STRING_CATEGORICAL":
+        return tf.constant([["a"]])
+    if name == "INTEGER_CATEGORICAL":
+        return tf.constant([[0]], dtype=tf.int32)
+    if name == "TEXT":
+        return tf.constant([["some text"]])
+    if name == "DATE":
+        return tf.constant([["2021-06-15"]])
+    return tf.constant([[0.0]])
+
+test_batch = {name: _sample(feature) for name, feature in features.items()}
 transformed_data = ppr.model.predict(test_batch)
 
 # Get feature importances

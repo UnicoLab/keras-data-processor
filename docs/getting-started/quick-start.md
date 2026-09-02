@@ -23,8 +23,8 @@ from kdp import PreprocessingModel, FeatureType
 # Quick feature definition - KDP handles the complexity
 features = {
     # Numerical features with smart preprocessing
-    "age": FeatureType.FLOAT_NORMALIZED,          # Age gets 0-1 normalization
-    "income": FeatureType.FLOAT_RESCALED,         # Income gets robust scaling
+    "age": FeatureType.FLOAT_NORMALIZED,          # zero mean, unit variance
+    "income": FeatureType.FLOAT_NORMALIZED,       # standardised too
 
     # Categorical features with automatic encoding
     "occupation": FeatureType.STRING_CATEGORICAL, # Text categories to embeddings

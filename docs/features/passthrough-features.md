@@ -100,6 +100,64 @@ preprocessor = PreprocessingModel(
 )
 ```
 
+### 📐 What the model returns in each mode
+
+The two modes do not just move a column &mdash; they change the **shape of the
+model's output**, which is what your downstream code has to handle.
+
+<div class="table-container">
+  <table>
+    <thead>
+      <tr>
+        <th><code>include_passthrough_in_output</code></th>
+        <th>Model output</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>True</code> (default)</td>
+        <td>A single tensor. Passthrough columns are concatenated alongside the processed features, so they add to its width.</td>
+      </tr>
+      <tr>
+        <td><code>False</code></td>
+        <td>A dict: <code>{"processed": &lt;tensor&gt;, "passthrough": {&lt;name&gt;: &lt;tensor&gt;, ...}}</code>. The processed tensor no longer contains the passthrough columns.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="code-container">
+
+```python
+import tensorflow as tf
+
+from kdp import FeatureType, PassthroughFeature, PreprocessingModel
+
+features = {
+    "amount": FeatureType.FLOAT_NORMALIZED,
+    "row_id": PassthroughFeature(name="row_id", feature_type=FeatureType.PASSTHROUGH),
+}
+batch = {"amount": tf.constant([[50.0]]), "row_id": tf.constant([[7.0]])}
+
+# Default: one tensor, two columns wide
+combined = PreprocessingModel(path_data="data.csv", features_specs=features)
+combined.build_preprocessor()
+print(combined.model(batch).shape)          # (1, 2)
+
+# Separate: the id is handed back untouched, next to the processed block
+separate = PreprocessingModel(
+    path_data="data.csv",
+    features_specs=features,
+    include_passthrough_in_output=False,
+)
+separate.build_preprocessor()
+result = separate.model(batch)
+print(result["processed"].shape)            # (1, 1)
+print(result["passthrough"]["row_id"])      # the original value
+```
+
+</div>
+
 ## 💡 Defining Passthrough Features
 
 <div class="code-container">
