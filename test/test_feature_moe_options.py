@@ -42,9 +42,7 @@ def _build(tmp_path, **kwargs):
         features_stats_path=str(tmp_path / "stats.json"),
         overwrite_stats=True,
         use_feature_moe=True,
-        feature_moe_num_experts=2,
-        feature_moe_expert_dim=16,
-        **kwargs,
+        **{"feature_moe_num_experts": 2, "feature_moe_expert_dim": 16, **kwargs},
     )
     preprocessor.build_preprocessor()
     return preprocessor
@@ -102,3 +100,40 @@ class TestFeatureMoEOptionsInConcatMode(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@pytest.mark.unit
+class TestFeatureMoEResidual(unittest.TestCase):
+    """`feature_moe_use_residual` was stored on the model and read nowhere."""
+
+    @staticmethod
+    def _residual_layers(model) -> list[str]:
+        """Names of the Add layers that implement the residual."""
+        return [layer.name for layer in model.layers if "moe_residual" in layer.name]
+
+    def test_residual_is_added_when_widths_match(self):
+        """A width-preserving expert can be added to its input."""
+        with tempfile.TemporaryDirectory() as tmp:
+            preprocessor = _build(Path(tmp), feature_moe_expert_dim=1)
+        self.assertTrue(self._residual_layers(preprocessor.model))
+
+    def test_no_residual_when_the_expert_changes_the_width(self):
+        """There is nothing to add a 1-wide feature to a 16-wide output."""
+        with tempfile.TemporaryDirectory() as tmp:
+            preprocessor = _build(Path(tmp), feature_moe_expert_dim=16)
+        self.assertEqual(self._residual_layers(preprocessor.model), [])
+
+    def test_disabling_it_removes_the_connection(self):
+        """The flag now actually controls something."""
+        with tempfile.TemporaryDirectory() as tmp:
+            preprocessor = _build(
+                Path(tmp), feature_moe_expert_dim=1, feature_moe_use_residual=False
+            )
+        self.assertEqual(self._residual_layers(preprocessor.model), [])
+
+    def test_the_model_still_runs_with_a_residual(self):
+        """The connection must not break the forward pass."""
+        with tempfile.TemporaryDirectory() as tmp:
+            preprocessor = _build(Path(tmp), feature_moe_expert_dim=1)
+            output = preprocessor.model(BATCH)
+        self.assertEqual(int(output.shape[-1]), len(COLUMNS))

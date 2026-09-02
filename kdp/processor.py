@@ -2254,6 +2254,14 @@ class PreprocessingModel:
                 name=f"{feature_name}_moe_projection_dict",
             )(feature_output)
 
+            # Same residual as the concat branch, where the widths allow it.
+            if self.feature_moe_use_residual:
+                original = individual_features[i]
+                if original.shape[-1] == projection.shape[-1]:
+                    projection = keras.layers.Add(
+                        name=f"{feature_name}_moe_residual_dict",
+                    )([original, projection])
+
             # Update the processed features with the MoE-enhanced version
             self.processed_features[feature_name] = projection
 
@@ -2377,6 +2385,21 @@ class PreprocessingModel:
 
         # Unstack the features after MoE processing using a custom layer
         unstacked_features = UnstackLayer(name="unstack_moe_features")(feature_moe)
+
+        # `feature_moe_use_residual` was stored on the model and read nowhere, so
+        # the residual connection it names never existed. It is added here on
+        # the features whose width the mixture preserved; where the expert
+        # changed the width there is nothing to add the original to.
+        if self.feature_moe_use_residual:
+            with_residual = []
+            for index, expert_output in enumerate(unstacked_features):
+                original = feature_outputs[index]
+                if original.shape[-1] == expert_output.shape[-1]:
+                    expert_output = keras.layers.Add(
+                        name=f"moe_residual_{index}",
+                    )([original, expert_output])
+                with_residual.append(expert_output)
+            unstacked_features = with_residual
 
         # Concatenate the processed features back together
         self.concat_all = keras.layers.Concatenate(axis=-1, name="concat_moe_features")(

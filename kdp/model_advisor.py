@@ -549,7 +549,14 @@ class ModelAdvisor:
 
     def _analyze_date_features(self) -> None:
         """Analyze date features and generate specific recommendations."""
-        date_stats = self.features_stats.get("date_stats", {})
+        # `DatasetStatistics` writes date statistics under "date"; this looked
+        # for "date_stats" and so never found any, which is why a dataset with
+        # a date column came back with no recommendation for it at all. Both
+        # spellings are accepted so a stats file from either side still works.
+        date_stats = self.features_stats.get("date") or self.features_stats.get(
+            "date_stats",
+            {},
+        )
 
         for feature, stats in date_stats.items():
             recommendation = {
@@ -565,30 +572,29 @@ class ModelAdvisor:
             timezone_info = stats.get("timezone_info", None)
             cyclical_patterns = stats.get("cyclical_patterns", [])
 
-            # Basic date feature extraction
-            recommendation["preprocessing"].append("DATE_FEATURES")
-            recommendation["config"]["extract"] = [
-                "year",
-                "month",
-                "day",
-                "dayofweek",
-                "quarter",
-            ]
+            # `DateFeature` reads exactly two options, so the recommendation
+            # only offers those. Year, month, day of month and day of week are
+            # always extracted and always cyclically encoded; the earlier
+            # `extract`, `timezone_aware` and `cyclical_encoding` entries named
+            # settings that do not exist.
+            recommendation["preprocessing"].append("DATE_ENCODING")
+            recommendation["config"]["format"] = stats.get("format", "YYYY-MM-DD")
+            recommendation["notes"].append(
+                "Year, month, day of month and day of week are always encoded "
+                "as sine/cosine pairs (8 columns).",
+            )
 
-            if has_time:
-                recommendation["config"]["extend"].extend(["hour", "minute", "second"])
-
-            # Add timezone handling if needed
-            if timezone_info:
-                recommendation["config"]["timezone_aware"] = True
-                recommendation["config"]["timezone"] = timezone_info
-
-            # Add cyclical encoding for detected patterns
-            if cyclical_patterns:
-                recommendation["advanced_options"]["cyclical_encoding"] = True
-                recommendation["config"]["cyclical_features"] = cyclical_patterns
+            if cyclical_patterns or has_time:
+                recommendation["config"]["add_season"] = True
                 recommendation["notes"].append(
-                    "Cyclical patterns detected, using cyclical encoding",
+                    "Seasonal pattern detected, adding the season one-hot "
+                    "(4 more columns).",
+                )
+
+            if timezone_info:
+                recommendation["notes"].append(
+                    f"Timezone {timezone_info} detected. KDP parses dates only; "
+                    "normalise the timezone before writing the CSV.",
                 )
 
             self.recommendations[feature] = recommendation
