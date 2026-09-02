@@ -231,7 +231,11 @@ class CalendarFeatureLayer(Layer):
                         df[feature] = (df[feature] - 1) / 365  # 1-366 -> 0-1
 
                 elif feature == "week_of_year":
-                    df[feature] = dates.isocalendar().week
+                    # `isocalendar()` returns a frame indexed by the timestamps
+                    # themselves. Assigning that to a column of a RangeIndex
+                    # frame aligns on the index, matches nothing, and filled
+                    # every row with NaN. Take the values positionally.
+                    df[feature] = dates.isocalendar().week.to_numpy(dtype=float)
                     if self.normalize:
                         df[feature] = (df[feature] - 1) / 52  # 1-53 -> 0-1
 
@@ -239,6 +243,21 @@ class CalendarFeatureLayer(Layer):
                     df[feature] = dates.quarter
                     if self.normalize:
                         df[feature] = (df[feature] - 1) / 3  # 1-4 -> 0-1
+
+                elif feature == "hour":
+                    df[feature] = dates.hour.astype(float)
+                    if self.normalize:
+                        df[feature] = df[feature] / 23  # 0-23 -> 0-1
+
+                elif feature == "minute":
+                    df[feature] = dates.minute.astype(float)
+                    if self.normalize:
+                        df[feature] = df[feature] / 59  # 0-59 -> 0-1
+
+                elif feature == "second":
+                    df[feature] = dates.second.astype(float)
+                    if self.normalize:
+                        df[feature] = df[feature] / 59  # 0-59 -> 0-1
 
                 elif feature == "is_weekend":
                     df[feature] = (dates.dayofweek >= 5).astype(float)  # 5=Sat, 6=Sun

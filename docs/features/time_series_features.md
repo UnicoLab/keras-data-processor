@@ -383,6 +383,12 @@ Holiday detection is not among them; KDP ships no holiday calendar.
         <td>Single value.</td>
       </tr>
       <tr>
+        <td>Clock</td>
+        <td><code>hour</code>, <code>minute</code>, <code>second</code></td>
+        <td>Read from the timestamp. A date-only column such as
+        <code>2021-06-15</code> has no time, so all three are 0.</td>
+      </tr>
+      <tr>
         <td>Boolean flags</td>
         <td><code>is_weekend</code>, <code>is_month_start</code>, <code>is_month_end</code>, <code>is_quarter_start</code>, <code>is_quarter_end</code>, <code>is_year_start</code>, <code>is_year_end</code></td>
         <td>0.0 or 1.0.</td>
