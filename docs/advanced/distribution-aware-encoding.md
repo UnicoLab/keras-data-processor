@@ -129,8 +129,6 @@ preprocessor = PreprocessingModel(
     features_specs=features_specs,
     use_distribution_aware=True,
     distribution_aware_bins=1000,
-    detect_periodicity=True,  # Enable periodic pattern detection
-    handle_sparsity=True     # Enable sparse data handling
 )
 ```
 
@@ -251,6 +249,10 @@ preprocessor = PreprocessingModel(
 
 ## ⚙️ Configuration Options
 
+### On `PreprocessingModel`
+
+These two are the whole model-level surface:
+
 <div class="table-container">
   <table class="config-table">
     <thead>
@@ -274,6 +276,32 @@ preprocessor = PreprocessingModel(
         <td>1000</td>
         <td>Number of bins for distribution analysis</td>
       </tr>
+    </tbody>
+  </table>
+</div>
+
+Per feature, set `preferred_distribution` on a `NumericalFeature` to skip
+automatic detection and force a specific distribution.
+
+### On the `DistributionAwareEncoder` layer
+
+The processor builds this layer for you with `detect_periodicity=True`,
+`handle_sparsity=True`, `adaptive_binning=True` and `mixture_components=3`
+fixed. To change them, use the layer directly through a
+[custom preprocessing pipeline](custom-preprocessing.md) &mdash; passing them
+to `PreprocessingModel` raises `TypeError`.
+
+<div class="table-container">
+  <table class="config-table">
+    <thead>
+      <tr>
+        <th>Parameter</th>
+        <th>Type</th>
+        <th>Default</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
       <tr>
         <td><code>detect_periodicity</code></td>
         <td>bool</td>
@@ -285,6 +313,12 @@ preprocessor = PreprocessingModel(
         <td>bool</td>
         <td>True</td>
         <td>Special handling for sparse data</td>
+      </tr>
+      <tr>
+        <td><code>adaptive_binning</code></td>
+        <td>bool</td>
+        <td>None</td>
+        <td>Learn bin boundaries from the batch rather than using fixed ones</td>
       </tr>
       <tr>
         <td><code>embedding_dim</code></td>
@@ -385,10 +419,7 @@ preprocessor = PreprocessingModel(
     features_specs=features_specs,
     use_distribution_aware=True,
     distribution_aware_bins=1000,
-    detect_periodicity=True,  # For daily/weekly patterns
-    handle_sparsity=True,    # For low-volume periods
     embedding_dim=32,        # Project to fixed dimension
-    add_distribution_embedding=True  # Add distribution information
 )
 ```
 
@@ -423,8 +454,6 @@ preprocessor = PreprocessingModel(
     features_specs=features_specs,
     use_distribution_aware=True,
     distribution_aware_bins=500,  # Fewer bins for simpler distributions
-    detect_periodicity=True,      # For daily temperature cycles
-    handle_sparsity=False,       # No sparse data expected
     embedding_dim=16             # Smaller embedding for simpler patterns
 )
 ```
