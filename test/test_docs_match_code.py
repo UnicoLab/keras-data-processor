@@ -13,6 +13,7 @@ layer that ultimately receives it.
 
 import ast
 import importlib
+import sys
 import inspect
 import re
 import subprocess
@@ -243,6 +244,40 @@ class TestDocumentedCodeMatchesTheAPI(unittest.TestCase):
                             f"not in {sorted(valid)}"
                         )
         self.assertEqual(invalid, [], "\n".join(invalid))
+
+    def test_every_module_reaches_the_api_reference(self):
+        """A module the generator does not list has no API page at all.
+
+        `kdp.moe` and `kdp.model_advisor` were both absent, so the whole
+        Feature-MoE implementation and the advisor behind `auto_configure` were
+        missing from the published reference while being documented as
+        headline features elsewhere.
+        """
+        sys.path.insert(0, str(REPO_ROOT / "scripts"))
+        try:
+            generator = importlib.import_module("generate_docstring_docs")
+        finally:
+            sys.path.pop(0)
+
+        listed = set(generator.MODULES_TO_DOCUMENT)
+        package_root = Path(kdp.__file__).parent
+        missing = []
+        for path in sorted(package_root.rglob("*.py")):
+            if path.name == "__init__.py":
+                continue
+            module = "kdp." + ".".join(
+                path.relative_to(package_root).with_suffix("").parts
+            )
+            if module in listed:
+                continue
+            public = [
+                node.name
+                for node in ast.walk(ast.parse(path.read_text()))
+                if isinstance(node, ast.ClassDef) and not node.name.startswith("_")
+            ]
+            if public:
+                missing.append(f"{module}: {public}")
+        self.assertEqual(missing, [], "\n".join(missing))
 
     def test_internal_links_resolve(self):
         """Every cross-link between pages must point at a page that exists.

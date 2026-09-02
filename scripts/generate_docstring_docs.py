@@ -24,6 +24,8 @@ CORE_MODULES = [
     "kdp.features",
     "kdp.stats",
     "kdp.auto_config",
+    "kdp.model_advisor",
+    "kdp.moe",
     "kdp.pipeline",
     "kdp.layers_factory",
     "kdp.inference.base",

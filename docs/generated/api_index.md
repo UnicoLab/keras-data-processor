@@ -42,6 +42,17 @@ This section provides detailed API documentation extracted directly from the cod
 ## kdp.auto_config
 
 
+## kdp.model_advisor
+
+- [ModelAdvisor](api/model_advisor_ModelAdvisor.md)
+
+## kdp.moe
+
+- [ExpertBlock](api/moe_ExpertBlock.md)
+- [FeatureMoE](api/moe_FeatureMoE.md)
+- [StackFeaturesLayer](api/moe_StackFeaturesLayer.md)
+- [UnstackLayer](api/moe_UnstackLayer.md)
+
 ## kdp.pipeline
 
 - [FeaturePreprocessor](api/pipeline_FeaturePreprocessor.md)
