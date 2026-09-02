@@ -113,7 +113,10 @@ class TestModelAdvisor(unittest.TestCase):
         self.assertEqual(text_rec["feature_type"], "TextFeature")
         self.assertIn("TEXT_VECTORIZATION", text_rec["preprocessing"])
         self.assertIn("max_tokens", text_rec["config"])
-        self.assertIn("embedding_dim", text_rec["config"])
+        # `embedding_dim` was recommended here, but TextFeature forwards its
+        # keyword arguments to TextVectorization, which has no such argument --
+        # the generated snippet wrote a setting that was silently ignored.
+        self.assertNotIn("embedding_dim", text_rec["config"])
 
     def test_analyze_date_features(self):
         """The recommendation must name options `DateFeature` actually reads.

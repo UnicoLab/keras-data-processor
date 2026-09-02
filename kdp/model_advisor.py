@@ -502,9 +502,9 @@ class ModelAdvisor:
                 "standardize"
             ] = self._determine_text_standardization(special_char_ratio, language)
 
-            # Smart embedding dimension calculation
-            embedding_dim = self._calculate_text_embedding_dim(vocab_size)
-            recommendation["config"]["embedding_dim"] = embedding_dim
+            # No embedding dimension is recorded: TextFeature has no such
+            # option, so recommending one told the reader to write a setting
+            # that does nothing.
 
             # Add advanced text processing options
             if special_char_ratio > 0.1:
@@ -766,8 +766,9 @@ class ModelAdvisor:
                     code.append(
                         f"        output_sequence_length={config['output_sequence_length']},",
                     )
-                if "embedding_dim" in config:
-                    code.append(f"        embedding_dim={config['embedding_dim']},")
+                # `embedding_dim` was emitted here, but TextFeature forwards its
+                # keyword arguments to TextVectorization, which has no such
+                # argument -- it was accepted and silently ignored.
                 code.append("    ),")
 
             elif feature_type == "DateFeature":
@@ -775,15 +776,13 @@ class ModelAdvisor:
                 code.append(f'    "{feature_name}": DateFeature(')
                 code.append(f'        name="{feature_name}",')
                 code.append("        feature_type=FeatureType.DATE,")
-                if "date_format" in config:
-                    code.append(f'        date_format="{config["date_format"]}",')
-                if "output_format" in config:
-                    code.append(f'        output_format="{config["output_format"]}",')
-                if config.get("extract", []):
-                    extract_str = (
-                        "[" + ", ".join([f'"{e}"' for e in config["extract"]]) + "]"
-                    )
-                    code.append(f"        extract={extract_str},")
+                # `date_format`, `output_format` and `extract` were emitted
+                # here; DateFeature reads neither. The two real options are
+                # `format` and `add_season`.
+                if "format" in config:
+                    code.append(f'        format="{config["format"]}",')
+                if config.get("add_season"):
+                    code.append("        add_season=True,")
                 code.append("    ),")
 
         code.append("}")
