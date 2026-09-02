@@ -7,6 +7,15 @@
   </div>
 </div>
 
+!!! note "Output width follows `embedding_dim`"
+    With `use_advanced_numerical_embedding=True`, each numeric feature becomes
+    an `embedding_dim`-wide block, so the model's numeric output is
+    `number_of_numeric_features x embedding_dim`. Two features at
+    `embedding_dim=16` give 32 columns.
+
+    A value set on an individual `NumericalFeature` wins over the model-level
+    one, so you can give a single column a different width.
+
 ## 📋 Architecture Overview
 
 <div class="architecture-container">

@@ -1,0 +1,104 @@
+"""Tests that every Feature-MoE option reaches the layer in concat mode.
+
+`_apply_feature_moe`, the path taken by the default `output_mode="concat"`,
+constructed `FeatureMoE` with only `num_experts`, `expert_dim` and `routing`.
+`feature_moe_hidden_dims`, `feature_moe_sparsity`, `feature_moe_freeze_experts`
+and `feature_moe_dropout` were therefore ignored, and
+`feature_moe_routing="predefined"` raised, because the assignments and feature
+names never arrived. The dict-mode branch passed them all along.
+"""
+
+import tempfile
+import unittest
+from pathlib import Path
+
+import keras
+import numpy as np
+import pandas as pd
+import pytest
+import tensorflow as tf
+
+from kdp import FeatureType, PreprocessingModel
+
+COLUMNS = ("n1", "n2")
+BATCH = {"n1": tf.constant([[50.0]]), "n2": tf.constant([[5.0]])}
+
+
+def _dataset(directory, rows: int = 200):
+    """Two numeric columns is enough to route between two experts."""
+    rng = np.random.default_rng(0)
+    csv_path = directory / "moe.csv"
+    pd.DataFrame({c: rng.normal(50, 10, rows) for c in COLUMNS}).to_csv(
+        csv_path, index=False
+    )
+    return csv_path
+
+
+def _build(tmp_path, **kwargs):
+    keras.backend.clear_session()
+    preprocessor = PreprocessingModel(
+        path_data=str(_dataset(tmp_path)),
+        features_specs={c: FeatureType.FLOAT_NORMALIZED for c in COLUMNS},
+        features_stats_path=str(tmp_path / "stats.json"),
+        overwrite_stats=True,
+        use_feature_moe=True,
+        feature_moe_num_experts=2,
+        feature_moe_expert_dim=16,
+        **kwargs,
+    )
+    preprocessor.build_preprocessor()
+    return preprocessor
+
+
+@pytest.mark.unit
+class TestFeatureMoEOptionsInConcatMode(unittest.TestCase):
+    """Concat mode is the default, so these are the common path."""
+
+    def test_predefined_routing_builds(self):
+        """This raised: feature_names and assignments were never passed."""
+        with tempfile.TemporaryDirectory() as tmp:
+            preprocessor = _build(
+                Path(tmp),
+                feature_moe_routing="predefined",
+                feature_moe_assignments={"n1": 0, "n2": 1},
+            )
+            output = preprocessor.model(BATCH)
+        self.assertEqual(int(output.shape[-1]), len(COLUMNS) * 16)
+
+    def test_predefined_routing_still_requires_assignments(self):
+        """The layer's own validation must keep working."""
+        with tempfile.TemporaryDirectory() as tmp, self.assertRaises(ValueError):
+            _build(Path(tmp), feature_moe_routing="predefined")
+
+    def test_hidden_dims_change_the_expert_networks(self):
+        """Ignored before, so the parameter count did not move."""
+        with tempfile.TemporaryDirectory() as tmp:
+            plain = _build(Path(tmp)).model.count_params()
+        with tempfile.TemporaryDirectory() as tmp:
+            deeper = _build(
+                Path(tmp), feature_moe_hidden_dims=[32, 32]
+            ).model.count_params()
+        self.assertGreater(deeper, plain)
+
+    def test_freezing_experts_removes_them_from_training(self):
+        """`freeze_experts` never reached the layer either."""
+        with tempfile.TemporaryDirectory() as tmp:
+            trainable = _build(Path(tmp)).model
+        with tempfile.TemporaryDirectory() as tmp:
+            frozen = _build(Path(tmp), feature_moe_freeze_experts=True).model
+
+        def count_trainable(model):
+            return int(sum(np.prod(w.shape) for w in model.trainable_weights))
+
+        self.assertLess(count_trainable(frozen), count_trainable(trainable))
+
+    def test_learned_routing_is_unchanged(self):
+        """The default path must behave as before."""
+        with tempfile.TemporaryDirectory() as tmp:
+            preprocessor = _build(Path(tmp))
+            output = preprocessor.model(BATCH)
+        self.assertEqual(int(output.shape[-1]), len(COLUMNS) * 16)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -135,6 +135,11 @@ class Feature:
         return FeatureType.from_string(type_str)
 
 
+# Sentinel marking a parameter the caller never supplied, so a model-level
+# setting can fill it in without overriding a value the caller chose.
+_UNSET = object()
+
+
 class NumericalFeature(Feature):
     """NumericalFeature with dynamic kwargs passing and embedding support."""
 
@@ -144,8 +149,8 @@ class NumericalFeature(Feature):
         feature_type: FeatureType = FeatureType.FLOAT_NORMALIZED,
         preferred_distribution: DistributionType | None = None,
         use_embedding: bool = False,
-        embedding_dim: int = 8,
-        num_bins: int = 10,
+        embedding_dim: int = _UNSET,
+        num_bins: int = _UNSET,
         **kwargs,
     ) -> None:
         """Initializes a NumericalFeature instance.
@@ -163,12 +168,24 @@ class NumericalFeature(Feature):
         self.dtype = tf.float32
         self.preferred_distribution = preferred_distribution
         self.use_embedding = use_embedding
-        self.embedding_dim = embedding_dim
-        self.num_bins = num_bins
+        # Remember what the caller actually asked for. `PreprocessingModel`
+        # passes its own embedding settings, and those must not overwrite a
+        # value set on the feature itself.
+        self._explicit_embedding_options = {
+            name
+            for name, value in (
+                ("embedding_dim", embedding_dim),
+                ("num_bins", num_bins),
+            )
+            if value is not _UNSET
+        }
+        self.embedding_dim = 8 if embedding_dim is _UNSET else embedding_dim
+        self.num_bins = 10 if num_bins is _UNSET else num_bins
 
     def get_embedding_layer(
         self,
         input_shape: tuple | None = None,  # noqa: ARG002 - kept for API compatibility
+        defaults: dict | None = None,
     ) -> keras.layers.Layer:
         """Creates and returns a NumericalEmbedding layer configured for this feature.
 
@@ -177,20 +194,46 @@ class NumericalFeature(Feature):
                 in its own `build`, so nothing here depends on the shape. The
                 parameter is kept, and optional, so existing callers that pass
                 it keep working.
+            defaults: Model-level embedding settings, used for every option
+                this feature did not set itself. `PreprocessingModel` passes
+                its `embedding_dim`, `mlp_hidden_units`, `num_bins`,
+                `init_min`, `init_max`, `dropout_rate` and `use_batch_norm`
+                here; without them those arguments had no effect at all.
 
         Returns:
             A `NumericalEmbedding` layer built from this feature's settings.
         """
         from kdp.layers.numerical_embedding_layer import NumericalEmbedding
 
+        defaults = defaults or {}
+
+        def resolve(option: str, fallback: object) -> object:
+            """Feature setting wins, then the model-level one, then the default.
+
+            Args:
+                option: Name of the embedding option to resolve.
+                fallback: Value to use when nothing else supplies one.
+
+            Returns:
+                The resolved value for the option.
+            """
+            if option in self._explicit_embedding_options:
+                return getattr(self, option)
+            if option in self.kwargs:
+                return self.kwargs[option]
+            if option in defaults and defaults[option] is not None:
+                return defaults[option]
+            return fallback
+
+        embedding_dim = resolve("embedding_dim", self.embedding_dim)
         return NumericalEmbedding(
-            embedding_dim=self.embedding_dim,
-            mlp_hidden_units=max(16, self.embedding_dim * 2),
-            num_bins=self.num_bins,
-            init_min=self.kwargs.get("init_min", -3.0),
-            init_max=self.kwargs.get("init_max", 3.0),
-            dropout_rate=self.kwargs.get("dropout_rate", 0.1),
-            use_batch_norm=self.kwargs.get("use_batch_norm", True),
+            embedding_dim=embedding_dim,
+            mlp_hidden_units=resolve("mlp_hidden_units", max(16, embedding_dim * 2)),
+            num_bins=resolve("num_bins", self.num_bins),
+            init_min=resolve("init_min", -3.0),
+            init_max=resolve("init_max", 3.0),
+            dropout_rate=resolve("dropout_rate", 0.1),
+            use_batch_norm=resolve("use_batch_norm", True),
             name=f"{self.name}_embedding",
         )
 

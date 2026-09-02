@@ -300,6 +300,14 @@ class FeatureMoE(keras.layers.Layer):
             for i in range(num_experts)
         ]
 
+        # `freeze_experts` only passed `training=False` to each expert, which
+        # controls dropout and batch-norm behaviour, not whether the weights
+        # receive gradients -- so the experts were still trained. Marking them
+        # untrainable is what the option is documented to do.
+        if freeze_experts:
+            for expert in self.experts:
+                expert.trainable = False
+
         # Set up routing mechanism
         if routing == "learned":
             # Router network maps feature representations to expert weights

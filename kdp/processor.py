@@ -1077,19 +1077,26 @@ class PreprocessingModel:
             input_layer: Input layer for the feature
         """
         logger.info(f"Using NumericalEmbedding for {feature_name}")
-        # Obtain the embedding layer.
-        embedding_layer = feature.get_embedding_layer(input_shape=input_layer.shape)
+        # These were passed to `add_processing_step` below, where the layer
+        # creator ignored every keyword argument and returned an already-built
+        # layer, so none of them reached the embedding. They are handed to the
+        # feature instead, which uses them for whatever it did not set itself.
+        embedding_layer = feature.get_embedding_layer(
+            input_shape=input_layer.shape,
+            defaults={
+                "embedding_dim": self.embedding_dim,
+                "mlp_hidden_units": self.mlp_hidden_units,
+                "num_bins": self.num_bins,
+                "init_min": self.init_min,
+                "init_max": self.init_max,
+                "dropout_rate": self.dropout_rate,
+                "use_batch_norm": self.use_batch_norm,
+            },
+        )
         preprocessor.add_processing_step(
             layer_creator=lambda **kwargs: embedding_layer,
             layer_class="NumericalEmbedding",
             name=f"advanced_embedding_{feature_name}",
-            embedding_dim=self.embedding_dim,
-            mlp_hidden_units=self.mlp_hidden_units,
-            num_bins=self.num_bins,
-            init_min=self.init_min,
-            init_max=self.init_max,
-            dropout_rate=self.dropout_rate,
-            use_batch_norm=self.use_batch_norm,
         )
 
     @_monitor_performance
@@ -2343,11 +2350,28 @@ class PreprocessingModel:
             feature_outputs,
         )
 
-        # Create and apply the Feature MoE layer
+        # The features were stacked in this order, so predefined routing has to
+        # name them in the same order.
+        moe_feature_names = [
+            *(getattr(self, "numeric_features", None) or []),
+            *(getattr(self, "categorical_features", None) or []),
+        ]
+
+        # Only `num_experts`, `expert_dim` and `routing` used to be forwarded
+        # here, so `feature_moe_hidden_dims`, `feature_moe_sparsity`,
+        # `feature_moe_freeze_experts` and `feature_moe_dropout` did nothing in
+        # concat mode, and `routing="predefined"` raised because the assignments
+        # never arrived. The dict-mode branch already passed them all.
         feature_moe = FeatureMoE(
             num_experts=self.feature_moe_num_experts,
             expert_dim=self.feature_moe_expert_dim,
+            expert_hidden_dims=self.feature_moe_hidden_dims,
             routing=self.feature_moe_routing,
+            sparsity=self.feature_moe_sparsity,
+            feature_names=moe_feature_names,
+            predefined_assignments=self.feature_moe_assignments,
+            freeze_experts=self.feature_moe_freeze_experts,
+            dropout_rate=self.feature_moe_dropout,
             name="feature_moe_concat",
         )(stacked_features)
 
