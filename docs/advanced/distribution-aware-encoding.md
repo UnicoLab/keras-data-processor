@@ -285,6 +285,44 @@ These two are the whole model-level surface:
 Per feature, set `preferred_distribution` on a `NumericalFeature` to skip
 automatic detection and force a specific distribution.
 
+### Available transformations
+
+`transform_type` accepts these; anything else raises. `auto` is the default on
+the encoder and picks from the rest using the column's own shape &mdash;
+whether it is bounded, contains zeros, or contains negative values.
+
+<div class="table-container">
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Requires</th>
+        <th>Use for</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td><code>auto</code></td><td>&mdash;</td><td>Let KDP choose from the column's shape.</td></tr>
+      <tr><td><code>none</code></td><td>&mdash;</td><td>Pass the values through unchanged.</td></tr>
+      <tr><td><code>log</code></td><td>Strictly positive</td><td>Long right tails, such as income.</td></tr>
+      <tr><td><code>sqrt</code></td><td>Non-negative</td><td>Milder right skew; tolerates zeros.</td></tr>
+      <tr><td><code>cube-root</code></td><td>Any sign</td><td>Skew in data that also goes negative.</td></tr>
+      <tr><td><code>arcsinh</code></td><td>Any sign</td><td>Log-like compression that accepts zero and negatives.</td></tr>
+      <tr><td><code>box-cox</code></td><td>Strictly positive</td><td>Power transform toward normality.</td></tr>
+      <tr><td><code>yeo-johnson</code></td><td>Any sign</td><td>Box-Cox for data including zero and negatives.</td></tr>
+      <tr><td><code>logit</code></td><td>Values inside (0, 1)</td><td>Proportions and rates.</td></tr>
+      <tr><td><code>min-max</code></td><td>&mdash;</td><td>Rescale to a fixed range.</td></tr>
+      <tr><td><code>robust-scale</code></td><td>&mdash;</td><td>Median and IQR per feature; resists outliers.</td></tr>
+      <tr><td><code>quantile</code></td><td>&mdash;</td><td>Rank-based, per feature; flattens any shape.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+!!! tip "`auto` narrows the candidates to what the data allows"
+    A column with zeros never gets `log`, and one with negative values never
+    gets `box-cox`, so `auto` cannot produce infinities from an unsuitable
+    transform. Restrict the search yourself with
+    `auto_candidates=["log", "sqrt"]`.
+
 ### On the `DistributionAwareEncoder` layer
 
 The processor builds this layer for you with `detect_periodicity=True`,

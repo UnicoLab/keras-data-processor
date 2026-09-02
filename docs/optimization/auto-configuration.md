@@ -184,6 +184,23 @@
   </div>
 </div>
 
+!!! note "How the feature types are chosen"
+    Without `features_specs`, KDP reads a sample of the file and infers a type
+    per column:
+
+    | Column looks like | Inferred type |
+    |---|---|
+    | Floats, or whole numbers with many distinct values | `FLOAT_NORMALIZED` |
+    | Whole numbers with at most 20 distinct values | `INTEGER_CATEGORICAL` |
+    | Strings that parse as dates (`YYYY-MM-DD` or `YYYY/MM/DD`) | `DATE` |
+    | Strings of at most three words | `STRING_CATEGORICAL` |
+    | Longer strings | `TEXT` |
+
+    A high-cardinality single-token column such as an id stays categorical, so
+    hashing can keep it bounded rather than building a vocabulary the size of
+    the dataset. Pass `features_specs` for any column you want decided
+    differently &mdash; explicit specs are used as given.
+
 ## 🚀 Getting Started
 
 <div class="step-card">

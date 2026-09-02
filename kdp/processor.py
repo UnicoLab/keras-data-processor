@@ -686,76 +686,6 @@ class PreprocessingModel:
                     logger.error(f"Error processing feature {feature_name}: {str(e)}")
                     raise
 
-    def _parallel_setup_inputs(self, features_dict: dict[str, dict]) -> None:
-        """Set up inputs for features in parallel.
-
-        Args:
-            features_dict: Dictionary of feature names and their stats
-        """
-
-        def setup_input(feature_name: str, stats: dict) -> None:
-            dtype = stats.get("dtype", tf.string)  # Default to string if not specified
-            self._add_input_column(feature_name=feature_name, dtype=dtype)
-            self._add_input_signature(feature_name=feature_name, dtype=dtype)
-
-        with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
-            futures = []
-            for feature_name, stats in features_dict.items():
-                futures.append(executor.submit(setup_input, feature_name, stats))
-
-            # Wait for all futures to complete
-            for future in futures:
-                future.result()
-
-    @_monitor_performance
-    def _process_features_parallel(self, features_dict: dict) -> None:
-        """Process multiple features in parallel using thread pools.
-
-        Args:
-            features_dict: Dictionary of feature names and their stats
-        """
-        # Group features by type
-        numeric_features = []
-        categorical_features = []
-        text_features = []
-        date_features = []
-        passthrough_features = []
-        time_series_features = []  # Add time series features list
-
-        for feature_name, stats in features_dict.items():
-            if "mean" in stats:
-                numeric_features.append((feature_name, stats))
-            elif "vocab" in stats and feature_name not in self.text_features:
-                categorical_features.append((feature_name, stats))
-            elif feature_name in self.text_features:
-                text_features.append((feature_name, stats))
-            elif feature_name in self.date_features:
-                date_features.append((feature_name, stats))
-            elif feature_name in self.time_series_features:
-                time_series_features.append(
-                    (feature_name, stats),
-                )  # Handle time series features
-            elif feature_name in self.passthrough_features:
-                passthrough_features.append((feature_name, stats))
-
-        # Set up inputs in parallel
-        self._parallel_setup_inputs(features_dict)
-
-        # Process each feature type in parallel
-        feature_groups = [
-            (numeric_features, "numeric"),
-            (categorical_features, "categorical"),
-            (text_features, "text"),
-            (date_features, "date"),
-            (time_series_features, "time_series"),  # Add time series feature group
-            (passthrough_features, "passthrough"),
-        ]
-
-        for features, feature_type in feature_groups:
-            if features:
-                logger.info(f"Processing {feature_type} features in parallel")
-                self._process_feature_batch(features, feature_type)
-
     def _create_feature_preprocessor(
         self,
         feature_name: str,
@@ -2318,40 +2248,12 @@ class PreprocessingModel:
             # Store these calculated dimensions for future use
             logger.info(f"Using equal split sizes: {output_dims}")
 
-        # Try to get individual feature outputs from pipelines
-        feature_outputs = []
-
-        if hasattr(self, "numeric_features") and self.numeric_features:
-            for feature_name in self.numeric_features:
-                if hasattr(self, f"pipeline_{feature_name}") and hasattr(
-                    getattr(self, f"pipeline_{feature_name}"),
-                    "output",
-                ):
-                    feature_outputs.append(
-                        getattr(self, f"pipeline_{feature_name}").output,
-                    )
-
-        if hasattr(self, "categorical_features") and self.categorical_features:
-            for feature_name in self.categorical_features:
-                if hasattr(self, f"pipeline_{feature_name}") and hasattr(
-                    getattr(self, f"pipeline_{feature_name}"),
-                    "output",
-                ):
-                    feature_outputs.append(
-                        getattr(self, f"pipeline_{feature_name}").output,
-                    )
-
-        # If we couldn't get individual features, we'll split the concatenated tensor
-        if not feature_outputs:
-            logger.info("Using concat_all tensor and splitting it for Feature MoE")
-            # Calculate the feature dimensions
-            feature_dims = (
-                output_dims if output_dims else [feature_dim] * total_features
-            )
-
-            # Split the concatenated tensor into individual features
-            split_layer = SplitLayer(feature_dims)
-            feature_outputs = split_layer(self.concat_all)
+        # Split the concatenated tensor back into individual features. An
+        # earlier branch here looked for `self.pipeline_<name>` attributes,
+        # which nothing ever sets, so it always fell through to this split.
+        logger.info("Splitting concat_all into individual features for Feature MoE")
+        feature_dims = output_dims if output_dims else [feature_dim] * total_features
+        feature_outputs = SplitLayer(feature_dims)(self.concat_all)
 
         # Stack the features for the MoE layer
         stacked_features = StackFeaturesLayer(name="stacked_features_for_moe")(
