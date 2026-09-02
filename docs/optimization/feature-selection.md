@@ -60,12 +60,17 @@ Feature Selection can be applied at different points in your KDP pipeline:
 preprocessor = PreprocessingModel(
     features_specs=features,
     feature_selection_placement="all_features",
-    feature_selection_method="correlation",
-    feature_selection_threshold=0.01
+    feature_selection_units=32,        # width of the selection network
+    feature_selection_dropout=0.2,     # dropout inside it
 )
 ```
 
-*Note: Feature selection integrates directly into your model architecture. The importance scores are calculated during training and can be visualized using the provided utility methods.*
+*Note: selection is learned, not statistical &mdash; a `VariableSelection` layer
+is added to the graph and its weights are trained with the rest of your model.
+There is no correlation filter or threshold; `feature_selection_placement`
+chooses which feature groups get the layer, and the two parameters above size
+it. Valid placements are `"none"`, `"numeric"`, `"categorical"`, `"text"`,
+`"date"` and `"all_features"`.*
 
 ## 🎛️ Configuration Options
 

@@ -556,13 +556,13 @@ features = {
     # Store features
     "store_id": CategoricalFeature(
         name="store_id",
-        embedding_dim=8
+        embedding_size=8
     ),
 
     # Product category
     "product_category": CategoricalFeature(
         name="product_category",
-        embedding_dim=8
+        embedding_size=8
     )
 }
 
@@ -634,7 +634,7 @@ features = {
     # Sector/industry
     "sector": CategoricalFeature(
         name="sector",
-        embedding_dim=12
+        embedding_size=12
     ),
 
     # Date feature with calendar effects
@@ -732,7 +732,7 @@ features = {
     "gender": CategoricalFeature(name="gender"),
     "diagnosis": CategoricalFeature(
         name="diagnosis",
-        embedding_dim=16
+        embedding_size=16
     ),
 
     # Time information with calendar features

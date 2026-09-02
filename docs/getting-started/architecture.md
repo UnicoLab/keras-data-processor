@@ -204,7 +204,7 @@ preprocessor = PreprocessingModel(
     features_specs=features,
     use_distribution_aware=True,       # Smart distribution handling
     tabular_attention=True,            # Feature relationships
-    feature_selection_placement="all"  # Automatic feature importance
+    feature_selection_placement="all_features"  # Automatic feature importance
 )
 ```
 

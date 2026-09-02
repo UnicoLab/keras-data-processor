@@ -144,6 +144,41 @@ class FeatureSelectionPlacementOptions(str, Enum):
     ALL_FEATURES = "all_features"
 
 
+def _validate_option(value, options, param_name: str) -> str:
+    """Normalise a placement/mode option and reject anything unrecognised.
+
+    These are compared against the option constants by string equality, so a
+    value that merely looks right -- "all" instead of "all_features" -- matched
+    nothing and the feature it controls was silently skipped rather than
+    raising.
+
+    Args:
+        value: The caller-supplied option, in any casing.
+        options: The class holding the valid string constants.
+        param_name: Name of the parameter, used in the error message.
+
+    Returns:
+        str: The canonical option value.
+
+    Raises:
+        ValueError: If the value is not one of the valid options.
+    """
+    valid = {
+        v.value if isinstance(v, Enum) else v
+        for k, v in vars(options).items()
+        if not k.startswith("_") and isinstance(v, str | Enum)
+    }
+    if isinstance(value, Enum):
+        value = value.value
+    if isinstance(value, str):
+        for option in valid:
+            if value.lower() == option.lower():
+                return option
+    raise ValueError(
+        f"Unsupported {param_name} {value!r}. Expected one of {sorted(valid)}.",
+    )
+
+
 class PreprocessingModel:
     def __init__(
         self,
@@ -287,11 +322,19 @@ class PreprocessingModel:
         self.tabular_attention_heads = tabular_attention_heads
         self.tabular_attention_dim = tabular_attention_dim
         self.tabular_attention_dropout = tabular_attention_dropout
-        self.tabular_attention_placement = tabular_attention_placement
+        self.tabular_attention_placement = _validate_option(
+            tabular_attention_placement,
+            TabularAttentionPlacementOptions,
+            "tabular_attention_placement",
+        )
         self.tabular_attention_embedding_dim = tabular_attention_embedding_dim
 
         # feature selection control
-        self.feature_selection_placement = feature_selection_placement
+        self.feature_selection_placement = _validate_option(
+            feature_selection_placement,
+            FeatureSelectionPlacementOptions,
+            "feature_selection_placement",
+        )
         self.feature_selection_units = feature_selection_units
         self.use_distribution_aware = use_distribution_aware
         self.distribution_aware_bins = distribution_aware_bins

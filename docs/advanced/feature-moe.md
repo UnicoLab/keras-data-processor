@@ -25,7 +25,7 @@ features = {
     "age": FeatureType.FLOAT_NORMALIZED,
     "income": FeatureType.FLOAT_RESCALED,
     "occupation": FeatureType.STRING_CATEGORICAL,
-    "purchase_history": FeatureType.FLOAT_ARRAY,
+    "purchase_history": FeatureType.FLOAT_NORMALIZED,
 }
 
 # Create preprocessor with Feature MoE

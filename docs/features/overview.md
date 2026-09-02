@@ -191,8 +191,7 @@ features = {
     "income": NumericalFeature(
         name="income",
         feature_type=FeatureType.FLOAT_RESCALED,
-        use_embedding=True,
-        embedding_dim=32
+        embedding_size=32
     ),
 
     # 🏪 Categorical with hashing
@@ -207,17 +206,14 @@ features = {
     "description": TextFeature(
         name="description",
         max_tokens=5000,
-        embedding_dim=64,
+        embedding_size=64,
         sequence_length=128,
         ngrams=2
     ),
 
     # 🗓️ Date with cyclical encoding
     "purchase_date": DateFeature(
-        name="purchase_date",
-        add_day_of_week=True,
-        add_month=True,
-        cyclical_encoding=True
+        name="purchase_date"
     ),
 
     # 🧠 Passthrough feature

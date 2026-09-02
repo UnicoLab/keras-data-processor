@@ -565,7 +565,6 @@ feature = NumericalFeature(
         CustomScalingLayer,
         "Dense"
     ],
-    scaling_factor=5.0,  # For CustomScalingLayer
     units=16             # For Dense
 )
 ```
@@ -798,9 +797,12 @@ feature = NumericalFeature(
     ]
 )
 
-# The normalization layer needs to be adapted to the data
-model = PreprocessingModel(features={"height": feature})
-model.fit(data)  # This initializes the normalization statistics
+# The normalization layer is adapted while the preprocessor is built
+model = PreprocessingModel(
+    path_data="data.csv",
+    features_specs={"height": feature},
+)
+model.build_preprocessor()
 ```
 
 ### 🚀 GPU-Accelerated Custom Preprocessing
@@ -825,10 +827,10 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 
 # Create a model with your custom preprocessing
-model = PreprocessingModel(features=features)
+model = PreprocessingModel(path_data="data.csv", features_specs=features)
 
 # Inspect the model layers
-model.build_model()
+model.build_preprocessor()
 model.model.summary()
 
 # Test with small batch

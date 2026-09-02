@@ -103,3 +103,100 @@ class TestTextOutputModes(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@pytest.mark.unit
+class TestCategoryEncodingIsValidated(unittest.TestCase):
+    """A miscased encoding used to degrade the feature in silence."""
+
+    def test_lowercase_encoding_is_accepted(self):
+        """`"hashing"` now means HASHING rather than nothing at all."""
+        from kdp.features import CategoricalFeature
+
+        feature = CategoricalFeature(
+            name="city",
+            feature_type=FeatureType.STRING_CATEGORICAL,
+            category_encoding="hashing",
+        )
+        self.assertEqual(feature.category_encoding, "HASHING")
+
+    def test_unknown_encoding_raises(self):
+        """Anything that is not an option is refused up front."""
+        from kdp.features import CategoricalFeature
+
+        with self.assertRaises(ValueError) as ctx:
+            CategoricalFeature(
+                name="city",
+                feature_type=FeatureType.STRING_CATEGORICAL,
+                category_encoding="nonsense",
+            )
+        self.assertIn("category_encoding", str(ctx.exception))
+
+    def test_lowercase_hashing_actually_hashes(self):
+        """Previously this produced a width-1 lookup index instead of buckets."""
+        from kdp.features import CategoricalFeature
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            rng = np.random.default_rng(7)
+            csv_path = tmp_path / "cat.csv"
+            pd.DataFrame({"city": rng.choice(["a", "b", "c"], 100)}).to_csv(
+                csv_path, index=False
+            )
+            keras.backend.clear_session()
+            preprocessor = PreprocessingModel(
+                path_data=str(csv_path),
+                features_specs={
+                    "city": CategoricalFeature(
+                        name="city",
+                        feature_type=FeatureType.STRING_CATEGORICAL,
+                        category_encoding="hashing",
+                        hash_bucket_size=8,
+                    ),
+                },
+                features_stats_path=str(tmp_path / "stats.json"),
+                overwrite_stats=True,
+            )
+            preprocessor.build_preprocessor()
+            output = preprocessor.model({"city": tf.constant([["a"]])})
+        self.assertEqual(int(output.shape[-1]), 8)
+
+
+@pytest.mark.unit
+class TestPlacementOptionsAreValidated(unittest.TestCase):
+    """A placement that matches nothing used to disable the feature in silence."""
+
+    def test_wrong_placement_raises_instead_of_doing_nothing(self):
+        """`"all"` is not `"all_features"`, and never was."""
+        with self.assertRaises(ValueError) as ctx:
+            PreprocessingModel(features_specs={}, feature_selection_placement="all")
+        self.assertIn("feature_selection_placement", str(ctx.exception))
+
+    def test_valid_placements_are_accepted(self):
+        """Every documented placement is a real option."""
+        for placement in (
+            "none",
+            "numeric",
+            "categorical",
+            "text",
+            "date",
+            "all_features",
+        ):
+            model = PreprocessingModel(
+                features_specs={}, feature_selection_placement=placement
+            )
+            self.assertEqual(model.feature_selection_placement, placement)
+
+    def test_casing_is_normalised(self):
+        """An upper-case spelling resolves rather than silently missing."""
+        model = PreprocessingModel(
+            features_specs={}, feature_selection_placement="ALL_FEATURES"
+        )
+        self.assertEqual(model.feature_selection_placement, "all_features")
+
+    def test_attention_placement_is_validated_too(self):
+        """The same comparison-by-string trap applies here."""
+        with self.assertRaises(ValueError):
+            PreprocessingModel(
+                features_specs={}, tabular_attention_placement="everything"
+            )

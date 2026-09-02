@@ -142,7 +142,7 @@ preprocessor = PreprocessingModel(
         "support_messages": FeatureType.TEXT
     },
     use_distribution_aware=True,
-    feature_selection_placement="all",    # Identify churn drivers
+    feature_selection_placement="all_features",  # Identify churn drivers
     tabular_attention=True                # Model feature interactions
 )
 ```

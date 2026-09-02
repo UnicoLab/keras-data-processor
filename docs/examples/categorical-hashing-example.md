@@ -179,9 +179,7 @@ features = {
         feature_type=FeatureType.STRING_CATEGORICAL,
         category_encoding=CategoryEncodingOptions.HASHING,
         hash_bucket_size=1024,
-        hash_with_embedding=True,
-        multi_hash=True,  # Enable multiple hash functions
-        num_hash_functions=3  # Number of hash functions to use
+        hash_with_embedding=True
     )
 }
 ```

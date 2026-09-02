@@ -24,8 +24,7 @@ features = {
     "price": NumericalFeature(
         name="price",
         feature_type=FeatureType.FLOAT_NORMALIZED,
-        use_embedding=True,                  # Create richer representation
-        embedding_dim=8                      # Size of embedding
+        embedding_size=8                      # Size of embedding
     ),
     "quantity": NumericalFeature(
         name="quantity",
@@ -37,13 +36,12 @@ features = {
     "category": CategoricalFeature(
         name="category",
         feature_type=FeatureType.STRING_CATEGORICAL,
-        embedding_dim=32,                    # Larger embeddings for complex categories
-        max_vocabulary_size=1000            # Limit vocabulary size
+        embedding_size=32,                    # Larger embeddings for complex categories
     ),
     "brand": CategoricalFeature(
         name="brand",
         feature_type=FeatureType.STRING_CATEGORICAL,
-        embedding_dim=16
+        embedding_size=16
     ),
 
     # Text features with different token limits
@@ -64,7 +62,6 @@ features = {
         name="sale_date",
         feature_type=FeatureType.DATE,
         add_season=True,                     # Add seasonal indicators
-        add_day_of_week=True                 # Add day of week information
     )
 }
 ```
@@ -142,8 +139,7 @@ features = {
     "close_price": NumericalFeature(
         name="close_price",
         feature_type=FeatureType.FLOAT_RESCALED,
-        use_embedding=True,
-        embedding_dim=16,
+        embedding_size=16,
         preferred_distribution="heavy_tailed"  # Handle market data distributions
     ),
     "volume": NumericalFeature(
@@ -168,15 +164,13 @@ features = {
     "market_regime": CategoricalFeature(
         name="market_regime",
         feature_type=FeatureType.STRING_CATEGORICAL,
-        embedding_dim=8
+        embedding_size=8
     ),
 
     # Date information with market-specific features
     "date": DateFeature(
         name="date",
-        feature_type=FeatureType.DATE,
-        add_day_of_week=True,  # Markets behave differently on different days
-        add_month=True         # Capture seasonal effects
+        feature_type=FeatureType.DATE
     )
 }
 
@@ -221,13 +215,12 @@ features = {
     "gender": CategoricalFeature(
         name="gender",
         feature_type=FeatureType.STRING_CATEGORICAL,
-        embedding_dim=4
+        embedding_size=4
     ),
     "location": CategoricalFeature(
         name="location",
         feature_type=FeatureType.STRING_CATEGORICAL,
-        embedding_dim=16,
-        max_vocabulary_size=500  # Limit to top locations
+        embedding_size=16
     ),
 
     # Behavioral metrics
@@ -250,7 +243,7 @@ features = {
     "subscription_tier": CategoricalFeature(
         name="subscription_tier",
         feature_type=FeatureType.STRING_CATEGORICAL,
-        embedding_dim=8
+        embedding_size=8
     ),
 
     # Textual data

@@ -214,11 +214,43 @@ class CategoricalFeature(Feature):
             **kwargs: Additional keyword arguments for the feature.
         """
         super().__init__(name, feature_type, **kwargs)
-        self.category_encoding = category_encoding
+        self.category_encoding = self._normalise_encoding(category_encoding)
         self.dtype = (
             tf.int32 if feature_type == FeatureType.INTEGER_CATEGORICAL else tf.string
         )
         self.kwargs = kwargs
+
+    @staticmethod
+    def _normalise_encoding(category_encoding) -> str:
+        """Accept any casing, reject anything that is not a real option.
+
+        The encoding is compared against `CategoryEncodingOptions` by string
+        equality further down the pipeline, so a value such as "hashing"
+        matched nothing and the feature silently degraded to a bare lookup
+        index -- no hashing, no embedding, no one-hot, and no error.
+
+        Args:
+            category_encoding: The requested encoding, in any casing.
+
+        Returns:
+            str: The canonical encoding name.
+
+        Raises:
+            ValueError: If the encoding is not one of the supported options.
+        """
+        valid = {
+            CategoryEncodingOptions.ONE_HOT_ENCODING,
+            CategoryEncodingOptions.EMBEDDING,
+            CategoryEncodingOptions.HASHING,
+        }
+        if isinstance(category_encoding, str):
+            canonical = category_encoding.upper()
+            if canonical in valid:
+                return canonical
+        raise ValueError(
+            f"Unsupported category_encoding {category_encoding!r}. "
+            f"Expected one of {sorted(valid)}.",
+        )
 
     def _embedding_size_rule(self, nr_categories: int) -> int:
         """Returns the embedding size for a given number of categories using the Embedding Size Rule of Thumb.
