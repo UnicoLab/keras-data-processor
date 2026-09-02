@@ -37,7 +37,14 @@ class TestTimeSeriesFeature(unittest.TestCase):
         self.assertEqual(feature.input_type, "continuous")
 
     def test_full_initialization(self):
-        """Test initialization with all parameters specified."""
+        """Test initialization with every numeric parameter specified.
+
+        The calendar config used to be set here alongside these, and the test
+        only checked that the attributes were stored -- it never built a model
+        from the feature, so it never surfaced that the combination cannot
+        work: the calendar layer reads date strings and these read numbers out
+        of the same column. It is asserted separately below.
+        """
         lag_config = {"lags": [1, 7], "drop_na": True}
         rolling_stats_config = {"window_size": 7, "statistics": ["mean", "std"]}
         differencing_config = {"order": 1}
@@ -48,10 +55,6 @@ class TestTimeSeriesFeature(unittest.TestCase):
             "flatten_output": True,
         }
         tsfresh_feature_config = {"features": ["mean", "std", "min", "max"]}
-        calendar_feature_config = {
-            "features": ["month", "day", "day_of_week"],
-            "cyclic_encoding": True,
-        }
 
         feature = TimeSeriesFeature(
             name="sales",
@@ -61,7 +64,6 @@ class TestTimeSeriesFeature(unittest.TestCase):
             moving_average_config=moving_average_config,
             wavelet_transform_config=wavelet_transform_config,
             tsfresh_feature_config=tsfresh_feature_config,
-            calendar_feature_config=calendar_feature_config,
             is_target=True,
             exclude_from_input=True,
             input_type="continuous",
@@ -75,10 +77,33 @@ class TestTimeSeriesFeature(unittest.TestCase):
         self.assertEqual(feature.moving_average_config, moving_average_config)
         self.assertEqual(feature.wavelet_transform_config, wavelet_transform_config)
         self.assertEqual(feature.tsfresh_feature_config, tsfresh_feature_config)
-        self.assertEqual(feature.calendar_feature_config, calendar_feature_config)
+        self.assertIsNone(feature.calendar_feature_config)
         self.assertTrue(feature.is_target)
         self.assertTrue(feature.exclude_from_input)
         self.assertEqual(feature.input_type, "continuous")
+
+    def test_calendar_initialization(self):
+        """A calendar feature stands alone and reads a string column."""
+        calendar_feature_config = {
+            "features": ["month", "day", "day_of_week"],
+            "cyclic_encoding": True,
+        }
+        feature = TimeSeriesFeature(
+            name="sold_on",
+            calendar_feature_config=calendar_feature_config,
+        )
+        self.assertEqual(feature.calendar_feature_config, calendar_feature_config)
+        self.assertEqual(feature.dtype, tf.string)
+
+    def test_calendar_cannot_share_a_column_with_numeric_configs(self):
+        """One column is either a date or a number, not both."""
+        with self.assertRaises(ValueError) as caught:
+            TimeSeriesFeature(
+                name="sales",
+                calendar_feature_config={"features": ["month"]},
+                rolling_stats_config={"window_size": 7},
+            )
+        self.assertIn("rolling_stats_config", str(caught.exception))
 
     def test_build_layers(self):
         """Test that build_layers creates the appropriate layers based on configuration."""
@@ -271,37 +296,44 @@ class TestTimeSeriesFeature(unittest.TestCase):
         self.assertEqual(feature.input_type, "continuous")
 
     def test_build_layers_with_new_transforms(self):
-        """Test that build_layers creates the appropriate layers including the new transform types."""
-        # Create a feature with all new configs
+        """The numeric transforms build in order, from one numeric column.
+
+        The calendar config was configured here too, which cannot share a
+        column with these -- it reads dates where they read numbers. It has its
+        own test below.
+        """
         feature = TimeSeriesFeature(
             name="sales",
             wavelet_transform_config={"levels": 3, "window_sizes": [4, 8]},
             tsfresh_feature_config={"features": ["mean", "std", "min"]},
+        )
+
+        layers = feature.build_layers()
+
+        self.assertEqual(len(layers), 2)
+        self.assertIsInstance(layers[0], WaveletTransformLayer)
+        self.assertIsInstance(layers[1], TSFreshFeatureLayer)
+
+        self.assertEqual(layers[0].levels, 3)
+        self.assertEqual(layers[0].window_sizes, [4, 8])
+        self.assertEqual(layers[1].features, ["mean", "std", "min"])
+
+    def test_build_layers_for_a_calendar_feature(self):
+        """A calendar feature builds the one layer it configures."""
+        feature = TimeSeriesFeature(
+            name="sold_on",
             calendar_feature_config={
                 "features": ["month", "day_of_week"],
                 "cyclic_encoding": True,
             },
         )
 
-        # Build layers
         layers = feature.build_layers()
 
-        # Check that we have the expected number of layers (3 new ones)
-        self.assertEqual(len(layers), 3)
-
-        # Check that each layer is of the correct type
-        self.assertIsInstance(layers[0], WaveletTransformLayer)
-        self.assertIsInstance(layers[1], TSFreshFeatureLayer)
-        self.assertIsInstance(layers[2], CalendarFeatureLayer)
-
-        # Check layer configurations
-        self.assertEqual(layers[0].levels, 3)
-        self.assertEqual(layers[0].window_sizes, [4, 8])
-
-        self.assertEqual(layers[1].features, ["mean", "std", "min"])
-
-        self.assertEqual(layers[2].features, ["month", "day_of_week"])
-        self.assertTrue(layers[2].cyclic_encoding)
+        self.assertEqual(len(layers), 1)
+        self.assertIsInstance(layers[0], CalendarFeatureLayer)
+        self.assertEqual(layers[0].features, ["month", "day_of_week"])
+        self.assertTrue(layers[0].cyclic_encoding)
 
     @parameterized.expand(
         [
