@@ -104,12 +104,12 @@ Add a weight variable to the layer.
 ## build
 
 ```python
-build(self, input_shape: int) -> None
+build(self, input_shape: tuple) -> None
 ```
 
-Build the layer.
+Build the projection that maps the input width onto `d_model`.
 
-### Parameters- **input_shape**: Shape tuple (tuple of integers) or list of shape tuples
+### Parameters- **input_shape**: Shape of the input, (batch, num_samples, num_features).
 
 
 ---

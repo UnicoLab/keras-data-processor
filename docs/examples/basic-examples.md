@@ -72,7 +72,7 @@ ppr = PreprocessingModel(
     overwrite_stats=True,
     output_mode=OutputModeOptions.CONCAT,
 
-    # Add feature selection to get the most important features
+    # Gate every feature through a variable-selection layer
     feature_selection_placement="numeric", # Choose between (all_features|numeric|categorical)
     feature_selection_units=32,
     feature_selection_dropout=0.10,
@@ -377,7 +377,7 @@ ppr = PreprocessingModel(
     overwrite_stats=True,
     output_mode=OutputModeOptions.CONCAT,
 
-    # Add feature selection to get the most important features
+    # Gate every feature through a variable-selection layer
     feature_selection_placement="numeric", # Choose between (all_features|numeric|categorical)
 
     # Add tabular attention to check for feature interactions

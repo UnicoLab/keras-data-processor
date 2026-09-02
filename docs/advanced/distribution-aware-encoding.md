@@ -546,7 +546,7 @@ preprocessor = PreprocessingModel(
     <span class="topic-icon">👁️</span>
     <span class="topic-text">Tabular Attention</span>
   </a>
-  <a href="feature-selection.md" class="topic-link">
+  <a href="../optimization/feature-selection.md" class="topic-link">
     <span class="topic-icon">🎯</span>
     <span class="topic-text">Feature Selection</span>
   </a>

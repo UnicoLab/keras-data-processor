@@ -368,10 +368,13 @@ import pandas as pd
 # Sample dataset
 df = pd.read_csv("benchmark_dataset.csv")
 
-# KDP approach
+# KDP approach. There is no separate fit step: the statistics are computed
+# from `path_data` while the preprocessor is built.
 start_time = time.time()
-model = PreprocessingModel(features_specs=features)
-model.fit(df)
+model = PreprocessingModel(
+    path_data="benchmark_dataset.csv",
+    features_specs=features,
+)
 preprocessor = model.build_preprocessor()
 kdp_time = time.time() - start_time
 

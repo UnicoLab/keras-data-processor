@@ -259,7 +259,7 @@
   </div>
 
   <div class="contribute-cta">
-    <p>Check out our <a href="../contributing/contributing.md">Contributing Guide</a> to get started.</p>
+    <p>Check out our <a href="../contributing/overview.md">Contributing Guide</a> to get started.</p>
   </div>
 </div>
 

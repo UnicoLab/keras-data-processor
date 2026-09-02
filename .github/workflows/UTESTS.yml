@@ -58,6 +58,23 @@ jobs:
           python -m pip install --upgrade pip
           pip install poetry
           poetry install --no-interaction
+      - name: Every test belongs to a group the matrix runs
+        run: |
+          # The matrix selects by marker. A test carrying none of these markers
+          # is collected by nobody and never runs in CI, which is how the whole
+          # save/load round-trip suite went unexecuted.
+          orphans=$(poetry run pytest test/ --collect-only -q \
+            -m "not unit and not integration and not layers and not processor and not time_series" \
+            2>/dev/null | grep -c "::" || true)
+          if [ "$orphans" -ne 0 ]; then
+            echo "::error::$orphans test(s) match no CI marker group:"
+            poetry run pytest test/ --collect-only -q \
+              -m "not unit and not integration and not layers and not processor and not time_series"
+            exit 1
+          fi
+          echo "All collected tests belong to a marker group."
+        timeout-minutes: 3
+
       - name: Run smoke tests
         run: |
           poetry run pytest -m "micro" --maxfail=1 --tb=no -q --timeout=30

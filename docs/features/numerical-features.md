@@ -378,7 +378,7 @@ preprocessor = PreprocessingModel(
       <p>Neural representations</p>
     </div>
   </a>
-  <a href="../advanced/feature-selection.md" class="related-topic-card">
+  <a href="../optimization/feature-selection.md" class="related-topic-card">
     <span class="related-topic-icon">🎯</span>
     <div class="related-topic-content">
       <h3>Feature Selection</h3>

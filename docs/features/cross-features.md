@@ -540,7 +540,7 @@ preprocessor = PreprocessingModel(
     <span class="topic-icon">👁️</span>
     <span class="topic-text">Tabular Attention</span>
   </a>
-  <a href="../examples/feature-crosses.md" class="topic-link">
+  <a href="../examples/complex-examples.md" class="topic-link">
     <span class="topic-icon">📚</span>
     <span class="topic-text">Feature Cross Examples</span>
   </a>

@@ -429,4 +429,4 @@ predictions = pipeline.predict(X_test)
 KDP provides several optimization techniques to improve model performance:
 
 - **Memory Optimization**: Techniques for reducing memory usage. See [Tabular Optimization](../optimization/tabular-optimization.md).
-- **Feature Selection**: Automatically identify the most important features. See [Feature Selection](../optimization/feature-selection.md).
+- **Feature Selection**: Gate features through variable-selection layers. See [Feature Selection](../optimization/feature-selection.md).

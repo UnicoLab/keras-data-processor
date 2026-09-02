@@ -52,10 +52,10 @@ class TabularAttention(keras.layers.Layer):
             ],
         )
 
-        # Normalization and dropout
-        self.layernorm1 = keras.layers.LayerNormalization()
-        self.layernorm2 = keras.layers.LayerNormalization()
-        self.dropout = keras.layers.Dropout(dropout_rate)
+        # Normalization and dropout. `call` normalises and drops out separately
+        # on the feature and sample branches, so there are no shared
+        # `layernorm`/`dropout` layers here, and no unused output projection:
+        # the sample branch already emits `d_model` columns.
         self.feature_layernorm = keras.layers.LayerNormalization()
         self.feature_layernorm2 = keras.layers.LayerNormalization()
         self.feature_dropout = keras.layers.Dropout(dropout_rate)
@@ -64,16 +64,17 @@ class TabularAttention(keras.layers.Layer):
         self.sample_layernorm2 = keras.layers.LayerNormalization()
         self.sample_dropout = keras.layers.Dropout(dropout_rate)
         self.sample_dropout2 = keras.layers.Dropout(dropout_rate)
-        self.output_projection = keras.layers.Dense(d_model)
 
-    def build(self, input_shape: int) -> None:
-        """Build the layer.
+    def build(self, input_shape: tuple) -> None:
+        """Build the projection that maps the input width onto `d_model`.
 
         Args:
-            input_shape: Shape tuple (tuple of integers) or list of shape tuples
+            input_shape: Shape of the input, (batch, num_samples, num_features).
         """
         self.input_dim = input_shape[-1]
         self.input_projection = keras.layers.Dense(self.d_model)
+        self.input_projection.build(input_shape)
+        super().build(input_shape)
 
     def call(self, inputs: tf.Tensor, training: bool = False) -> tf.Tensor:
         """Forward pass for TabularAttention.

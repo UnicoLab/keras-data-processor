@@ -244,6 +244,93 @@ class TestDocumentedCodeMatchesTheAPI(unittest.TestCase):
                         )
         self.assertEqual(invalid, [], "\n".join(invalid))
 
+    def test_internal_links_resolve(self):
+        """Every cross-link between pages must point at a page that exists.
+
+        Ten of them did not, including the homepage's own link to Feature
+        Selection. `mkdocs build --strict` only checks markdown links, and the
+        docs navigate with raw `<a href>` inside HTML blocks, so the dead ones
+        rendered as links that go nowhere.
+        """
+        href = re.compile(r'href="([^"]+)"')
+        markdown_link = re.compile(r"\]\(([^)\s]+)\)")
+        # Links written inside code spans are examples, not navigation.
+        code_span = re.compile(r"`[^`]*`")
+
+        broken = []
+        for path in sorted(DOCS.rglob("*.md")):
+            if "generated" in path.parts:
+                continue
+            text = code_span.sub("", path.read_text())
+            for link in href.findall(text) + markdown_link.findall(text):
+                if link.startswith(("http://", "https://", "#", "mailto:", "data:")):
+                    continue
+                target = (path.parent / link.split("#")[0]).resolve()
+                if not target.exists():
+                    broken.append(f"{path.relative_to(DOCS)} -> {link}")
+        self.assertEqual(broken, [], "\n".join(broken))
+
+    def test_documented_methods_exist(self):
+        """A method the docs call must be a method the class has.
+
+        The documentation showed `get_feature_importance`,
+        `plot_feature_importance`, `get_top_features`, `update_statistics`,
+        `transform` and `fit` on a `PreprocessingModel`. None of them existed:
+        following those pages raised `AttributeError`.
+        """
+        # Names bound to a PreprocessingModel in the examples, plus the ones
+        # the prose uses without showing the assignment.
+        implicit = {"preprocessor", "preprocessing_model", "basic", "advanced"}
+        # `dir` misses attributes assigned on instances, such as the built
+        # `model`, which the examples legitimately call.
+        source = ast.parse(Path(kdp.processor.__file__).read_text())
+        model_class = next(
+            node
+            for node in source.body
+            if isinstance(node, ast.ClassDef) and node.name == "PreprocessingModel"
+        )
+        assigned = {
+            target.attr
+            for node in ast.walk(model_class)
+            if isinstance(node, ast.Assign)
+            for target in node.targets
+            if isinstance(target, ast.Attribute)
+            and isinstance(target.value, ast.Name)
+            and target.value.id == "self"
+        }
+        real = set(dir(kdp.processor.PreprocessingModel)) | assigned
+        phantom = []
+        for path, index, code in _doc_blocks():
+            try:
+                tree = ast.parse(code)
+            except SyntaxError:
+                continue
+            names = set(implicit)
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Assign) and isinstance(node.value, ast.Call):
+                    function = node.value.func
+                    if isinstance(function, ast.Name) and function.id == (
+                        "PreprocessingModel"
+                    ):
+                        names.update(
+                            target.id
+                            for target in node.targets
+                            if isinstance(target, ast.Name)
+                        )
+            for node in ast.walk(tree):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id in names
+                    and node.func.attr not in real
+                ):
+                    phantom.append(
+                        f"{path} block #{index}: PreprocessingModel has no "
+                        f"{node.func.attr}()"
+                    )
+        self.assertEqual(sorted(set(phantom)), [], "\n".join(sorted(set(phantom))))
+
     def test_every_constructor_parameter_is_documented(self):
         """A parameter no page mentions is a capability nobody can find.
 

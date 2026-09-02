@@ -987,13 +987,13 @@ sensor_feature = TimeSeriesFeature(
     <span class="topic-icon">🔢</span>
     <span class="topic-text">Numerical Features</span>
   </a>
-  <a href="../advanced/custom-layers.md" class="topic-link">
+  <a href="../advanced/custom-preprocessing.md" class="topic-link">
     <span class="topic-icon">🧩</span>
     <span class="topic-text">Custom Preprocessing Layers</span>
   </a>
-  <a href="../examples/time-series-forecasting.md" class="topic-link">
+  <a href="../time_series_inference.md" class="topic-link">
     <span class="topic-icon">📈</span>
-    <span class="topic-text">Time Series Forecasting Examples</span>
+    <span class="topic-text">Time Series Inference</span>
   </a>
 </div>
 
@@ -1004,8 +1004,8 @@ sensor_feature = TimeSeriesFeature(
     <span class="nav-icon">←</span>
     <span class="nav-text">Text Features</span>
   </a>
-  <a href="image-features.md" class="nav-button next">
-    <span class="nav-text">Image Features</span>
+  <a href="passthrough-features.md" class="nav-button next">
+    <span class="nav-text">Passthrough Features</span>
     <span class="nav-icon">→</span>
   </a>
 </div>

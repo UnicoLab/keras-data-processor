@@ -26,11 +26,90 @@ configuration changes, but the numbers coming out of the preprocessor do.
 | Distribution-aware encoding | `preferred_distribution` was accepted and then ignored, so the layer always auto-detected | The requested distribution is honoured |
 | Output width | `get_output_dim()` combined dimensions additively for some feature configurations | Combined multiplicatively, matching the tensor the model actually produces |
 | Time series + other features | A time series feature could not be combined with any other feature: the warm-up rows `drop_na` removes left that column shorter and `Concatenate` raised | Transforms preserve rows by default, so the documented combinations build |
+| Feature MoE in `concat` mode | Only `feature_moe_num_experts`, `feature_moe_expert_dim` and `feature_moe_routing` reached the layer; `feature_moe_hidden_dims`, `feature_moe_sparsity`, `feature_moe_freeze_experts` and `feature_moe_dropout` were dropped on the floor | Every option reaches the mixture, so a model that set them now has the network it asked for |
+| `feature_moe_use_residual` | Stored on the model and read nowhere, so the residual connection it names never existed | The original feature is added back onto its expert output wherever the widths match |
+| `feature_moe_freeze_experts` | Passed `training=False` to the experts, which only changes dropout and batch norm; the weights still received gradients | The experts are marked non-trainable, which is what the option says |
 
 !!! warning "Re-train downstream models"
     If you trained a model on top of KDP output from 1.11.x and any of the
     rows above apply to your feature set, the preprocessor now feeds it
     different numbers. Re-fit before you compare metrics.
+
+## 🚫 Configurations that are now rejected
+
+Two configurations used to be accepted and then silently do the wrong thing.
+They raise now, with a message naming what to fix.
+
+<div class="code-container">
+
+```python
+from kdp import PreprocessingModel, FeatureType
+
+features = {
+    "age": FeatureType.FLOAT_NORMALIZED,
+    "income": FeatureType.FLOAT_RESCALED,
+}
+
+# Predefined MoE routing with an incomplete map. "income" had no expert, so
+# its routing row was all zeros and the feature was multiplied away -- the
+# model built, ran, and silently dropped the column.
+PreprocessingModel(
+    path_data="data.csv",
+    features_specs=features,
+    use_feature_moe=True,
+    feature_moe_routing="predefined",
+    feature_moe_assignments={"age": 0, "income": 1},  # every feature, or ValueError
+)
+```
+
+</div>
+
+An expert index outside the mixture, or a name the mixture never sees, is
+rejected the same way.
+
+## 🔤 `TextVectorizerOutputOptions`
+
+`kdp.features` and `kdp.processor` each defined a class of this name.  The
+`kdp.processor` one held the strings Keras accepts; the `kdp.features` one held
+`auto()` integers, so `TextFeature(output_mode=TextVectorizerOutputOptions.TF_IDF)`
+produced `1` and matched nothing. There is one class now, exported from `kdp`,
+whose members are the strings:
+
+<div class="code-container">
+
+```python
+from kdp import TextVectorizerOutputOptions
+
+TextVectorizerOutputOptions.TF_IDF == "tf_idf"      # True, was False
+```
+
+</div>
+
+If you compared against `.value` and got `1`, `2` or `3`, that comparison now
+sees `"tf_idf"`, `"int"` and `"multi_hot"`.
+
+## 🆕 Methods the documentation promised
+
+`get_timing_metrics()`, `get_memory_usage()` and `plot_model()` appeared in the
+docs and did not exist. They do now:
+
+<div class="code-container">
+
+```python
+preprocessor.build_preprocessor()
+
+print(preprocessor.get_timing_metrics()["total_seconds"])
+print(preprocessor.get_memory_usage()["peak_mb"])
+preprocessor.plot_model("architecture.png")   # needs pydot and Graphviz
+```
+
+</div>
+
+`get_feature_importance()`, `plot_feature_importance()`, `get_top_features()`,
+`update_statistics()`, `transform()` and `fit()` were documented too and were
+never real. The pages that used them now show the working equivalents:
+`get_feature_importances()`, an `overwrite_stats=True` rebuild, and calling the
+built Keras model on a batch.
 
 ## 🗂️ Existing `features_stats.json` files
 

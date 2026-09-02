@@ -368,7 +368,11 @@ def pytest_collection_modifyitems(config, items):
     slow_tests = []
 
     for item in items:
-        # Add markers based on file names and test names
+        # Exactly one group marker per test, and always one: CI selects tests by
+        # these markers, so a test that gets none never runs there. The speed
+        # markers below used to be assigned *instead of* `unit`, which quietly
+        # hid 26 tests from CI -- the whole save/load round-trip suite among
+        # them, because every one of its names contains "model".
         if "test_processor" in item.fspath.basename:
             item.add_marker(pytest.mark.processor)
         elif "test_time_series" in item.fspath.basename:
@@ -377,7 +381,11 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(pytest.mark.layers)
         elif "integration" in str(item.fspath):
             item.add_marker(pytest.mark.integration)
-        elif "inference" in item.fspath.basename:
+        else:
+            item.add_marker(pytest.mark.unit)
+
+        # Extra labels, never a substitute for the group marker above.
+        if "inference" in item.fspath.basename:
             item.add_marker(pytest.mark.inference)
 
         # Categorize by speed
@@ -390,7 +398,6 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(pytest.mark.slow)
             slow_tests.append(item)
         else:
-            item.add_marker(pytest.mark.unit)
             medium_tests.append(item)
 
     # Reorder items for optimal execution (fast tests first)

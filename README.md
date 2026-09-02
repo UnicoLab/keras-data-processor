@@ -24,11 +24,16 @@ KDP provides a state-of-the-art preprocessing system built on TensorFlow Keras. 
 ## ✨ Key Features
 
 - 🚀 **Efficient Single-Pass Processing**: Process all features in one go, dramatically faster than alternatives
-- 🧠 **Distribution-Aware Encoding**: Automatically detects and optimally handles different data distributions
-- 👁️ **Tabular Attention**: Captures complex feature interactions for better model performance
-- 🔍 **Feature Selection**: Automatically identifies and focuses on the most important features
-- 🔄 **Feature-wise Mixture of Experts**: Specialized processing for different feature types
-- 📦 **Production-Ready**: Deploy your preprocessing along with your model as a single unit
+- 🧠 **[Distribution-Aware Encoding](docs/advanced/distribution-aware-encoding.md)**: Detects the shape of each numeric column and transforms it accordingly
+- 👁️ **[Tabular Attention](docs/advanced/tabular-attention.md)**: Inter-feature and inter-sample attention, with a multi-resolution mode that treats numeric and categorical columns separately
+- 🧮 **[Advanced Numerical Embeddings](docs/advanced/numerical-embeddings.md)**: Learned per-feature embeddings, and a global embedding across all numeric columns
+- 🔀 **[Transformer Blocks](docs/advanced/transformer-blocks.md)**: Stackable blocks over the categorical features or over everything
+- 🔄 **[Feature-wise Mixture of Experts](docs/advanced/feature-moe.md)**: Specialised expert networks per feature, routed automatically or by hand
+- ⏱️ **[Time Series Features](docs/features/time_series_features.md)**: Lags, rolling statistics, differencing, moving averages, wavelets, FFT, tsfresh statistics and calendar features
+- 📝 **[Text](docs/features/text-features.md), [Date](docs/features/date-features.md), [Categorical](docs/features/categorical-features.md), [Cross](docs/features/cross-features.md) and [Passthrough](docs/features/passthrough-features.md) features**: Every column type in one model
+- 🎛️ **[Auto-Configuration](docs/optimization/auto-configuration.md)**: Inspects your data and recommends the preprocessing to use
+- 🔍 **[Feature Selection](docs/optimization/feature-selection.md)**: Gated variable-selection layers on any subset of your features
+- 📦 **Production-Ready**: Save and reload the preprocessor with your model as a single Keras artefact
 
 ## 🚀 Quick Installation
 

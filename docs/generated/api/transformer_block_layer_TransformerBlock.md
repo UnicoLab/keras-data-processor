@@ -95,6 +95,26 @@ Add a weight variable to the layer.
 
 ---
 
+## build
+
+```python
+build(self, input_shape: tuple) -> None
+```
+
+Build the sub-layers so Keras does not mark the block falsely built.
+
+The sub-layers are created in `__init__`, so without this method Keras 3
+warns that the layer "does not have a `build()` method implemented and
+it looks like it has unbuilt state", and marks it built anyway. Building
+them here on the shape `call` actually sees keeps saving, loading and
+weight transfer working on the real structure.
+
+### Parameters- **input_shape**: Shape of the input, 2D or 3D. A 2D input is treated as
+        a single-step sequence, matching what `call` does to it.
+
+
+---
+
 ## build_from_config
 
 ```python
@@ -166,6 +186,19 @@ loading.
 ### Returns
 
     A dict containing the input shape associated with the layer.
+
+
+---
+
+## get_config
+
+```python
+get_config(self) -> dict
+```
+
+Return the constructor arguments needed to rebuild this block.
+
+### Returns- **dict**: Serializable configuration for the block.
 
 
 ---

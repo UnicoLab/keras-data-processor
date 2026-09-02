@@ -8,10 +8,19 @@ from loguru import logger
 from kdp.layers_factory import PreprocessorLayerFactory
 
 
-class TextVectorizerOutputOptions(Enum):
-    TF_IDF = auto()
-    INT = auto()
-    MULTI_HOT = auto()
+class TextVectorizerOutputOptions(str, Enum):
+    """Output modes accepted by `TextFeature(output_mode=...)`.
+
+    The members are the exact strings `keras.layers.TextVectorization` and
+    KDP's own checks compare against. They used to be `auto()` integers here
+    while `kdp.processor` defined a second, string-valued class of the same
+    name, so whichever one a caller imported decided whether their option
+    worked or was quietly discarded.
+    """
+
+    TF_IDF = "tf_idf"
+    INT = "int"
+    MULTI_HOT = "multi_hot"
 
 
 class CategoryEncodingOptions:
@@ -20,8 +29,15 @@ class CategoryEncodingOptions:
     HASHING = "HASHING"
 
 
-class CrossFeatureOutputOptions(Enum):
-    INT = auto()
+class CrossFeatureOutputOptions(str, Enum):
+    """Output mode of a crossed feature.
+
+    `feature_crosses` are hashed into integer bins, so `"int"` is the only
+    mode there is. It is spelled as the string the layer takes, for the same
+    reason as `TextVectorizerOutputOptions`.
+    """
+
+    INT = "int"
 
 
 class FeatureType(Enum):
@@ -32,6 +48,9 @@ class FeatureType(Enum):
     INTEGER_CATEGORICAL = auto()
     STRING_CATEGORICAL = auto()
     TEXT = auto()
+    # Crosses are configured with `PreprocessingModel(feature_crosses=[...])`,
+    # not by giving a column this type: a feature declared as CROSSES is
+    # rejected by the feature-space converter.
     CROSSES = auto()
     DATE = auto()
     TIME_SERIES = auto()

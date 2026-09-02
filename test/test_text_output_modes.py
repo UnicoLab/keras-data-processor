@@ -15,6 +15,8 @@ import pandas as pd
 import pytest
 import tensorflow as tf
 
+import kdp.features
+import kdp.processor
 from kdp import PreprocessingModel
 from kdp.features import FeatureType, TextFeature
 
@@ -200,3 +202,43 @@ class TestPlacementOptionsAreValidated(unittest.TestCase):
             PreprocessingModel(
                 features_specs={}, tabular_attention_placement="everything"
             )
+
+
+@pytest.mark.unit
+class TestTextVectorizerOutputOptions(unittest.TestCase):
+    """The enum that names the text output modes.
+
+    `kdp.features` and `kdp.processor` each defined a class of this name, one
+    with `auto()` integers and one with the real strings. Importing the wrong
+    one produced an `output_mode` that no comparison in KDP matched and that
+    `TextVectorization` could not use.
+    """
+
+    def test_both_modules_expose_the_same_class(self):
+        """Two classes of one name is how the values diverged."""
+        self.assertIs(
+            kdp.features.TextVectorizerOutputOptions,
+            kdp.processor.TextVectorizerOutputOptions,
+        )
+
+    def test_members_are_the_strings_keras_accepts(self):
+        """The value has to be usable as `output_mode` on its own."""
+        options = kdp.features.TextVectorizerOutputOptions
+        self.assertEqual(options.TF_IDF, "tf_idf")
+        self.assertEqual(options.INT, "int")
+        self.assertEqual(options.MULTI_HOT, "multi_hot")
+
+    def test_a_crossed_feature_is_integer_coded(self):
+        """Crosses are hashed into bins, so `int` is the only honest mode."""
+        self.assertEqual(kdp.features.CrossFeatureOutputOptions.INT, "int")
+
+    def test_the_enum_works_where_the_string_does(self):
+        """A caller reaching for the enum must get the documented behaviour."""
+        options = kdp.features.TextVectorizerOutputOptions
+        with tempfile.TemporaryDirectory() as tmp:
+            preprocessor = _build(
+                Path(tmp),
+                output_mode=options.MULTI_HOT,
+                max_tokens=16,
+            )
+        self.assertIsNotNone(preprocessor.model)

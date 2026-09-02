@@ -480,7 +480,7 @@ preprocessor = PreprocessingModel(
     <span class="nav-icon">←</span>
     <span class="nav-text">Cross Features</span>
   </a>
-  <a href="../optimization/overview.md" class="nav-button next">
+  <a href="../optimization/tabular-optimization.md" class="nav-button next">
     <span class="nav-text">Optimization</span>
     <span class="nav-icon">→</span>
   </a>

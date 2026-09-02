@@ -141,6 +141,39 @@ only a description of each weight tensor can be returned.
 
 ---
 
+## get_memory_usage
+
+```python
+get_memory_usage(self) -> dict
+```
+
+Report the GPU memory the monitored build steps needed.
+
+The figures come from `tf.config.experimental.get_memory_info`, which
+only reports GPU memory. On a CPU-only machine, and for steps that
+allocated nothing, every figure is `0.0`.
+
+### Returns- **dict**: `peak_mb` for the largest single step and a `steps` mapping of
+    each monitored method to the megabytes it peaked at.
+
+
+---
+
+## get_timing_metrics
+
+```python
+get_timing_metrics(self) -> dict
+```
+
+Report how long the monitored build steps took.
+
+### Returns- **dict**: `total_seconds` for the whole build plus a `steps` mapping of
+    each monitored method to the seconds it accounted for. Empty of
+    steps until `build_preprocessor` has run.
+
+
+---
+
 ## load_model
 
 ```python
@@ -156,6 +189,31 @@ Load a saved preprocessing model and its metadata.
 
 ### Raises
 - **ValueError**: If the model directory doesn't exist or is missing required files
+
+
+---
+
+## plot_model
+
+```python
+plot_model(self, to_file: str = 'model_architecture.png', **kwargs: Any) -> Any
+```
+
+Write a diagram of the preprocessing model to an image file.
+
+### Parameters- **to_file**: Where to write the image.
+    **kwargs: Passed through to `keras.utils.plot_model`; the shape,
+        dtype and layer-name flags default to on because they are what
+        makes a preprocessing graph readable.
+
+### Returns
+
+    Whatever `keras.utils.plot_model` returns, so the diagram renders
+    inline in a notebook.
+
+### Raises
+- **ValueError**: If the preprocessor has not been built yet.
+- **ImportError**: If `pydot` and Graphviz are not installed.
 
 
 ---

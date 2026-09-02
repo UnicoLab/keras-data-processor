@@ -29,6 +29,10 @@ from kdp.features import (
     FeatureType,
     NumericalFeature,
     PassthroughFeature,
+    # Re-exported: `kdp.processor` used to define a second class of this name
+    # whose members were different values, so an import from the wrong module
+    # produced an option that silently did nothing.
+    TextVectorizerOutputOptions,
 )
 from kdp.layers_factory import PreprocessorLayerFactory
 from kdp.pipeline import FeaturePreprocessor
@@ -106,14 +110,6 @@ class OutputModeOptions(str, Enum):
 
     CONCAT = "concat"
     DICT = "dict"
-
-
-class TextVectorizerOutputOptions(str, Enum):
-    """Output options for text vectorization."""
-
-    TF_IDF = "tf_idf"
-    INT = "int"
-    MULTI_HOT = "multi_hot"
 
 
 class TransformerBlockPlacementOptions(str, Enum):
@@ -398,7 +394,15 @@ class PreprocessingModel:
         self.processed_features = {}  # All processed features before final output
         self.passthrough_outputs = {}  # Passthrough features (unprocessed)
         self.concat_all = None  # Final concatenated output for CONCAT mode
+        self.model = None  # Set by build_preprocessor
         self._preprocessed_cache = {} if use_caching else None
+
+        # `_monitor_performance` measured the time and GPU memory of every step
+        # it wrapped and then wrote them to a debug log, so `get_timing_metrics`
+        # and `get_memory_usage` -- both of which the documentation shows -- had
+        # nothing to read and did not exist. The measurements are kept here now.
+        self._step_seconds: dict[str, float] = {}
+        self._step_memory_bytes: dict[str, int] = {}
 
         if log_to_file:
             logger.info("Logging to file enabled")
@@ -470,6 +474,16 @@ class PreprocessingModel:
                 # Calculate metrics
                 execution_time = end_time - start_time
                 memory_used = end_memory - start_memory
+
+                # Keep the measurements as well as logging them; the getters
+                # below are the documented way to read them back.
+                self._step_seconds[func.__name__] = (
+                    self._step_seconds.get(func.__name__, 0.0) + execution_time
+                )
+                self._step_memory_bytes[func.__name__] = max(
+                    self._step_memory_bytes.get(func.__name__, 0),
+                    memory_used,
+                )
 
                 # Log performance metrics
                 logger.debug(
@@ -1269,7 +1283,8 @@ class PreprocessingModel:
             # tf_idf, so defaulting it unconditionally made those modes
             # unreachable.
             if (
-                _feature.kwargs.get("output_mode", "int") == "int"
+                _feature.kwargs.get("output_mode", TextVectorizerOutputOptions.INT)
+                == TextVectorizerOutputOptions.INT
                 and "output_sequence_length" not in _feature.kwargs
             ):
                 _feature.kwargs["output_sequence_length"] = 35
@@ -2754,6 +2769,80 @@ class PreprocessingModel:
         for batch in dataset:
             # Apply preprocessing
             yield self.model(batch)
+
+    def get_timing_metrics(self) -> dict:
+        """Report how long the monitored build steps took.
+
+        Returns:
+            dict: `total_seconds` for the whole build plus a `steps` mapping of
+            each monitored method to the seconds it accounted for. Empty of
+            steps until `build_preprocessor` has run.
+        """
+        return {
+            "total_seconds": sum(self._step_seconds.values()),
+            "steps": dict(self._step_seconds),
+        }
+
+    def get_memory_usage(self) -> dict:
+        """Report the GPU memory the monitored build steps needed.
+
+        The figures come from `tf.config.experimental.get_memory_info`, which
+        only reports GPU memory. On a CPU-only machine, and for steps that
+        allocated nothing, every figure is `0.0`.
+
+        Returns:
+            dict: `peak_mb` for the largest single step and a `steps` mapping of
+            each monitored method to the megabytes it peaked at.
+        """
+        steps = {
+            name: value / (1024 * 1024)
+            for name, value in self._step_memory_bytes.items()
+        }
+        return {
+            "peak_mb": max(steps.values(), default=0.0),
+            "steps": steps,
+        }
+
+    def plot_model(self, to_file: str = "model_architecture.png", **kwargs: Any) -> Any:
+        """Write a diagram of the preprocessing model to an image file.
+
+        Args:
+            to_file: Where to write the image.
+            **kwargs: Passed through to `keras.utils.plot_model`; the shape,
+                dtype and layer-name flags default to on because they are what
+                makes a preprocessing graph readable.
+
+        Returns:
+            Whatever `keras.utils.plot_model` returns, so the diagram renders
+            inline in a notebook.
+
+        Raises:
+            ValueError: If the preprocessor has not been built yet.
+            ImportError: If `pydot` and Graphviz are not installed.
+        """
+        if self.model is None:
+            raise ValueError(
+                "There is no model to plot yet. Call build_preprocessor() first.",
+            )
+
+        options = {
+            "show_shapes": True,
+            "show_dtype": True,
+            "show_layer_names": True,
+            **kwargs,
+        }
+        result = keras.utils.plot_model(self.model, to_file=to_file, **options)
+
+        # `keras.utils.plot_model` prints its complaint and returns None when
+        # pydot or Graphviz are missing, so a caller who only looked at the
+        # return value would think the diagram had been written.
+        if not Path(to_file).exists():
+            raise ImportError(
+                "Plotting the model needs `pydot` and Graphviz, and no image "
+                f"was written to {to_file!r}. Install them with "
+                "`pip install pydot` and your system's `graphviz` package.",
+            )
+        return result
 
     def get_feature_importances(self, data: dict | None = None) -> dict:
         """Get feature importance weights if feature selection was enabled.

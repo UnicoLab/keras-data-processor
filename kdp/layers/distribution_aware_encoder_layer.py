@@ -67,6 +67,11 @@ class DistributionType(str, Enum):
     BOUNDED = "bounded"  # For data with known bounds
     ORDINAL = "ordinal"  # For ordered categorical data
 
+    # BOUNDED, ORDINAL and POISSON can be requested explicitly, and the encoder
+    # will honour them, but `distribution_type="auto"` never returns them: the
+    # detector scores no evidence for those three, so they cannot come out of
+    # automatic detection.
+
 
 @keras.saving.register_keras_serializable(package="kdp.layers")
 class DistributionAwareEncoder(keras.layers.Layer):

@@ -3,6 +3,7 @@ from importlib.metadata import PackageNotFoundError, version as _package_version
 
 from kdp.features import (
     CategoricalFeature,
+    CrossFeatureOutputOptions,
     DateFeature,
     DistributionType,
     Feature,
@@ -11,6 +12,7 @@ from kdp.features import (
     NumericalFeature,
     PassthroughFeature,
     TextFeature,
+    TextVectorizerOutputOptions,
     TimeSeriesFeature,
 )
 from kdp.layers_factory import PreprocessorLayerFactory
@@ -51,6 +53,8 @@ __all__ = [
     "PreprocessorLayerFactory",
     "PreprocessingModel",
     "CategoryEncodingOptions",
+    "TextVectorizerOutputOptions",
+    "CrossFeatureOutputOptions",
     "TransformerBlockPlacementOptions",
     "OutputModeOptions",
     "TabularAttentionPlacementOptions",

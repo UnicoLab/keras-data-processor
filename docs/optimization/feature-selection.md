@@ -2,7 +2,7 @@
 
 ## 📋 Quick Overview
 
-Feature Selection in KDP automatically identifies and prioritizes your most important features, cutting through the noise to focus on what really drives your predictions. Built on the advanced Gated Residual Variable Selection Network (GRVSN) architecture, it's like having a data scientist automatically analyze your feature importance.
+Feature Selection puts a Gated Residual Variable Selection Network (GRVSN) in front of your features, so the model learns a gate for each one instead of consuming it raw. The gates are trainable weights of the preprocessor, which lets a downstream model attenuate features it does not need. See the note below on what the reported weights do, and do not, tell you today.
 
 ## ✨ Key Benefits
 
@@ -174,22 +174,35 @@ preprocessor = PreprocessingModel(
 )
 ```
 
-## 📊 Visualizing Feature Importance
+## 📊 Inspecting the Selection Layers
 
-KDP provides utilities to visualize which features are most important:
+`get_feature_importances()` is the only accessor: it returns a plain
+`{feature_name: weight}` dictionary, which you can chart with whatever plotting
+library you already use.
 
 ```python
-# After building and training your preprocessor
-feature_importance = preprocessor.get_feature_importance()
+import matplotlib.pyplot as plt
 
-# Visualize the importance scores
-preprocessor.plot_feature_importance()
+importances = preprocessor.get_feature_importances()
 
-# Get the top N most important features
-top_features = preprocessor.get_top_features(n=10)
+names = list(importances)
+plt.barh(names, [importances[name] for name in names])
+plt.xlabel("selection weight")
+plt.tight_layout()
+plt.savefig("feature_importances.png")
 ```
 
-*Note: The feature importance visualization shows a bar chart with features sorted by their importance scores, helping you identify which features contribute most to your model's performance.*
+To see where the selection layers sit in the graph, write the architecture out
+as an image:
+
+```python
+preprocessor.plot_model("preprocessor_architecture.png")
+```
+
+!!! warning "These weights do not rank features yet"
+    As the note above explains, each feature is selected on its own, so every
+    weight is `1.0` and the chart is flat by construction. Read it as
+    confirmation that the selection layers are wired in, not as a ranking.
 
 ## 💡 Pro Tips for Feature Selection
 
@@ -214,15 +227,14 @@ top_features = preprocessor.get_top_features(n=10)
    ```
 
 3. **Progressive Feature Refinement**
+
+   Decide the shortlist with your own downstream model -- a trained estimator's
+   importances, a permutation test -- and then build the refined preprocessor
+   over it. KDP's selection weights cannot make that call for you while they
+   are all `1.0`.
+
    ```python
-   # First run to identify important features
-   importances = first_preprocessor.get_feature_importances()
-
-   # Keep only features with importance > 0.05
-   important_features = {k: v for k, v in features.items()
-                        if importances.get(k, 0) > 0.05}
-
-   # Create refined model with just important features
+   # `important_features` came from your model, not from KDP's weights
    refined_preprocessor = PreprocessingModel(
        features_specs=important_features,
        # More advanced processing now with fewer features
@@ -240,7 +252,7 @@ top_features = preprocessor.get_top_features(n=10)
    # Save importance scores with timestamp
    def log_importances(preprocessor, name):
        preprocessor.build_preprocessor()
-importances = preprocessor.get_feature_importances()
+       importances = preprocessor.get_feature_importances()
        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
        with open(f"importance_{name}_{timestamp}.json", "w") as f:
            json.dump(importances, f, indent=2)

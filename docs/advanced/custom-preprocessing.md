@@ -833,8 +833,14 @@ model = PreprocessingModel(path_data="data.csv", features_specs=features)
 model.build_preprocessor()
 model.model.summary()
 
-# Test with small batch
-small_batch = data.head(5)
-result = model.transform(small_batch)
-print(result)
+# Test with a small batch. The built model is a Keras model over a dict of
+# columns, so feed it one tensor per feature -- `InferenceFormatter` does that
+# conversion for you when you have a DataFrame in hand.
+from kdp import InferenceFormatter
+
+batch = InferenceFormatter(model).prepare_inference_data(
+    data.head(5),
+    to_tensors=True,
+)
+print(model.model(batch))
 ```
