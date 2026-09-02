@@ -102,6 +102,39 @@ Note also that `BOUNDED`, `ORDINAL` and `POISSON` can be requested explicitly
 but are never returned by automatic detection: the detector scores no evidence
 for them.
 
+## ✍️ `preferred_distribution`, spelled with two "r"s
+
+`kdp.layers` and the model advisor spell this option `prefered_distribution`,
+with one "r", while `NumericalFeature` takes `preferred_distribution`. The
+feature swallows `**kwargs`, so the misspelling was discarded and the feature
+stayed on automatic detection while looking configured. The advisor's own
+recommendation went the same way, and the code snippet it generates never
+carried the distribution at all -- so following `auto_configure()` end to end
+gave you none of its distribution advice.
+
+Three changes:
+
+- `NumericalFeature` accepts `prefered_distribution` as a deprecated alias and
+  warns. Existing code keeps working.
+- The advisor's recommendation now uses the key `preferred_distribution`. If
+  you read `recommendation["config"]["prefered_distribution"]`, read the
+  correctly spelled key instead.
+- The generated snippet writes `preferred_distribution=...` onto the feature.
+
+<div class="code-container">
+
+```python
+from kdp.features import FeatureType, NumericalFeature
+
+NumericalFeature(
+    name="revenue",
+    feature_type=FeatureType.FLOAT_RESCALED,
+    preferred_distribution="log_normal",   # two "r"s
+)
+```
+
+</div>
+
 ## 🕳️ `MissingValueHandlerLayer` and NaN
 
 Missing values were found with `inputs == mask_value`, and NaN compares equal

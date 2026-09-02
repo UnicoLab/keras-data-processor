@@ -207,7 +207,7 @@ class ModelAdvisor:
 
         elif dist_type == "heavy_tailed":
             recommendation["preprocessing"].append("DISTRIBUTION_AWARE")
-            recommendation["config"]["prefered_distribution"] = "heavy_tailed"
+            recommendation["config"]["preferred_distribution"] = "heavy_tailed"
             recommendation["config"]["robust_scaling"] = True
             recommendation["notes"] = [
                 "Heavy-tailed distribution detected, robust scaling recommended",
@@ -215,7 +215,7 @@ class ModelAdvisor:
 
         elif dist_type == "log_normal":
             recommendation["preprocessing"].append("DISTRIBUTION_AWARE")
-            recommendation["config"]["prefered_distribution"] = "log_normal"
+            recommendation["config"]["preferred_distribution"] = "log_normal"
             recommendation["config"]["log_transform"] = True
             recommendation["notes"] = [
                 "Log-normal distribution detected, logarithmic transformation recommended",
@@ -223,7 +223,7 @@ class ModelAdvisor:
 
         elif dist_type == "periodic":
             recommendation["preprocessing"].append("DISTRIBUTION_AWARE")
-            recommendation["config"]["prefered_distribution"] = "periodic"
+            recommendation["config"]["preferred_distribution"] = "periodic"
             recommendation["config"]["trigonometric_features"] = True
             recommendation["notes"] = [
                 "Periodic distribution detected, trigonometric features recommended",
@@ -231,7 +231,7 @@ class ModelAdvisor:
 
         elif dist_type == "multimodal":
             recommendation["preprocessing"].append("DISTRIBUTION_AWARE")
-            recommendation["config"]["prefered_distribution"] = "multimodal"
+            recommendation["config"]["preferred_distribution"] = "multimodal"
             recommendation["config"]["mixture_model"] = True
             recommendation["notes"] = [
                 "Multimodal distribution detected, mixture model encoding recommended",
@@ -239,7 +239,7 @@ class ModelAdvisor:
 
         elif dist_type == "sparse":
             recommendation["preprocessing"].append("DISTRIBUTION_AWARE")
-            recommendation["config"]["prefered_distribution"] = "sparse"
+            recommendation["config"]["preferred_distribution"] = "sparse"
             recommendation["config"]["zero_handling"] = "special"
             recommendation["notes"] = [
                 "Sparse distribution detected, specialized zero handling recommended",
@@ -703,6 +703,14 @@ class ModelAdvisor:
                         code.append(f"        scale={config['scale']},")
                 elif "FLOAT_DISCRETIZED" in preprocessing:
                     code.append("        feature_type=FeatureType.FLOAT_DISCRETIZED,")
+                # The recommended distribution was computed, stored and then
+                # left out of the snippet, so following the advisor produced a
+                # feature on automatic detection instead.
+                if config.get("preferred_distribution"):
+                    code.append(
+                        "        preferred_distribution="
+                        f"\"{config['preferred_distribution']}\",",
+                    )
                 if config.get("use_embedding", False):
                     code.append("        use_embedding=True,")
                     code.append(

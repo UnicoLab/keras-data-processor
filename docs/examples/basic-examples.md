@@ -350,7 +350,7 @@ features = {
         name="rescaled_float",
         feature_type=FeatureType.FLOAT_RESCALED,
         scale=2.0,
-        prefered_distribution="gamma"
+        preferred_distribution="gamma"
     ),
     # 3. Custom preprocessing pipeline with a custom set normal distribution
     "custom_float": NumericalFeature(
@@ -365,7 +365,7 @@ features = {
         mean=0.0,
         variance=1.0,
         scale=4.0,
-        prefered_distribution="normal"
+        preferred_distribution="normal"
     ),
 }
 

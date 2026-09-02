@@ -190,6 +190,20 @@ class NumericalFeature(Feature):
             num_bins (int): Number of bins for discretization.
             **kwargs: Additional keyword arguments for the feature.
         """
+        # `kdp.layers` and the model advisor both spell this option with one
+        # "r", so callers reach for that spelling too -- and it landed in
+        # `**kwargs`, which this class swallows, leaving the feature on
+        # automatic detection while looking configured.
+        legacy = kwargs.pop("prefered_distribution", None)
+        if legacy is not None:
+            if preferred_distribution is None:
+                preferred_distribution = legacy
+            logger.warning(
+                f"{name}: `prefered_distribution` is a misspelling of "
+                "`preferred_distribution` and is accepted for compatibility. "
+                "Use `preferred_distribution`.",
+            )
+
         super().__init__(name, feature_type, **kwargs)
         self.dtype = tf.float32
         self.preferred_distribution = preferred_distribution

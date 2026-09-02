@@ -160,6 +160,12 @@ with tempfile.TemporaryDirectory() as _tmp:
     _base = Path(_tmp)
 {writes if writes else "    pass"}
 
+    # Run from the temporary directory. A block that names a relative path --
+    # `features_stats_path="features_stats.json"`, say -- would otherwise write
+    # it into the repository, and a stray stats file there makes the tests that
+    # assert "no data means a clear error" find statistics and fail.
+    os.chdir(_tmp)
+
     # Point every documented path at the synthesised copy.
     _orig_init = None
     import kdp

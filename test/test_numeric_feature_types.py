@@ -123,3 +123,57 @@ class TestNumericFeatureTypes(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@pytest.mark.unit
+class TestPreferredDistributionSpelling(unittest.TestCase):
+    """`NumericalFeature` swallows `**kwargs`, so a misspelling vanishes.
+
+    `kdp.layers` and the model advisor both spell this option
+    `prefered_distribution`, with one "r", while the feature takes
+    `preferred_distribution`. The misspelling therefore landed in `kwargs` and
+    was discarded, leaving the feature on automatic detection while looking
+    configured -- and the advisor's own recommendation went the same way.
+    """
+
+    def test_the_canonical_spelling_is_recorded(self):
+        """The baseline the alias has to match."""
+        feature = NumericalFeature(
+            name="x",
+            feature_type=FeatureType.FLOAT_RESCALED,
+            preferred_distribution="gamma",
+        )
+        self.assertEqual(feature.preferred_distribution, "gamma")
+
+    def test_the_misspelling_is_honoured_rather_than_dropped(self):
+        """This used to leave `preferred_distribution` as None."""
+        feature = NumericalFeature(
+            name="x",
+            feature_type=FeatureType.FLOAT_RESCALED,
+            prefered_distribution="gamma",
+        )
+        self.assertEqual(feature.preferred_distribution, "gamma")
+
+    def test_the_misspelling_does_not_linger_in_kwargs(self):
+        """Left in `kwargs` it would reach the layer as an unknown keyword."""
+        feature = NumericalFeature(
+            name="x",
+            feature_type=FeatureType.FLOAT_RESCALED,
+            prefered_distribution="gamma",
+        )
+        self.assertNotIn("prefered_distribution", feature.kwargs)
+
+    def test_the_canonical_spelling_wins_when_both_are_given(self):
+        """The correctly spelled argument is the one the caller meant."""
+        feature = NumericalFeature(
+            name="x",
+            feature_type=FeatureType.FLOAT_RESCALED,
+            preferred_distribution="beta",
+            prefered_distribution="gamma",
+        )
+        self.assertEqual(feature.preferred_distribution, "beta")
+
+    def test_neither_spelling_leaves_it_unset(self):
+        """Absent from both, the feature auto-detects, as before."""
+        feature = NumericalFeature(name="x", feature_type=FeatureType.FLOAT_RESCALED)
+        self.assertIsNone(feature.preferred_distribution)

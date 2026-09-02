@@ -122,7 +122,12 @@ class MissingValueHandlerLayer(Layer):
         Returns:
             A boolean array, True wherever a value counts as missing.
         """
-        if isinstance(self.mask_value, float) and np.isnan(self.mask_value):
+        try:
+            is_nan_marker = bool(np.isnan(self.mask_value))
+        except (TypeError, ValueError):
+            # A non-numeric marker cannot be NaN.
+            is_nan_marker = False
+        if is_nan_marker:
             return np.isnan(inputs)
         return inputs == self.mask_value
 

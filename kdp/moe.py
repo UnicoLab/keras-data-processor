@@ -272,7 +272,9 @@ class FeatureMoE(keras.layers.Layer):
         self.expert_dim = expert_dim
         self.expert_hidden_dims = expert_hidden_dims
         self.routing = routing
-        self.sparsity = min(sparsity, num_experts)
+        # `tf.nn.top_k` rejects a float `k`, and a saved config can bring
+        # this back as one, so it is pinned to an int here.
+        self.sparsity = int(min(sparsity, num_experts))
         self.routing_activation = routing_activation
         self.feature_names = feature_names
         self.predefined_assignments = predefined_assignments

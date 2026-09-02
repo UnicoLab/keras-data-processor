@@ -475,3 +475,20 @@ def _no_stray_stats_file():
     yield
     if default_stats.exists() and not existed:
         default_stats.unlink()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _clear_stray_stats_before_the_session():
+    """Remove a stats file left in the working directory before we start.
+
+    The per-test fixture above deliberately leaves alone a file that was
+    already there, so a stray one -- written by a script run from the
+    repository root, for instance -- survives the whole session and makes every
+    test that asserts "without data this must raise" find statistics instead.
+    The file is git-ignored and never part of a checkout, so removing it here
+    costs nothing and keeps a local run honest.
+    """
+    stray = Path("features_stats.json")
+    if stray.exists():
+        stray.unlink()
+    yield
