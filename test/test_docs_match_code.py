@@ -279,6 +279,42 @@ class TestDocumentedCodeMatchesTheAPI(unittest.TestCase):
                 missing.append(f"{module}: {public}")
         self.assertEqual(missing, [], "\n".join(missing))
 
+    def test_no_example_mixes_calendar_with_numeric_time_series_configs(self):
+        """A column is either a date or a number, and four pages said both.
+
+        `calendar_feature_config` reads date strings; the other time series
+        configs read numbers out of the same column. The combination raised
+        "Cast string to float is not supported" the moment such a model was
+        called, and four documented examples taught it.
+        """
+        numeric_configs = {
+            "lag_config",
+            "rolling_stats_config",
+            "differencing_config",
+            "moving_average_config",
+            "wavelet_transform_config",
+            "tsfresh_feature_config",
+        }
+        mixed = []
+        for path, index, code in _doc_blocks():
+            try:
+                tree = ast.parse(code)
+            except SyntaxError:
+                continue
+            for node in ast.walk(tree):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Name)
+                    and node.func.id == "TimeSeriesFeature"
+                ):
+                    named = {keyword.arg for keyword in node.keywords}
+                    conflicting = sorted(named & numeric_configs)
+                    if "calendar_feature_config" in named and conflicting:
+                        mixed.append(
+                            f"{path} block #{index}: calendar with {conflicting}"
+                        )
+        self.assertEqual(mixed, [], "\n".join(mixed))
+
     def test_internal_links_resolve(self):
         """Every cross-link between pages must point at a page that exists.
 

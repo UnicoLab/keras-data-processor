@@ -203,9 +203,14 @@ sales_feature = TimeSeriesFeature(
         "stride": 1,                   # Stride for sliding window
         "drop_na": True,               # Handle missing values
         "normalize": False             # Whether to normalize features
-    },
+    }
+)
 
-    # Calendar feature configuration for date input
+# Calendar features read the date column, not the numeric one, so they are a
+# feature of their own. Combining them with the configs above would ask one
+# column to be both a date and a number, and KDP raises if you try.
+calendar_feature = TimeSeriesFeature(
+    name="date",
     calendar_feature_config={
         "features": ["month", "day", "day_of_week", "is_weekend"],  # Features to extract
         "cyclic_encoding": True,       # Use cyclic encoding for cyclical features
@@ -217,7 +222,7 @@ sales_feature = TimeSeriesFeature(
 # Create features dictionary
 features = {
     "sales": sales_feature,
-    "date": "DATE",
+    "date": calendar_feature,
     "store_id": "STRING_CATEGORICAL"
 }
 
@@ -554,8 +559,12 @@ traffic_data = TimeSeriesFeature(
 
     # Lag features for short-term patterns
     lag_config={"lags": [1, 2, 3, 24, 24*7]},  # Hours back
+)
 
-    # Calendar features for temporal patterns
+# The calendar features come off the timestamp column, so they are declared on
+# that column rather than on the numeric series.
+timestamp_calendar = TimeSeriesFeature(
+    name="timestamp",
     calendar_feature_config={
         "features": [
             "month", "day_of_week", "hour", "is_weekend",
@@ -569,7 +578,7 @@ traffic_data = TimeSeriesFeature(
 # Create features dictionary
 features = {
     "traffic_volume": traffic_data,
-    "timestamp": "DATE",
+    "timestamp": timestamp_calendar,
     "location_id": "STRING_CATEGORICAL"
 }
 
@@ -622,8 +631,14 @@ features = {
         # Weekly, monthly, quarterly smoothing
         moving_average_config={
             "periods": [7, 30, 90]
-        },
-        # Calendar features for seasonal patterns
+        }
+    ),
+
+    # Calendar features for seasonal patterns. They read the date column, so
+    # they belong to that column rather than to the numeric sales series --
+    # one column cannot be both a date and a number.
+    "date": TimeSeriesFeature(
+        name="date",
         calendar_feature_config={
             "features": ["month", "day_of_week", "is_weekend", "is_year_start"],
             "cyclic_encoding": True
@@ -1014,7 +1029,7 @@ features = {
     <div class="code-container">
 
 ```python
-# Comprehensive time series feature engineering
+# Comprehensive time series feature engineering, over the numeric column
 sensor_feature = TimeSeriesFeature(
     name="sensor_data",
     sort_by="timestamp",
@@ -1023,15 +1038,23 @@ sensor_feature = TimeSeriesFeature(
     lag_config={"lags": [1, 2, 3]},
     rolling_stats_config={"window_size": 10, "statistics": ["mean", "std"]},
 
-    # Advanced features
+    # Advanced features. The wavelet needs a window to decompose, which the
+    # lags above provide -- on a bare column it has a single step and raises.
     wavelet_transform_config={"levels": 3},
-    tsfresh_feature_config={"features": ["mean", "variance", "abs_energy"]},
+    tsfresh_feature_config={"features": ["mean", "variance", "abs_energy"]}
+)
+
+# Calendar features read the timestamp column, so they are a feature of that
+# column. A column cannot be both a date and a number, and KDP raises if you
+# configure both on one feature.
+timestamp_feature = TimeSeriesFeature(
+    name="timestamp",
     calendar_feature_config={"features": ["hour", "day_of_week"]}
 )
 
-# This combination captures temporal dependencies (lags),
-# local statistics (rolling stats), multi-scale patterns (wavelets),
-# global statistics (tsfresh), and temporal context (calendar)
+# Together these capture temporal dependencies (lags), local statistics
+# (rolling stats), multi-scale patterns (wavelets), global statistics
+# (tsfresh), and temporal context (calendar)
 ```
 
    </div>
