@@ -20,6 +20,23 @@ from kdp.processor import PreprocessingModel
 from kdp.time_series.inference import TimeSeriesInferenceFormatter
 
 
+def _output_path(filename: str) -> str:
+    """Where an example writes its images.
+
+    Running an example used to drop PNGs into the repository root, so anyone
+    who tried one came back to a dirty working tree.
+
+    Args:
+        filename: Name of the image to write.
+
+    Returns:
+        The full path, inside a gitignored directory beside this script.
+    """
+    directory = Path(__file__).resolve().parent / "outputs"
+    directory.mkdir(exist_ok=True)
+    return str(directory / filename)
+
+
 def generate_sample_data(num_stores=3, days_per_store=30, add_noise=True):
     """Generate sample time series data for multiple stores."""
     np.random.seed(42)
@@ -269,7 +286,7 @@ def example_multi_step_forecast(preprocessor, formatter, train_data):
         plt.grid(True)
 
         # Save the figure
-        plt.savefig("forecast_example.png")
+        plt.savefig(_output_path("forecast_example.png"))
         print("Forecast visualization saved as 'forecast_example.png'")
     except Exception as e:
         print(f"Couldn't create visualization: {e}")
