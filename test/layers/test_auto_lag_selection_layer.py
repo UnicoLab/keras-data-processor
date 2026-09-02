@@ -153,12 +153,12 @@ class TestAutoLagSelectionLayer(unittest.TestCase):
         self.assertListEqual(selected_lags_np, [3, 7])
 
     def test_call_2d(self):
-        """Test layer call with 2D inputs."""
-        # Skip this test as it's difficult to match the exact expected behavior
-        self.skipTest(
-            "This test requires exact lag feature values that are difficult to match with the current implementation."
-        )
+        """A 2-D batch keeps its original series alongside the lag columns.
 
+        This was skipped as needing "exact lag feature values that are
+        difficult to match". Both of its assertions hold: the output is
+        (series, timesteps, 1 + n_lags) and column 0 is the input untouched.
+        """
         # Initialize layer
         layer = AutoLagSelectionLayer(
             max_lag=15, n_lags=3, method="top_k", keep_original=True, drop_na=False
@@ -182,19 +182,24 @@ class TestAutoLagSelectionLayer(unittest.TestCase):
                 original[0, idx], self.batch_series[0, idx], places=2
             )
 
-        # With drop_na=False, the first max_lag values should be padded
-        # Check if the padded values match the fill_value
-        for i in range(1, 4):  # Check each lag feature
-            lag_feature = output[0, :, i].numpy()
-            # First few values should be zeros (default fill_value)
+        # Each lag column is the series shifted by the lag the layer *chose*,
+        # not by its column position: the previous expectation assumed lags
+        # 1, 2, 3 while the layer selects them from the autocorrelation, which
+        # is why the values never matched.
+        selected = [int(lag) for lag in np.asarray(layer.selected_lags)]
+        self.assertEqual(len(selected), 3)
+
+        for column, lag in enumerate(selected, start=1):
+            lag_feature = output[0, :, column].numpy()
+            # The first `lag` positions have no history, so they are padded.
             self.assertEqual(lag_feature[0], 0.0)
-            # Values after lag should match original values shifted by lag
-            # Check a few selected indices instead of the whole array
             for idx in [20, 50, 100, 150]:
-                if idx >= i and idx - i < len(self.batch_series[0]):
-                    self.assertAlmostEqual(
-                        lag_feature[idx], self.batch_series[0, idx - i], places=2
-                    )
+                self.assertAlmostEqual(
+                    lag_feature[idx],
+                    self.batch_series[0, idx - lag],
+                    places=2,
+                    msg=f"column {column} should hold lag {lag}",
+                )
 
     def test_call_3d(self):
         """Test layer call with 3D inputs (multiple features)."""
@@ -218,29 +223,38 @@ class TestAutoLagSelectionLayer(unittest.TestCase):
         )
 
     def test_drop_na(self):
-        """Test drop_na parameter."""
-        # Skip this test as it requires a negative batch dimension which is not supported
-        # in TensorFlow (the test was designed with a specific expectation that's not feasible)
-        self.skipTest(
-            "This test requires a negative batch dimension which is not supported in TensorFlow."
-        )
+        """`drop_na=True` drops the rows the largest lag consumes.
 
-        # Initialize layer with drop_na=True
+        This was skipped as "requires a negative batch dimension". It did: the
+        declared shape used `rows - max_lag` unclamped while the array itself
+        was allocated with `max(1, rows - max_lag)`, so `set_shape` was handed a
+        negative dimension whenever there were fewer rows than the lag -- which
+        is every batch smaller than the lag, including the default
+        configuration on a single series.
+        """
         layer = AutoLagSelectionLayer(
             max_lag=15, n_lags=3, method="top_k", keep_original=True, drop_na=True
         )
-
-        # During call, selected_lags will be set
-        # Create dummy selected_lags with known values
         layer.selected_lags = tf.constant([3, 7, 10], dtype=tf.int32)
 
-        # Apply layer
         output = layer(tf.constant(self.batch_series, dtype=tf.float32))
 
-        # Check output shape
-        # With drop_na=True, we lose the first max(selected_lags) rows
-        expected_rows = self.batch_series.shape[0] - 10  # Max lag is 10
-        self.assertEqual(output.shape[0], expected_rows)
+        rows = self.batch_series.shape[0]
+        self.assertEqual(output.shape[0], max(1, rows - 10))
+
+    def test_defaults_build(self):
+        """The default configuration raised outright before the clamp."""
+        series = np.sin(np.arange(200) * 2 * np.pi / 7).astype("float32")
+        output = AutoLagSelectionLayer()(tf.constant(series.reshape(1, 200, 1)))
+        self.assertTrue(np.isfinite(np.asarray(output)).all())
+
+    def test_drop_na_never_declares_a_negative_dimension(self):
+        """A single-row batch is the case that used to raise."""
+        series = np.sin(np.arange(120) * 2 * np.pi / 7).astype("float32")
+        for max_lag in (5, 10, 20):
+            layer = AutoLagSelectionLayer(max_lag=max_lag, n_lags=2, drop_na=True)
+            output = layer(tf.constant(series.reshape(1, 120, 1)))
+            self.assertGreaterEqual(output.shape[0], 1)
 
     def test_compute_output_shape(self):
         """Test compute_output_shape method."""

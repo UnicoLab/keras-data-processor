@@ -255,12 +255,16 @@ class AutoLagSelectionLayer(Layer):
                 n_output_features = (1 if self.keep_original else 0) + self.n_lags
 
             if self.drop_na:
-                max_lag = tf.reduce_max(self.selected_lags)
-                # Dropping the leading rows consumed by the largest lag. This can
-                # go negative when the batch is shorter than the lag, which
-                # set_shape then rejects -- the caller must supply enough rows.
-                batch_size = inputs.shape[0] - max_lag
-                result.set_shape([batch_size, inputs.shape[1], n_output_features])
+                # `create_lag_features` allocates `max(1, rows - max_lag)` rows,
+                # so the declared shape has to use the same clamp. Declaring the
+                # unclamped difference made `set_shape` reject a negative
+                # dimension whenever the input had fewer rows than the largest
+                # selected lag -- which is every single-row batch, and so the
+                # default configuration always raised.
+                max_lag = int(tf.reduce_max(self.selected_lags))
+                rows = inputs.shape[0]
+                declared_rows = None if rows is None else max(1, rows - max_lag)
+                result.set_shape([declared_rows, inputs.shape[1], n_output_features])
             else:
                 result.set_shape([inputs.shape[0], inputs.shape[1], n_output_features])
 
