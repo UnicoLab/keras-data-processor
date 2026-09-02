@@ -96,9 +96,148 @@ model = result["model"]
         <td>[64, 32]</td>
         <td>Deeper for complex relationships</td>
       </tr>
+      <tr>
+        <td><code>feature_moe_assignments</code></td>
+        <td>Feature &rarr; expert index map, required by <code>"predefined"</code> routing</td>
+        <td>None</td>
+        <td>Group related features onto the same expert index</td>
+      </tr>
+      <tr>
+        <td><code>feature_moe_dropout</code></td>
+        <td>Dropout applied inside every expert network</td>
+        <td>0.1</td>
+        <td>0.0-0.3 (raise it when experts overfit)</td>
+      </tr>
+      <tr>
+        <td><code>feature_moe_freeze_experts</code></td>
+        <td>Freeze expert weights so only the router trains</td>
+        <td>False</td>
+        <td>True when reusing pretrained experts</td>
+      </tr>
+      <tr>
+        <td><code>feature_moe_use_residual</code></td>
+        <td>Add the original feature back onto its expert output</td>
+        <td>True</td>
+        <td>Keep True unless you want experts to fully replace the input</td>
+      </tr>
     </tbody>
   </table>
 </div>
+
+## 🎛️ Steering the Experts
+
+The router is not the only control you have. Four extra parameters decide *how*
+experts are assigned, trained and combined.
+
+### Hand-picked routing
+
+Set `feature_moe_routing="predefined"` and hand KDP a `feature_moe_assignments`
+map to place each feature on a specific expert yourself. Features that share an
+expert index are processed by the same specialist network.
+
+<div class="code-container">
+
+```python
+from kdp import PreprocessingModel, FeatureType
+
+features = {
+    "age": FeatureType.FLOAT_NORMALIZED,
+    "income": FeatureType.FLOAT_RESCALED,
+    "occupation": FeatureType.STRING_CATEGORICAL,
+    "education": FeatureType.STRING_CATEGORICAL,
+}
+
+preprocessor = PreprocessingModel(
+    path_data="data.csv",
+    features_specs=features,
+    use_feature_moe=True,
+    feature_moe_num_experts=2,
+    feature_moe_routing="predefined",
+    feature_moe_assignments={
+        "age": 0,          # expert 0 gets the demographic signals
+        "education": 0,
+        "income": 1,       # expert 1 gets the financial ones
+        "occupation": 1,
+    },
+)
+
+result = preprocessor.build_preprocessor()
+```
+
+</div>
+
+The map has to be complete. KDP raises a `ValueError` naming the gaps if a
+routed feature has no expert, because the assignment matrix doubles as the
+router's weights &mdash; an unassigned feature would be multiplied by zero and
+vanish from the model. Expert indices are range-checked too, and an index may
+be a weight map (`{0: 0.7, 1: 0.3}`) to split one feature across experts.
+
+In `concat` output mode only numeric and categorical features reach the
+mixture, so those are the names the map may contain; the error lists the exact
+set if you name something else.
+
+### Regularising, freezing and residuals
+
+<div class="code-container">
+
+```python
+from kdp import PreprocessingModel, FeatureType
+
+features = {
+    "age": FeatureType.FLOAT_NORMALIZED,
+    "income": FeatureType.FLOAT_RESCALED,
+    "occupation": FeatureType.STRING_CATEGORICAL,
+}
+
+preprocessor = PreprocessingModel(
+    path_data="data.csv",
+    features_specs=features,
+    use_feature_moe=True,
+    feature_moe_num_experts=3,
+    feature_moe_dropout=0.2,        # dropout inside every expert network
+    feature_moe_freeze_experts=False,  # True keeps expert weights fixed
+    feature_moe_use_residual=True,  # add the input back onto the expert output
+)
+
+result = preprocessor.build_preprocessor()
+```
+
+</div>
+
+<div class="table-container">
+  <table class="config-table">
+    <thead>
+      <tr>
+        <th>Parameter</th>
+        <th>What it changes</th>
+        <th>Reach for it when</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>feature_moe_dropout</code></td>
+        <td>Inserts a <code>Dropout</code> layer after every hidden layer of every expert. <code>0.0</code> removes the layers entirely.</td>
+        <td>Experts memorise the training set, or you have many experts and little data.</td>
+      </tr>
+      <tr>
+        <td><code>feature_moe_freeze_experts</code></td>
+        <td>Marks every expert non-trainable, so gradients only reach the router and the surrounding layers.</td>
+        <td>You loaded pretrained experts, or you want the router to settle before fine-tuning.</td>
+      </tr>
+      <tr>
+        <td><code>feature_moe_use_residual</code></td>
+        <td>Adds the untouched feature representation onto the expert output. Applied per feature, only where the two widths already match.</td>
+        <td>Almost always &mdash; it keeps the original signal reachable. Turn it off when experts should fully replace their input.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+!!! note "Residuals need matching widths"
+    The residual is a plain `Add`, so it only fires for features whose
+    preprocessed width already equals `feature_moe_expert_dim`. Features of a
+    different width pass through the expert output alone &mdash; no error, no
+    silent reshape.
 
 ## 💡 Pro Tips for Feature MoE
 

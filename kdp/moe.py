@@ -281,11 +281,15 @@ class FeatureMoE(keras.layers.Layer):
         self.use_batch_norm = use_batch_norm
 
         # Validate parameters
-        if routing == "predefined" and (
-            not feature_names or not predefined_assignments
-        ):
-            raise ValueError(
-                "For predefined routing, feature_names and predefined_assignments must be provided",
+        if routing == "predefined":
+            if not feature_names or not predefined_assignments:
+                raise ValueError(
+                    "For predefined routing, feature_names and predefined_assignments must be provided",
+                )
+            self._validate_assignments(
+                feature_names=feature_names,
+                assignments=predefined_assignments,
+                num_experts=num_experts,
             )
 
         # Initialize experts
@@ -315,6 +319,57 @@ class FeatureMoE(keras.layers.Layer):
         else:
             # Create a fixed assignment matrix for predefined routing
             self._create_assignment_matrix()
+
+    @staticmethod
+    def _validate_assignments(
+        feature_names: list[str],
+        assignments: dict[str, int | dict[int, float]],
+        num_experts: int,
+    ) -> None:
+        """Reject predefined assignments that would silently zero out a feature.
+
+        The assignment matrix doubles as the routing weights, so a feature with
+        no entry gets an all-zero row and its whole representation is multiplied
+        away. An out-of-range expert index is the same failure with a different
+        cause. Both are configuration mistakes, so they are reported rather than
+        absorbed.
+
+        Args:
+            feature_names: Features that will be routed through the mixture.
+            assignments: The caller's feature -> expert mapping.
+            num_experts: How many experts exist to route to.
+
+        Raises:
+            ValueError: If a feature is unassigned or an expert index is invalid.
+        """
+        missing = [name for name in feature_names if name not in assignments]
+        if missing:
+            raise ValueError(
+                "Predefined routing needs an expert for every feature. "
+                f"Missing assignments for: {sorted(missing)}. "
+                "Unassigned features would be zeroed out by the router.",
+            )
+
+        unknown = [name for name in assignments if name not in feature_names]
+        if unknown:
+            raise ValueError(
+                f"Predefined assignments name features the mixture never sees: {sorted(unknown)}. "
+                f"Known features: {sorted(feature_names)}.",
+            )
+
+        for name in feature_names:
+            target = assignments[name]
+            indices = target.keys() if isinstance(target, dict) else [target]
+            for index in indices:
+                if not isinstance(index, int) or isinstance(index, bool):
+                    raise ValueError(
+                        f"Expert index for {name!r} must be an int, got {index!r}.",
+                    )
+                if not 0 <= index < num_experts:
+                    raise ValueError(
+                        f"Expert index {index} for {name!r} is out of range "
+                        f"for a mixture of {num_experts} experts.",
+                    )
 
     def _create_assignment_matrix(self) -> None:
         """Create a fixed assignment matrix for predefined routing."""

@@ -3,7 +3,7 @@
 ## Constructor
 
 ```python
-__init__(self, features_stats: dict[str, typing.Any] = None, path_data: str = None, batch_size: int = 50000, feature_crosses: list[tuple[str, str, int]] = None, features_stats_path: str = None, output_mode: str = 'concat', overwrite_stats: bool = False, log_to_file: bool = False, features_specs: dict[str, kdp.features.FeatureType | str] = None, transfo_nr_blocks: int = None, transfo_nr_heads: int = 3, transfo_ff_units: int = 16, transfo_dropout_rate: float = 0.25, transfo_placement: str = 'categorical', tabular_attention: bool = False, tabular_attention_heads: int = 4, tabular_attention_dim: int = 64, tabular_attention_dropout: float = 0.1, tabular_attention_placement: str = 'all_features', tabular_attention_embedding_dim: int = 32, use_caching: bool = True, feature_selection_placement: str = 'none', use_distribution_aware: bool = False, distribution_aware_bins: int = 1000, feature_selection_units: int = 32, feature_selection_dropout: float = 0.2, use_advanced_numerical_embedding: bool = False, embedding_dim: int = 8, mlp_hidden_units: int = 16, num_bins: int = 10, init_min: float = -3.0, init_max: float = 3.0, dropout_rate: float = 0.1, use_batch_norm: bool = True, use_global_numerical_embedding: bool = False, global_embedding_dim: int = 8, global_mlp_hidden_units: int = 16, global_num_bins: int = 10, global_init_min: float = -3.0, global_init_max: float = 3.0, global_dropout_rate: float = 0.1, global_use_batch_norm: bool = True, global_pooling: str = 'average', use_feature_moe: bool = False, feature_moe_num_experts: int = 4, feature_moe_expert_dim: int = 64, feature_moe_hidden_dims: list[int] = None, feature_moe_routing: str = 'learned', feature_moe_sparsity: int = 2, feature_moe_assignments: dict[str, int] = None, feature_moe_dropout: float = 0.1, feature_moe_freeze_experts: bool = False, feature_moe_use_residual: bool = True, include_passthrough_in_output: bool = True) -> None
+__init__(self, features_stats: dict[str, typing.Any] = None, path_data: str = None, batch_size: int = 50000, feature_crosses: list[tuple[str, str, int]] = None, features_stats_path: str = None, output_mode: str = 'concat', overwrite_stats: bool = False, log_to_file: bool = False, features_specs: dict[str, kdp.features.FeatureType | str] = None, transfo_nr_blocks: int = None, transfo_nr_heads: int = 3, transfo_ff_units: int = 16, transfo_dropout_rate: float = 0.25, transfo_placement: str = 'categorical', tabular_attention: bool = False, tabular_attention_heads: int = 4, tabular_attention_dim: int = 64, tabular_attention_dropout: float = 0.1, tabular_attention_placement: str = 'all_features', tabular_attention_embedding_dim: int = 32, use_caching: bool = True, feature_selection_placement: str = 'none', use_distribution_aware: bool = False, distribution_aware_bins: int = 1000, feature_selection_units: int = 32, feature_selection_dropout: float = 0.2, use_advanced_numerical_embedding: bool = False, embedding_dim: int = 8, mlp_hidden_units: int = 16, num_bins: int = 10, init_min: float = -3.0, init_max: float = 3.0, dropout_rate: float = 0.1, use_batch_norm: bool = True, use_global_numerical_embedding: bool = False, global_embedding_dim: int = 8, global_mlp_hidden_units: int = 16, global_num_bins: int = 10, global_init_min: float = -3.0, global_init_max: float = 3.0, global_dropout_rate: float = 0.1, global_use_batch_norm: bool = True, global_pooling: str = 'average', use_feature_moe: bool = False, feature_moe_num_experts: int = 4, feature_moe_expert_dim: int = 64, feature_moe_hidden_dims: list[int] = None, feature_moe_routing: str = 'learned', feature_moe_sparsity: int = 2, feature_moe_assignments: dict[str, int] = None, feature_moe_dropout: float = 0.1, feature_moe_freeze_experts: bool = False, feature_moe_use_residual: bool = True, include_passthrough_in_output: bool = True, name: str = 'preprocessor') -> None
 ```
 
 Initialize a preprocessing model.
@@ -66,6 +66,10 @@ Initialize a preprocessing model.
     feature_moe_dropout (float): Dropout rate applied inside the mixture of experts.
     feature_moe_freeze_experts (bool): Whether expert weights are frozen during training.
     feature_moe_use_residual (bool): Whether to add a residual connection around the mixture.
+    name (str): Name given to the built Keras model. Keras requires
+        operation names to be unique within a graph, so give each
+        preprocessor its own name when combining several in one model
+        (a two-tower recommender, for example).
     include_passthrough_in_output (bool): Whether passthrough features appear in the model output.
 
 
@@ -112,16 +116,27 @@ Building preprocessing model.
 ## get_feature_importances
 
 ```python
-get_feature_importances(self) -> dict
+get_feature_importances(self, data: dict | None = None) -> dict
 ```
 
 Get feature importance weights if feature selection was enabled.
 
+The selection layer computes a softmax over features for every row, so
+the importances depend on the data rather than being fixed weights.
+Pass a batch to get numbers; without one there is nothing to score and
+only a description of each weight tensor can be returned.
+
+### Parameters- **data**: Optional mapping of feature name to a batch of values. When
+        given, the model is run and the mean importance per feature is
+        returned as a float.
+
 ### Returns
+- **dict**: Feature name to mean importance (a float) when `data` is
+        supplied, otherwise feature name to a description of its weight
+        tensor.
 
-    Dictionary mapping feature names to their importance weights information
-
-### Raises- **ValueError**: If feature selection was not enabled or model hasn't been built
+### Raises
+- **ValueError**: If feature selection was not enabled or model hasn't been built
 
 
 ---

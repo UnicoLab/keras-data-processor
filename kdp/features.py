@@ -135,9 +135,27 @@ class Feature:
         return FeatureType.from_string(type_str)
 
 
-# Sentinel marking a parameter the caller never supplied, so a model-level
-# setting can fill it in without overriding a value the caller chose.
-_UNSET = object()
+class _Unset:
+    """Sentinel marking a parameter the caller never supplied.
+
+    A model-level setting can then fill it in without overriding a value the
+    caller chose. A bare `object()` would render as `<object object at 0x...>`
+    in the generated API reference, so the repr is spelled out here to keep
+    those pages readable and stable across runs.
+    """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        """Render as `<unset>` wherever a default is printed."""
+        return "<unset>"
+
+    def __bool__(self) -> bool:
+        """A missing value is falsy, like the `None` it stands in for."""
+        return False
+
+
+_UNSET = _Unset()
 
 
 class NumericalFeature(Feature):
@@ -149,8 +167,8 @@ class NumericalFeature(Feature):
         feature_type: FeatureType = FeatureType.FLOAT_NORMALIZED,
         preferred_distribution: DistributionType | None = None,
         use_embedding: bool = False,
-        embedding_dim: int = _UNSET,
-        num_bins: int = _UNSET,
+        embedding_dim: int | _Unset = _UNSET,
+        num_bins: int | _Unset = _UNSET,
         **kwargs,
     ) -> None:
         """Initializes a NumericalFeature instance.

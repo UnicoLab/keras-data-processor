@@ -195,6 +195,11 @@ def extract_module_docs(module, output_dir):
         if obj.__module__ != module.__name__:
             continue
 
+        # Skip private helpers: they are implementation detail, and publishing
+        # them puts names users cannot import into the API index.
+        if name.startswith("_"):
+            continue
+
         # Generate documentation
         docs = extract_class_docs(obj)
 

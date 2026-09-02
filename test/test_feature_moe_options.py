@@ -68,6 +68,67 @@ class TestFeatureMoEOptionsInConcatMode(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, self.assertRaises(ValueError):
             _build(Path(tmp), feature_moe_routing="predefined")
 
+    def test_an_unassigned_feature_is_rejected(self):
+        """It used to be zeroed out: an all-zero routing row erases the feature."""
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(ValueError) as caught:
+                _build(
+                    Path(tmp),
+                    feature_moe_routing="predefined",
+                    feature_moe_assignments={"n1": 0},
+                )
+        self.assertIn("n2", str(caught.exception))
+
+    def test_an_out_of_range_expert_is_rejected(self):
+        """Routing to an expert that does not exist is a configuration error."""
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(ValueError) as caught:
+                _build(
+                    Path(tmp),
+                    feature_moe_routing="predefined",
+                    feature_moe_assignments={"n1": 0, "n2": 7},
+                )
+        self.assertIn("out of range", str(caught.exception))
+
+    def test_an_unknown_feature_name_is_rejected(self):
+        """Naming a feature the mixture never sees is a silent no-op otherwise."""
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(ValueError) as caught:
+                _build(
+                    Path(tmp),
+                    feature_moe_routing="predefined",
+                    feature_moe_assignments={"n1": 0, "n2": 1, "absent": 0},
+                )
+        self.assertIn("absent", str(caught.exception))
+
+    def test_weighted_assignments_are_accepted(self):
+        """A feature may be split across experts with explicit weights."""
+        with tempfile.TemporaryDirectory() as tmp:
+            preprocessor = _build(
+                Path(tmp),
+                feature_moe_routing="predefined",
+                feature_moe_assignments={"n1": {0: 0.7, 1: 0.3}, "n2": 1},
+            )
+            output = preprocessor.model(BATCH)
+        self.assertEqual(int(output.shape[-1]), len(COLUMNS) * 16)
+
+    def test_every_routed_feature_keeps_a_signal(self):
+        """The regression this guards: a routed feature must not come out zero."""
+        with tempfile.TemporaryDirectory() as tmp:
+            preprocessor = _build(
+                Path(tmp),
+                feature_moe_routing="predefined",
+                feature_moe_assignments={"n1": 0, "n2": 1},
+                feature_moe_use_residual=False,
+            )
+            output = preprocessor.model(BATCH).numpy().reshape(len(COLUMNS), 16)
+        for index, column in enumerate(COLUMNS):
+            self.assertGreater(
+                float(np.abs(output[index]).sum()),
+                0.0,
+                f"{column} was zeroed out by the router",
+            )
+
     def test_hidden_dims_change_the_expert_networks(self):
         """Ignored before, so the parameter count did not move."""
         with tempfile.TemporaryDirectory() as tmp:

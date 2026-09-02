@@ -292,7 +292,32 @@ print("Most important features:", sorted(
 
     </div>
   </div>
+
+  <div class="tip-card">
+    <div class="tip-header">
+      <span class="tip-number">4</span>
+      <h3>Keep a Log of the Build</h3>
+    </div>
+    <div class="code-container">
+
+```python
+# Mirror KDP's log output into PreprocessModel.log next to your script
+preprocessor = PreprocessingModel(
+    features_specs=features,
+    log_to_file=True            # off by default; console logging stays on
+)
+```
+
+    </div>
+  </div>
 </div>
+
+!!! tip "What lands in the log"
+    `log_to_file=True` adds a file sink to KDP's logger, so the statistics it
+    computes, the layers it assembles and any warning about a feature it could
+    not interpret are written to `PreprocessModel.log` in the working directory.
+    It is the fastest way to hand a reproducible trace to someone else when a
+    build behaves unexpectedly.
 
 ## 🔗 Where to Next?
 

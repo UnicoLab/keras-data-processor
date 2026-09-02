@@ -5,7 +5,7 @@ NumericalFeature with dynamic kwargs passing and embedding support.
 ## Constructor
 
 ```python
-__init__(self, name: str, feature_type: kdp.features.FeatureType = <FeatureType.FLOAT_NORMALIZED: 2>, preferred_distribution: kdp.features.DistributionType | None = None, use_embedding: bool = False, embedding_dim: int = 8, num_bins: int = 10, **kwargs) -> None
+__init__(self, name: str, feature_type: kdp.features.FeatureType = <FeatureType.FLOAT_NORMALIZED: 2>, preferred_distribution: kdp.features.DistributionType | None = None, use_embedding: bool = False, embedding_dim: int | kdp.features._Unset = <unset>, num_bins: int | kdp.features._Unset = <unset>, **kwargs) -> None
 ```
 
 Initializes a NumericalFeature instance.
@@ -50,7 +50,7 @@ Converts a string to a FeatureType.
 ## get_embedding_layer
 
 ```python
-get_embedding_layer(self, input_shape: tuple | None = None) -> keras.src.layers.layer.Layer
+get_embedding_layer(self, input_shape: tuple | None = None, defaults: dict | None = None) -> keras.src.layers.layer.Layer
 ```
 
 Creates and returns a NumericalEmbedding layer configured for this feature.
@@ -59,6 +59,11 @@ Creates and returns a NumericalEmbedding layer configured for this feature.
         in its own `build`, so nothing here depends on the shape. The
         parameter is kept, and optional, so existing callers that pass
         it keep working.
+- **defaults**: Model-level embedding settings, used for every option
+        this feature did not set itself. `PreprocessingModel` passes
+        its `embedding_dim`, `mlp_hidden_units`, `num_bins`,
+        `init_min`, `init_max`, `dropout_rate` and `use_batch_norm`
+        here; without them those arguments had no effect at all.
 
 ### Returns
 

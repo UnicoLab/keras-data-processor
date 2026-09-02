@@ -244,6 +244,28 @@ class TestDocumentedCodeMatchesTheAPI(unittest.TestCase):
                         )
         self.assertEqual(invalid, [], "\n".join(invalid))
 
+    def test_every_constructor_parameter_is_documented(self):
+        """A parameter no page mentions is a capability nobody can find.
+
+        Five options reached users this way: the whole predefined-routing
+        control surface of the feature mixture, plus file logging. They worked,
+        they were reachable, and the prose never named them.
+        """
+        prose = "\n".join(
+            path.read_text()
+            for path in sorted(DOCS.rglob("*.md"))
+            # The API pages are generated from the docstrings, so they always
+            # match by construction and would mask a gap in the written docs.
+            if "generated" not in path.parts
+        )
+        undocumented = sorted(param for param in PM_PARAMS if param not in prose)
+        self.assertEqual(
+            undocumented,
+            [],
+            "PreprocessingModel parameters missing from the documentation: "
+            + ", ".join(undocumented),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -21,16 +21,20 @@ like number of peaks, autocorrelation, and trend coefficients.
         - 'abs_mean': Mean of absolute values
         - 'count_above_mean': Number of values above mean
         - 'count_below_mean': Number of values below mean
-        - 'first_location_of_max': Index of first occurrence of maximum
-        - 'first_location_of_min': Index of first occurrence of minimum
+        - 'first_location_of_max': Position of the first maximum as a
+          fraction of the series length
+        - 'first_location_of_min': Position of the first minimum as a
+          fraction of the series length
         - 'quantile_05': 5% quantile
         - 'quantile_25': 25% quantile
         - 'quantile_50': 50% quantile (median)
         - 'quantile_75': 75% quantile
         - 'quantile_95': 95% quantile
         - 'linear_trend_coef': Linear trend coefficients (slope, intercept)
-        - 'peak_count': Number of peaks (local maxima)
-        - 'valley_count': Number of valleys (local minima)
+        - 'peak_count': Peaks (local maxima) per sample, i.e. the count
+          divided by the series length
+        - 'valley_count': Valleys (local minima) per sample, likewise
+          divided by the series length
         - 'fft_coef_n': First n FFT coefficients
         - 'autocorrelation_lag_n': Autocorrelation at lag n
 - **window_size**: Size of rolling window for feature extraction (default: None,
