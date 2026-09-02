@@ -5,6 +5,7 @@ This allows for automatic documentation generation directly from the code.
 """
 
 import importlib
+import pathlib
 import os
 import re
 import inspect
@@ -16,17 +17,41 @@ project_root = str(Path(__file__).resolve().parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-MODULES_TO_DOCUMENT = [
+# Hand-listed modules that are not layers.
+CORE_MODULES = [
     "kdp.processor",
     "kdp.dynamic_pipeline",
     "kdp.features",
-    "kdp.layers.distribution_aware_encoder_layer",
-    "kdp.layers.distribution_transform_layer",
-    "kdp.layers.global_numerical_embedding_layer",
-    "kdp.layers.numerical_embedding_layer",
-    "kdp.layers.tabular_attention_layer",
-    "kdp.layers.multi_resolution_tabular_attention_layer",
+    "kdp.stats",
+    "kdp.auto_config",
+    "kdp.pipeline",
+    "kdp.layers_factory",
+    "kdp.inference.base",
+    "kdp.time_series.inference",
 ]
+
+
+def _layer_modules() -> list[str]:
+    """Every layer module under kdp/layers, including the time series ones.
+
+    Listing them by hand meant fourteen of the twenty layer modules were never
+    documented; discovering them keeps the reference complete as layers are
+    added.
+    """
+    import kdp.layers
+
+    roots = [pathlib.Path(kdp.layers.__file__).parent]
+    found = []
+    for root in roots:
+        for path in sorted(root.rglob("*.py")):
+            if path.name == "__init__.py":
+                continue
+            relative = path.relative_to(root).with_suffix("")
+            found.append("kdp.layers." + ".".join(relative.parts))
+    return found
+
+
+MODULES_TO_DOCUMENT = CORE_MODULES + _layer_modules()
 
 
 def docstring_to_markdown(docstring):
@@ -207,7 +232,10 @@ def generate_module_index(modules, output_dir):
 
             # List documented classes
             for doc_file in sorted(doc_dir.glob(f"{module_short_name}_*.md")):
-                class_name = doc_file.stem.split("_", 1)[1]
+                # Strip the module prefix rather than splitting on the first
+                # underscore -- every multi-word module name (for example
+                # distribution_aware_encoder_layer) was otherwise cut mid-name.
+                class_name = doc_file.stem[len(module_short_name) + 1 :]
                 relative_path = os.path.relpath(doc_file, Path(output_dir))
                 f.write(f"- [{class_name}]({relative_path})\n")
 

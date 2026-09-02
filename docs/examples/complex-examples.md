@@ -49,7 +49,7 @@ features = {
         name="description",
         feature_type=FeatureType.TEXT,
         max_tokens=100,                      # Longer limit for descriptions
-        output_mode="embedding"              # Use text embeddings
+        output_mode="multi_hot"              # Bag-of-words over the vocabulary
     ),
     "title": TextFeature(
         name="title",

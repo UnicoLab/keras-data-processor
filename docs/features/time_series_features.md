@@ -263,6 +263,30 @@ preprocessor = PreprocessingModel(
         <td>Optional, for handling multiple related series</td>
       </tr>
       <tr>
+        <td><code>sequence_length</code></td>
+        <td>Declared sequence length</td>
+        <td>None</td>
+        <td>Recorded on the feature and round-trips through <code>get_config()</code>, but the built pipeline does not read it.</td>
+      </tr>
+      <tr>
+        <td><code>is_target</code></td>
+        <td>Marks the column as a prediction target</td>
+        <td>False</td>
+        <td>Metadata only &mdash; see the note below.</td>
+      </tr>
+      <tr>
+        <td><code>exclude_from_input</code></td>
+        <td>Marks the column as not an input</td>
+        <td>False</td>
+        <td>Metadata only &mdash; see the note below.</td>
+      </tr>
+      <tr>
+        <td><code>input_type</code></td>
+        <td>Declared signal type</td>
+        <td>"continuous"</td>
+        <td>Metadata only &mdash; see the note below.</td>
+      </tr>
+      <tr>
         <td><code>lags</code></td>
         <td>Time steps to look back</td>
         <td>None</td>
@@ -331,6 +355,18 @@ preprocessor = PreprocessingModel(
     </tbody>
   </table>
 </div>
+
+!!! note "Four parameters are metadata, not behaviour"
+    `sequence_length`, `is_target`, `exclude_from_input` and `input_type` are
+    stored on the feature and serialized by `get_config()`, so they survive a
+    save/load round-trip and are available to your own code. **The
+    preprocessing pipeline does not read them** &mdash; setting `is_target=True`
+    does not remove the column from the model output, and
+    `exclude_from_input=True` does not drop its input. Use them to carry your
+    own intent alongside the spec, and handle the split yourself. To keep a
+    column out of the concatenated output, use
+    [passthrough features](passthrough-features.md) with
+    `include_passthrough_in_output=False`.
 
 ## 💡 Powerful Features
 

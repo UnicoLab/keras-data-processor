@@ -65,7 +65,7 @@ To ensure your code is properly included in the automatic documentation:
 
 1. **Use Google-style docstrings** for all classes and methods:
 
-```python
+~~~python
 def my_function(param1, param2):
     """
     One-line description of function.
@@ -85,7 +85,7 @@ def my_function(param1, param2):
         ```
     """
     # Function implementation
-```
+~~~
 
 2. **Document parameters and return values** to provide clear usage instructions.
 
