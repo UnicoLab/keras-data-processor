@@ -105,6 +105,13 @@ embedding output is flattened now, so every numeric feature is rank 2:
 a discretised feature with `embedding_dim=8` contributes 80 columns rather
 than a `(10, 8)` block.
 
+!!! bug "Known limitation: dict output mode plus Feature MoE"
+    That combination now builds and runs correctly, but it does not survive a
+    save/load round trip -- two features come back holding each other's
+    projection weights. `concat` mode round trips exactly. KDP logs a warning
+    when you build the affected combination, and the case is kept as a failing
+    test rather than quietly skipped.
+
 ## 🚫 Configurations that are now rejected
 
 Two configurations used to be accepted and then silently do the wrong thing.

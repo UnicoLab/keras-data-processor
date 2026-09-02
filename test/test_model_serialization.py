@@ -22,6 +22,11 @@ from kdp.features import FeatureType
 FEATURES_SPECS = {
     "age": FeatureType.FLOAT_NORMALIZED,
     "income": FeatureType.FLOAT_RESCALED,
+    # Ten one-hot columns next to the one-column features above, so every
+    # configuration below is exercised on a feature set of mixed widths --
+    # the case where the mixture of experts used to slice mid-feature and
+    # where the padding it now inserts has to survive the round trip.
+    "score": FeatureType.FLOAT_DISCRETIZED,
     "occupation": FeatureType.STRING_CATEGORICAL,
     "description": FeatureType.TEXT,
     "signup_date": FeatureType.DATE,
@@ -30,6 +35,7 @@ FEATURES_SPECS = {
 SAMPLE_BATCH = {
     "age": tf.constant([[0.5], [1.5]]),
     "income": tf.constant([[100.0], [200.0]]),
+    "score": tf.constant([[42.0], [77.0]]),
     "occupation": tf.constant([["engineer"], ["doctor"]]),
     "description": tf.constant([["hello world"], ["lorem ipsum"]]),
     "signup_date": tf.constant([["2021-05-04"], ["2022-11-30"]]),
@@ -46,7 +52,57 @@ ROUND_TRIP_CONFIGS = [
     ("numerical_embedding", {"use_advanced_numerical_embedding": True}),
     ("global_numerical_embedding", {"use_global_numerical_embedding": True}),
     ("feature_moe", {"use_feature_moe": True, "feature_moe_num_experts": 2}),
+    (
+        "feature_moe_sparse",
+        {
+            "use_feature_moe": True,
+            "feature_moe_num_experts": 4,
+            "feature_moe_sparsity": 2,
+        },
+    ),
+    (
+        "feature_moe_predefined",
+        {
+            "use_feature_moe": True,
+            "feature_moe_num_experts": 2,
+            "feature_moe_routing": "predefined",
+            "feature_moe_assignments": {
+                "age": 0,
+                "income": 1,
+                "score": 0,
+                "occupation": 1,
+                "description": 0,
+                "signup_date": 1,
+            },
+        },
+    ),
+    (
+        "multi_resolution_attention",
+        {
+            "tabular_attention": True,
+            "tabular_attention_placement": "multi_resolution",
+        },
+    ),
     ("dict_output", {"output_mode": "dict"}),
+    pytest.param(
+        "moe_dict_output",
+        {
+            "use_feature_moe": True,
+            "feature_moe_num_experts": 2,
+            "output_mode": "dict",
+        },
+        marks=pytest.mark.xfail(
+            reason=(
+                "Feature MoE in dict output mode does not survive the round "
+                "trip: the per-feature projection layers are written in one "
+                "order and read back in another, so two features come back "
+                "holding each other's kernels. Reproduced down to a four-"
+                "feature model of mixed widths; concat mode round-trips "
+                "correctly, and the model is correct in memory."
+            ),
+            strict=True,
+        ),
+    ),
 ]
 
 
@@ -58,6 +114,7 @@ def _write_dataset(directory: Path) -> Path:
         {
             "age": rng.normal(size=120).astype("float32"),
             "income": (rng.random(120) * 1000).astype("float32"),
+            "score": (rng.random(120) * 100).astype("float32"),
             "occupation": rng.choice(["engineer", "doctor", "teacher"], 120),
             "description": rng.choice(
                 ["hello world", "lorem ipsum", "foo bar baz"], 120
@@ -82,8 +139,16 @@ def _assert_same_output(expected, actual) -> None:
         np.testing.assert_allclose(np.asarray(expected), np.asarray(actual), atol=1e-5)
 
 
+def _config_id(entry):
+    """Name a case, whether it is a plain tuple or carries marks."""
+    values = entry.values if isinstance(entry, type(pytest.param(0))) else entry
+    return values[0]
+
+
 @pytest.mark.parametrize(
-    "config_name,config", ROUND_TRIP_CONFIGS, ids=[c[0] for c in ROUND_TRIP_CONFIGS]
+    "config_name,config",
+    ROUND_TRIP_CONFIGS,
+    ids=[_config_id(entry) for entry in ROUND_TRIP_CONFIGS],
 )
 def test_model_survives_save_load_round_trip(config_name, config, tmp_path):
     """A saved preprocessor reloads and produces byte-identical predictions."""

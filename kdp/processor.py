@@ -2181,15 +2181,17 @@ class PreprocessingModel:
         # model raised on its first real batch.
         widths = [int(feature.shape[-1]) for feature in individual_features]
         if len(set(widths)) > 1:
+            # Every feature gets a padding layer, including the widest, where it
+            # is a no-op. Padding only the narrow ones leaves the features at
+            # different graph depths, and Keras restores weights in traversal
+            # order: on reload two projection layers swapped kernels and their
+            # features came back with each other's values.
             target_width = max(widths)
             individual_features = [
-                feature
-                if width == target_width
-                else PadFeatureLayer(target_width, name=f"moe_pad_dict_{name}")(feature)
-                for name, feature, width in zip(
+                PadFeatureLayer(target_width, name=f"moe_pad_dict_{name}")(feature)
+                for name, feature in zip(
                     feature_names,
                     individual_features,
-                    widths,
                     strict=True,
                 )
             ]
@@ -2217,7 +2219,7 @@ class PreprocessingModel:
         moe_outputs = moe(stacked_features)
 
         # Unstack the outputs back to individual features
-        unstacked_outputs = UnstackLayer()(moe_outputs)
+        unstacked_outputs = UnstackLayer(name="unstack_moe_features_dict")(moe_outputs)
 
         # Create a projection layer for each feature to maintain its original meaning
         for i, feature_name in enumerate(feature_names):
@@ -2240,6 +2242,13 @@ class PreprocessingModel:
             # Update the processed features with the MoE-enhanced version
             self.processed_features[feature_name] = projection
 
+        logger.warning(
+            "Feature MoE in dict output mode does not survive a save/load "
+            "round trip: the per-feature projection layers are written in one "
+            "order and read back in another, so two features can come back "
+            "holding each other's weights. The model is correct in memory. Use "
+            "output_mode='concat' if you need to save and reload it.",
+        )
         logger.info("Feature MoE applied successfully in dict mode")
 
     def _apply_feature_moe(self) -> None:
@@ -2283,14 +2292,13 @@ class PreprocessingModel:
         # a uniform-width model is unaffected.
         target_width = max(feature_dims)
         if len(set(feature_dims)) > 1:
+            # Padded uniformly, widest included, so every feature sits at the
+            # same graph depth; see the dict-mode branch for why that matters.
             feature_outputs = [
-                output
-                if width == target_width
-                else PadFeatureLayer(target_width, name=f"moe_pad_{name}")(output)
-                for name, output, width in zip(
+                PadFeatureLayer(target_width, name=f"moe_pad_{name}")(output)
+                for name, output in zip(
                     moe_feature_names,
                     feature_outputs,
-                    feature_dims,
                     strict=True,
                 )
             ]

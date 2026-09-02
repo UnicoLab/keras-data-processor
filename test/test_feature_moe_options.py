@@ -181,8 +181,9 @@ class TestFeatureMoEOptionsInConcatMode(unittest.TestCase):
                 },
             )
 
-        # Only the narrower feature needs padding.
-        self.assertEqual(padded, ["moe_pad_narrow"])
+        # Every feature gets a padding layer, the widest one as a no-op, so
+        # they all sit at the same depth in the graph.
+        self.assertEqual(sorted(padded), ["moe_pad_narrow", "moe_pad_wide"])
         self.assertEqual(int(output.shape[-1]), 2 * 8)
 
     def test_a_uniform_width_model_is_not_padded(self):
