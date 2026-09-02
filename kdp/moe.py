@@ -250,6 +250,23 @@ class ExpertBlock(keras.layers.Layer):
             name="expert_output",
         )
 
+    def build(self, input_shape) -> None:
+        """Build the stacked layers so Keras does not mark the block falsely built.
+
+        The layers are created in `__init__`, so without this Keras 3 warns that
+        the block "does not have a `build()` method implemented and it looks
+        like it has unbuilt state", and marks it built anyway.
+
+        Args:
+            input_shape: Shape of the input to the expert.
+        """
+        shape = tuple(input_shape)
+        for layer in self.hidden_layers:
+            layer.build(shape)
+            shape = layer.compute_output_shape(shape)
+        self.output_layer.build(shape)
+        super().build(input_shape)
+
     def call(self, inputs, training=None) -> tf.Tensor:
         """Forward pass through the expert network.
 
@@ -381,13 +398,49 @@ class FeatureMoE(keras.layers.Layer):
             for expert in self.experts:
                 expert.trainable = False
 
-        # Set up routing mechanism
-        if routing == "learned":
-            # Router network maps feature representations to expert weights
-            self.router = keras.layers.Dense(num_experts, use_bias=True, name="router")
-        else:
+        # Set up routing mechanism. Learned routing keeps its logits in a
+        # weight created in `build`, one row per feature; see
+        # `_compute_routing_weights` for why they cannot come from the input.
+        self.routing_logits = None
+        if routing != "learned":
             # Create a fixed assignment matrix for predefined routing
             self._create_assignment_matrix()
+
+    def build(self, input_shape) -> None:
+        """Create the learned routing logits, one row per feature.
+
+        Args:
+            input_shape: Shape of the stacked features,
+                `[batch, num_features, feature_dim]`.
+
+        Raises:
+            ValueError: If the number of features is not known statically, or
+                does not match the names given for predefined routing.
+        """
+        num_features = input_shape[1]
+        if num_features is None:
+            raise ValueError(
+                "FeatureMoE needs to know how many features it is routing. "
+                f"Got an unknown second dimension in {tuple(input_shape)}.",
+            )
+        if self.feature_names and len(self.feature_names) != num_features:
+            raise ValueError(
+                f"FeatureMoE was given {len(self.feature_names)} feature names "
+                f"but {num_features} features to route.",
+            )
+
+        if self.routing == "learned":
+            self.routing_logits = self.add_weight(
+                name="routing_logits",
+                shape=(num_features, self.num_experts),
+                initializer="glorot_uniform",
+                trainable=True,
+            )
+
+        for expert in self.experts:
+            if not expert.built:
+                expert.build(input_shape)
+        super().build(input_shape)
 
     @staticmethod
     def _validate_assignments(
@@ -484,16 +537,13 @@ class FeatureMoE(keras.layers.Layer):
             # Use fixed assignments; expand dims for broadcasting over the batch.
             return tf.expand_dims(self.assignment_matrix, 0)
         else:
-            # Compute routing weights using the router network
-            # Average the feature representations along the batch dimension
-            # to get feature-level routing rather than instance-level
-            feature_reprs = tf.reduce_mean(
-                inputs,
-                axis=0,
-            )  # [num_features, feature_dim]
-
-            # Get logits from router
-            routing_logits = self.router(feature_reprs)  # [num_features, num_experts]
+            # The logits used to come from a Dense layer fed the batch *mean* of
+            # the features. Routing therefore depended on which rows happened to
+            # share a batch: changing one row moved every row's output, and a
+            # record scored alone did not match the same record scored in a
+            # batch. Feature-level routing is a property of the feature, so it
+            # lives in a learned weight and is identical for every row.
+            routing_logits = self.routing_logits  # [num_features, num_experts]
 
             # `sparsity` names how many experts each feature may use, and the
             # top-k mask below is what enforces it. It used to sit behind
@@ -510,7 +560,7 @@ class FeatureMoE(keras.layers.Layer):
                 )
 
                 # Create a mask for the top-k logits
-                num_features = tf.shape(feature_reprs)[0]
+                num_features = tf.shape(routing_logits)[0]
                 mask = tf.scatter_nd(
                     indices=tf.stack(
                         [

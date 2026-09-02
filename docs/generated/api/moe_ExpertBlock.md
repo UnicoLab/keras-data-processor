@@ -102,6 +102,23 @@ Add a weight variable to the layer.
 
 ---
 
+## build
+
+```python
+build(self, input_shape) -> None
+```
+
+Build the stacked layers so Keras does not mark the block falsely built.
+
+The layers are created in `__init__`, so without this Keras 3 warns that
+the block "does not have a `build()` method implemented and it looks
+like it has unbuilt state", and marks it built anyway.
+
+### Parameters- **input_shape**: Shape of the input to the expert.
+
+
+---
+
 ## build_from_config
 
 ```python

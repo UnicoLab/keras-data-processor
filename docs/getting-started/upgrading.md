@@ -69,6 +69,32 @@ input and now routes real features.
 than producing nonsense: the global embedding merges every numeric feature into
 one vector, leaving no per-feature slices for the mixture to route.
 
+## 🎲 Feature MoE routing no longer depends on the batch
+
+Learned routing fed a Dense layer the *batch mean* of the features, so the
+routing weights changed with whatever rows happened to share a batch. Changing
+one row moved every row's output, and the same record scored alone did not
+match itself scored in a batch: training and single-record serving disagreed
+for reasons nothing in the configuration explained.
+
+Feature-level routing is a property of the feature, not of the data passing
+through, so the logits now live in a trainable weight with one row per feature.
+Routing is identical for every row and every batch, and still learned.
+
+<div class="code-container">
+
+```python
+moe = preprocessor.model.get_layer("feature_moe_concat")
+
+moe.routing_logits          # (num_features, num_experts), trainable
+```
+
+</div>
+
+!!! warning "Retrain models that used learned Feature MoE routing"
+    The old `router` Dense layer is gone, so its weights cannot be loaded, and
+    the routing a trained model learned was a function of its batches.
+
 ## 🔢 Advanced numerical embedding on discretised features
 
 `NumericalEmbedding` embeds each column it receives, so a feature arriving one

@@ -109,6 +109,24 @@ Add a weight variable to the layer.
 
 ---
 
+## build
+
+```python
+build(self, input_shape) -> None
+```
+
+Create the learned routing logits, one row per feature.
+
+### Parameters- **input_shape**: Shape of the stacked features,
+        `[batch, num_features, feature_dim]`.
+
+### Raises
+- **ValueError**: If the number of features is not known statically, or
+        does not match the names given for predefined routing.
+
+
+---
+
 ## build_from_config
 
 ```python

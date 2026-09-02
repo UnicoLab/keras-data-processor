@@ -253,9 +253,61 @@ class TestFeatureMoE(unittest.TestCase):
         # Check output shape
         self.assertEqual(outputs.shape, (batch_size, num_features, expert_dim))
 
-        # Get router weights - should distribute across all experts
-        router_weights = moe.router.kernel  # [feature_dim, num_experts]
-        self.assertEqual(router_weights.shape, (feature_dim, num_experts))
+        # The routing logits are one row per feature. They used to come from a
+        # Dense layer fed the batch mean of the features, which made every
+        # row's output depend on the other rows in its batch.
+        self.assertEqual(
+            tuple(moe.routing_logits.shape),
+            (num_features, num_experts),
+        )
+        self.assertIn(
+            "routing_logits",
+            [weight.name for weight in moe.trainable_weights],
+        )
+
+    def test_routing_does_not_depend_on_the_batch(self):
+        """A record scored alone must match the same record scored in a batch.
+
+        Routing averaged the features over the batch axis, so it changed with
+        the batch: one row's values moved every other row's output, and
+        training batches did not match single-record serving.
+        """
+        inputs = tf.random.normal(shape=(12, 3, 8))
+        moe = FeatureMoE(num_experts=3, expert_dim=16, routing="learned")
+        batched = moe(inputs, training=False).numpy()
+
+        alone = moe(inputs[3:4], training=False).numpy()
+        np.testing.assert_allclose(alone[0], batched[3], atol=1e-6)
+
+    def test_one_row_does_not_move_another(self):
+        """Changing row 5 used to change all twelve rows."""
+        inputs = tf.random.normal(shape=(12, 3, 8)).numpy()
+        moe = FeatureMoE(num_experts=3, expert_dim=16, routing="learned")
+        before = moe(tf.constant(inputs), training=False).numpy()
+
+        changed = inputs.copy()
+        changed[5] += 7.0
+        after = moe(tf.constant(changed), training=False).numpy()
+
+        moved = [
+            i for i in range(12) if not np.allclose(after[i], before[i], atol=1e-6)
+        ]
+        self.assertEqual(moved, [5])
+
+    def test_assignments_are_the_same_whatever_the_batch(self):
+        """Feature-level routing is a property of the feature, not the data."""
+        inputs = tf.random.normal(shape=(12, 3, 8))
+        moe = FeatureMoE(
+            num_experts=3,
+            expert_dim=16,
+            routing="learned",
+            feature_names=["a", "b", "c"],
+        )
+        moe(inputs)
+        self.assertEqual(
+            moe.get_expert_assignments(inputs),
+            moe.get_expert_assignments(inputs[:2]),
+        )
 
     def test_predefined_routing(self):
         """Test predefined routing in FeatureMoE."""
