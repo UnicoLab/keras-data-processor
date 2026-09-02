@@ -454,6 +454,9 @@ features = {
             tf.keras.layers.Normalization,
             DistributionAwareEncoder,  # from kdp.layers
         ],
+        # Extra keyword arguments are forwarded to the layer that accepts them.
+        # Rescaling has no default scale, so it has to be supplied.
+        scale=1.0,
     ),
 }
 

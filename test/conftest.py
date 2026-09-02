@@ -11,6 +11,7 @@ This module provides:
 
 import keras
 import gc
+from pathlib import Path
 import os
 import tempfile
 import shutil
@@ -449,3 +450,21 @@ def pytest_sessionfinish(session, exitstatus):
     # Final cleanup
     keras.backend.clear_session()
     gc.collect()
+
+
+@pytest.fixture(autouse=True)
+def _no_stray_stats_file():
+    """Keep `./features_stats.json` from leaking between tests.
+
+    `PreprocessingModel` and `DatasetStatistics` default `features_stats_path`
+    to `features_stats.json` in the working directory. A test that omits the
+    argument therefore leaves a file behind, and a later test asserting that a
+    missing `path_data` raises instead finds those statistics and passes for
+    the wrong reason -- which is exactly how two such assertions went green
+    locally and failed in CI, where each job starts from a fresh checkout.
+    """
+    default_stats = Path("features_stats.json")
+    existed = default_stats.exists()
+    yield
+    if default_stats.exists() and not existed:
+        default_stats.unlink()
