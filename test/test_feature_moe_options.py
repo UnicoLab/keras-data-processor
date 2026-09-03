@@ -347,9 +347,12 @@ class TestAddFeatureMoeToModel(unittest.TestCase):
     """
 
     @staticmethod
-    def _model(widths, **kwargs):
+    def _model(widths, seed=0, **kwargs):
         from kdp.moe import add_feature_moe_to_model
 
+        # Seeded so a failure is reproducible rather than a different model
+        # every run.
+        keras.utils.set_random_seed(seed)
         keras.backend.clear_session()
         names = tuple("abcde"[: len(widths)])
         inputs = {name: keras.Input(shape=(1,), name=name) for name in names}
@@ -376,15 +379,34 @@ class TestAddFeatureMoeToModel(unittest.TestCase):
                     self.assertEqual(int(output.shape[-1]), 4)
 
     def test_every_feature_still_reaches_its_own_output(self):
-        """Padding must not let a feature's signal go missing."""
-        names, model = self._model([2, 3, 5])
-        baseline_input = {name: tf.constant([[1.0]]) for name in names}
-        baseline = [np.asarray(t) for t in model(baseline_input)]
-        for index, name in enumerate(names):
-            moved = dict(baseline_input)
-            moved[name] = tf.constant([[9.0]])
-            output = np.asarray(model(moved)[index])
-            self.assertFalse(np.allclose(output, baseline[index]), name)
+        """Padding must not let a feature's signal go missing.
+
+        Several probe values, not one: the experts are randomly initialised
+        and end in a ReLU, so for any single value that ReLU can be dead for
+        both the baseline and the perturbation and the output legitimately
+        does not move. Measured over eight seeds, one probe misses about once
+        in twenty-four feature checks and these four never do. A feature that
+        genuinely did not reach its output would move for none of them.
+        """
+        probes = (-7.0, 0.5, 9.0, 250.0)
+        for seed in (0, 1, 2):
+            names, model = self._model([2, 3, 5], seed=seed)
+            baseline_input = {name: tf.constant([[1.0]]) for name in names}
+            baseline = [np.asarray(t) for t in model(baseline_input)]
+            for index, name in enumerate(names):
+                moved = False
+                for value in probes:
+                    probe = dict(baseline_input)
+                    probe[name] = tf.constant([[value]])
+                    output = np.asarray(model(probe)[index])
+                    if not np.allclose(output, baseline[index]):
+                        moved = True
+                        break
+                self.assertTrue(
+                    moved,
+                    f"feature {name!r} (seed {seed}) did not reach its own "
+                    f"output for any of {probes}",
+                )
 
     def test_the_result_survives_a_round_trip(self):
         names, model = self._model([2, 3, 5])
