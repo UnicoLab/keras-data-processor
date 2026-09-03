@@ -170,6 +170,32 @@ step to work on now raises instead of emitting a constant column of zeros:
 combine it with `lag_config`, `rolling_stats_config` or `moving_average_config`
 so there is a window to decompose.
 
+## 🎯 Feature importances rank features now
+
+`get_feature_importances()` returned `1.0` for every feature, on every input.
+Selection wrapped each feature in its own `VariableSelection` with
+`nr_features=1`, and a softmax over one element is `1.0` by definition: the
+gating was real, the numbers ranked nothing, and the documentation had to say
+so.
+
+A single softmax now scores every selected feature against the others. The
+scores sum to one across features and scale each feature's output, so the
+importances are shares you can sort. The output width is unchanged -- each
+selected feature is still `feature_selection_units` wide.
+
+<div class="code-container">
+
+```python
+importances = preprocessor.get_feature_importances(batch)
+# {"age": 0.39, "income": 0.35, "city": 0.18, "signup_date": 0.08}
+```
+
+</div>
+
+!!! warning "Feature selection changes values"
+    Each selected feature is scaled by its score, where before it was
+    multiplied by `1.0`. A model trained on the old output should be retrained.
+
 ## 🚫 Configurations that are now rejected
 
 Two configurations used to be accepted and then silently do the wrong thing.

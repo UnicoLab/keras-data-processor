@@ -166,8 +166,9 @@ with tempfile.TemporaryDirectory() as _tmp:
     # assert "no data means a clear error" find statistics and fail.
     os.chdir(_tmp)
 
-    # Point every documented path at the synthesised copy.
-    _orig_init = None
+    # Point every documented path at the synthesised copy, and remember every
+    # model the block builds so it can be called afterwards.
+    _built = []
     import kdp
     _RealModel = kdp.PreprocessingModel
     class _Patched(_RealModel):
@@ -179,6 +180,11 @@ with tempfile.TemporaryDirectory() as _tmp:
             kw.setdefault("features_stats_path", str(_base / "stats.json"))
             kw.setdefault("overwrite_stats", True)
             super().__init__(*a, **kw)
+
+        def build_preprocessor(self, *a, **kw):
+            _result = super().build_preprocessor(*a, **kw)
+            _built.append(self)
+            return _result
     import kdp.processor
     kdp.PreprocessingModel = _Patched
     kdp.processor.PreprocessingModel = _Patched
@@ -186,6 +192,32 @@ with tempfile.TemporaryDirectory() as _tmp:
 
     keras.backend.clear_session()
 {chr(10).join("    " + line for line in code.split(chr(10)))}
+
+    # Building is not running. A model can assemble and then fail on its first
+    # real batch -- four documented examples did exactly that, mixing calendar
+    # features with numeric ones -- so every model the block built is called
+    # here on two rows of the same synthesised data.
+    for _model in _built:
+        _graph = getattr(_model, "model", None)
+        if _graph is None:
+            continue
+        _batch = {{}}
+        for _inp in _graph.inputs:
+            _name = _inp.name.split(":")[0]
+            if _name not in _frame.columns:
+                _batch = None
+                break
+            _values = _frame[_name].head(2).tolist()
+            # Keras reports a dtype as a string, not a `tf.DType`.
+            _dtype = tf.as_dtype(_inp.dtype)
+            if _dtype == tf.string:
+                _batch[_name] = tf.constant([[str(_v)] for _v in _values], dtype=tf.string)
+            elif _dtype.is_integer:
+                _batch[_name] = tf.constant([[int(_v)] for _v in _values], dtype=_dtype)
+            else:
+                _batch[_name] = tf.constant([[float(_v)] for _v in _values], dtype=tf.float32)
+        if _batch:
+            _graph(_batch, training=False)
 print("__BLOCK_OK__")
 """
 

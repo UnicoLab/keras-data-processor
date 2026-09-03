@@ -1707,9 +1707,71 @@ class PreprocessingModel:
             self.processed_features[feature_name] = _output_pipeline
 
     @_monitor_performance
+    def _score_features_against_each_other(self) -> None:
+        """Give every selected feature a weight relative to the others.
+
+        Selection wraps each feature in its own `VariableSelection` with
+        `nr_features=1`, and that layer's softmax runs over its feature list --
+        over one element, so the weight it reports is 1.0 for everything. The
+        gating worked, but `get_feature_importances()` returned a constant for
+        every feature, and the documentation had to warn that the numbers
+        carried no ranking.
+
+        One softmax over all the selected features fixes that: each feature is
+        scored against the others, and the score scales its output. Widths are
+        untouched, so the shape of the model does not change.
+        """
+        selected = sorted(
+            key[: -len("_weights")]
+            for key in self.processed_features
+            if key.endswith("_weights")
+        )
+        if len(selected) < 2:
+            # One feature has nothing to be compared against, and its weight is
+            # legitimately 1.0.
+            return
+
+        outputs = [self.processed_features[name] for name in selected]
+        joint = keras.layers.Concatenate(name="feature_selection_scores_input")(
+            outputs,
+        )
+        scores = keras.layers.Dense(
+            len(selected),
+            activation="softmax",
+            name="feature_selection_scores",
+        )(joint)
+
+        # Stack, scale and unstack rather than slicing each weight out with a
+        # `Lambda`: a Lambda carries a serialized Python closure, which is
+        # exactly the kind of layer that does not survive a save/load.
+        # Selection leaves every feature `feature_selection_units` wide, so
+        # they stack cleanly.
+        stacked = StackFeaturesLayer(name="feature_selection_stack")(outputs)
+        weights = keras.layers.Reshape(
+            (len(selected), 1),
+            name="feature_selection_weights",
+        )(scores)
+        scaled = keras.layers.Multiply(name="feature_selection_scaled")(
+            [stacked, weights],
+        )
+
+        scaled_features = UnstackLayer(name="feature_selection_unstack")(scaled)
+        per_feature_weights = UnstackLayer(name="feature_selection_weight_split")(
+            weights,
+        )
+        for index, name in enumerate(selected):
+            self.processed_features[name] = scaled_features[index]
+            self.processed_features[f"{name}_weights"] = per_feature_weights[index]
+
+        logger.info(
+            f"Feature selection scored {len(selected)} features against each other",
+        )
+
     def _prepare_outputs(self) -> None:
         """Prepare model outputs based on output mode."""
         logger.info("Building preprocessor Model")
+        if self.feature_selection_placement != FeatureSelectionPlacementOptions.NONE:
+            self._score_features_against_each_other()
         if self.output_mode == OutputModeOptions.CONCAT:
             self._prepare_concat_mode_outputs()
         else:

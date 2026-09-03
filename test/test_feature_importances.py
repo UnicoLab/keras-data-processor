@@ -94,28 +94,57 @@ class TestFeatureImportances(unittest.TestCase):
         ranked = sorted(importances.items(), key=lambda kv: kv[1], reverse=True)[:3]
         self.assertEqual(len(ranked), min(3, len(importances)))
 
-    def test_importances_are_currently_uninformative(self):
-        """Each feature gets its own selector over a single feature.
+    def test_importances_rank_features_against_each_other(self):
+        """Every feature used to score exactly 1.0, whatever the data.
 
-        A softmax across one element is 1.0 by definition, so every weight is
-        1.0 regardless of the data. The selection layer still applies a learned
-        gated residual transform, but the weights cannot rank anything. This
-        test records that limitation so a real implementation has to update it.
+        Selection wrapped each feature in its own `VariableSelection` with
+        `nr_features=1`, and a softmax over one element is 1.0 by definition.
+        The gating worked but the numbers ranked nothing, and the documentation
+        had to say so. One softmax across all the selected features gives each
+        one a share.
         """
         with tempfile.TemporaryDirectory() as tmp:
             preprocessor = _build(Path(tmp), feature_selection_placement="all_features")
             importances = preprocessor.get_feature_importances(BATCH)
-            other = preprocessor.get_feature_importances(
-                {
-                    "age": tf.constant([[99.0]]),
-                    "income": tf.constant([[1.0]]),
-                    "education": tf.constant([["msc"]]),
-                }
+
+        self.assertEqual(sorted(importances), ["age", "education", "income"])
+        self.assertAlmostEqual(sum(importances.values()), 1.0, places=4)
+        # Shares, not a constant.
+        self.assertGreater(len({round(v, 6) for v in importances.values()}), 1)
+
+    def test_a_lone_feature_keeps_a_weight_of_one(self):
+        """With nothing to compare against, all of the weight is its own."""
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            rng = np.random.default_rng(0)
+            csv_path = directory / "one.csv"
+            pd.DataFrame({"age": rng.normal(40, 8, 200)}).to_csv(csv_path, index=False)
+            keras.backend.clear_session()
+            preprocessor = PreprocessingModel(
+                path_data=str(csv_path),
+                features_specs={"age": FeatureType.FLOAT_NORMALIZED},
+                features_stats_path=str(directory / "stats.json"),
+                overwrite_stats=True,
+                feature_selection_placement="all_features",
+            )
+            preprocessor.build_preprocessor()
+            importances = preprocessor.get_feature_importances(
+                {"age": tf.constant([[40.0]])},
             )
 
-        self.assertTrue(all(v == pytest.approx(1.0) for v in importances.values()))
-        # Wildly different input, identical weights: they carry no signal.
-        self.assertEqual(sorted(importances.values()), sorted(other.values()))
+        self.assertEqual(importances, {"age": pytest.approx(1.0)})
+
+    def test_selection_does_not_change_the_output_width(self):
+        """Scoring rescales the features; it must not reshape the model."""
+        with tempfile.TemporaryDirectory() as tmp:
+            preprocessor = _build(
+                Path(tmp),
+                feature_selection_placement="all_features",
+                feature_selection_units=8,
+            )
+            width = preprocessor.model.output_shape[-1]
+        # Three features, each `feature_selection_units` wide.
+        self.assertEqual(width, 3 * 8)
 
 
 if __name__ == "__main__":

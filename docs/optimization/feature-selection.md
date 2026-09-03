@@ -77,14 +77,15 @@ chooses which feature groups get the layer, and the two parameters above size
 it. Valid placements are `"none"`, `"numeric"`, `"categorical"`, `"text"`,
 `"date"` and `"all_features"`.*
 
-!!! warning "The weights do not currently rank features"
-    Each feature gets its **own** selection layer covering a single feature, so
-    the softmax that produces its weight runs over one element and is `1.0` by
-    definition &mdash; for every feature, on every input. The layer still
-    applies a learned gated residual transform, which is a real
-    transformation, but the reported importances carry no ranking information
-    yet. `get_feature_importances()` returns them faithfully; do not read a
-    ranking into equal numbers.
+!!! info "How the weights are produced"
+    Each feature passes through its own gated residual transform, and then a
+    single softmax scores every selected feature against the others. The scores
+    sum to `1.0` across features and scale each feature's output, so
+    `get_feature_importances()` returns a share per feature that you can rank.
+    They are computed per row, so they depend on the batch you pass.
+
+    A model with only one selected feature has nothing to compare against, and
+    that feature's weight is `1.0`.
 
     Calling it without a batch returns a description of each weight tensor
     instead, which is what earlier releases always returned.
@@ -199,10 +200,9 @@ as an image:
 preprocessor.plot_model("preprocessor_architecture.png")
 ```
 
-!!! warning "These weights do not rank features yet"
-    As the note above explains, each feature is selected on its own, so every
-    weight is `1.0` and the chart is flat by construction. Read it as
-    confirmation that the selection layers are wired in, not as a ranking.
+!!! note "The chart depends on the batch"
+    The scores are a softmax computed per row, so the chart reflects the batch
+    you pass. Score a representative sample rather than a single record.
 
 ## 💡 Pro Tips for Feature Selection
 
@@ -228,13 +228,14 @@ preprocessor.plot_model("preprocessor_architecture.png")
 
 3. **Progressive Feature Refinement**
 
-   Decide the shortlist with your own downstream model -- a trained estimator's
-   importances, a permutation test -- and then build the refined preprocessor
-   over it. KDP's selection weights cannot make that call for you while they
-   are all `1.0`.
+   Score a representative batch, keep the features that carry weight, and build
+   the refined preprocessor over those. Corroborate with your downstream model
+   where the decision matters: these scores come from an untrained preprocessor
+   unless you have trained it as part of a larger model.
 
    ```python
-   # `important_features` came from your model, not from KDP's weights
+   # importances = preprocessor.get_feature_importances(batch)
+   # important_features = {k: v for k, v in features.items() if importances[k] > 0.05}
    refined_preprocessor = PreprocessingModel(
        features_specs=important_features,
        # More advanced processing now with fewer features
