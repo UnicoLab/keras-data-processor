@@ -216,6 +216,42 @@ step to work on now raises instead of emitting a constant column of zeros:
 combine it with `lag_config`, `rolling_stats_config` or `moving_average_config`
 so there is a window to decompose.
 
+## 〰️ `tsfresh_feature_config` needs a window too
+
+The same shape as the wavelet, one section up. A time series feature hands one
+column per row over, `window_size` is clamped to the number of steps available,
+and every statistic over a window of one is degenerate: the mean, the minimum
+and the maximum are all the value itself and the standard deviation is zero. A
+`tsfresh_feature_config` asking for four statistics therefore returned the input
+column three times plus a column of zeros -- four engineered features carrying
+nothing, produced without a word. It raises now, naming the configs that widen
+the feature; paired with any of them the statistics match `pandas.rolling`
+exactly.
+
+## 📆 Calendar time series features can be built
+
+The documented way to ask for calendar components is a `TimeSeriesFeature`
+whose `calendar_feature_config` names them. Its column holds dates, and
+everything it produces is derived from that string by `CalendarFeatureLayer` --
+there is no mean or variance to take. The statistics pass fed the column to the
+numeric accumulator anyway and died inside a `tf.function` with `Cast string to
+double is not supported`, so the whole configuration could not be built. The
+layer had tests; the path from `PreprocessingModel` to it did not.
+
+Calendar columns are skipped in the numeric statistics now. With
+`normalize=False` every component matches what pandas reads off the same
+column; with the default `normalize=True` they are scaled into `[0, 1]`.
+
+## 💾 A `tf_idf` text model can be reloaded
+
+Saving worked; loading raised `object of type 'bool' has no len()`. Keras writes
+a `tf_idf` vectorizer's IDF weights as layer variables and, on load, assigns
+them to a layer that has no vocabulary yet and therefore no such variable. It
+happens with `TextVectorization` alone, with no KDP in the picture. The
+vocabulary and the weights are now passed to the constructor, where the config
+carries them and loading reads them; the layer computes the same numbers either
+way.
+
 ## 🎯 Feature importances rank features now
 
 `get_feature_importances()` returned `1.0` for every feature, on every input.

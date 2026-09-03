@@ -1350,7 +1350,52 @@ class PreprocessingModel:
             f"Adapted the text vectorizer for {feature_name} on the data; "
             f"vocabulary size {len(vectorizer.get_vocabulary())}",
         )
+
+        if kwargs.get("output_mode") == TextVectorizerOutputOptions.TF_IDF:
+            vectorizer = self._restatable_tf_idf_vectorizer(vectorizer, **kwargs)
+
         return vectorizer
+
+    @staticmethod
+    def _restatable_tf_idf_vectorizer(
+        adapted: keras.layers.TextVectorization,
+        **kwargs: Any,
+    ) -> keras.layers.TextVectorization:
+        """Rebuild an adapted `tf_idf` vectorizer so that it can be reloaded.
+
+        A `TextVectorization` in `tf_idf` mode that learned its state by
+        adapting cannot be read back from a saved model: Keras writes the IDF
+        weights as layer variables, and on load assigns them to a layer that has
+        no vocabulary yet and therefore no such variable, which surfaces as
+        "object of type 'bool' has no len()". The model saves without
+        complaint, so the loss shows up only when the model is next needed. This
+        happens with `TextVectorization` alone, with no KDP in the picture.
+
+        Passing the vocabulary and the weights to the constructor puts both in
+        the layer's config, where loading reads them. The layer computes the
+        same numbers either way.
+
+        Args:
+            adapted: The vectorizer that has already read the column.
+            **kwargs: The arguments it was constructed with.
+
+        Returns:
+            An equivalent vectorizer holding its state in its config.
+        """
+        vocabulary = [str(word) for word in adapted.get_vocabulary()]
+        specials = len(vocabulary) - len(
+            adapted.get_vocabulary(include_special_tokens=False),
+        )
+        weights = np.asarray(adapted._lookup_layer.idf_weights_const.numpy())
+
+        arguments = dict(kwargs)
+        arguments.pop("vocabulary", None)
+        arguments.pop("idf_weights", None)
+        return keras.layers.TextVectorization(
+            vocabulary=vocabulary[specials:],
+            idf_weights=weights[specials:],
+            **arguments,
+        )
 
     @_monitor_performance
     def _add_pipeline_text(self, feature_name: str, input_layer, stats: dict) -> None:

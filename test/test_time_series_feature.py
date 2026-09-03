@@ -387,9 +387,13 @@ class TestTimeSeriesFeature(unittest.TestCase):
                     "wavelet_transform_config": {"levels": 2, "flatten_output": False},
                 }
             ],
+            # tsfresh summarizes a window, and a time series feature hands one
+            # column per row over, so it needs a config that widens the feature
+            # first -- exactly like the wavelet cases above.
             [
                 {
                     "name": "sales",
+                    "lag_config": {"lags": [1, 2, 3]},
                     "tsfresh_feature_config": {"features": ["mean", "std", "min"]},
                 }
             ],

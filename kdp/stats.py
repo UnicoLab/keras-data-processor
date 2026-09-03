@@ -718,6 +718,20 @@ class DatasetStatistics:
                 )
                 continue
 
+            # A calendar feature's column holds dates, not numbers: everything
+            # it produces is derived from the string by `CalendarFeatureLayer`,
+            # and there is no mean or variance to take. Feeding it to the
+            # accumulator anyway killed the statistics pass with "Cast string to
+            # double is not supported" from inside a `tf.function`, so the
+            # documented way of declaring calendar features could not be built
+            # at all.
+            if feature.dtype == tf.string:
+                logger.debug(
+                    f"'{feature_name}' is a calendar feature; its column holds "
+                    f"dates, so there are no numeric statistics to collect.",
+                )
+                continue
+
             # Prepare for grouped processing if grouping is specified
             if feature.group_by and feature.group_by in list(
                 dataset.element_spec.keys(),
