@@ -242,9 +242,10 @@ This check is deliberately narrow. A column of empty strings has the vocabulary
 `[""]` and a column with one repeated value has a vocabulary of length one;
 neither is empty, and both still build.
 
-## 〰️ Time series options that could not run
+## 〰️ Time series options that did not do what they said
 
-Three documented options raised or returned nothing, on every input.
+Two of these raised on every input they were given. The rest were accepted and
+changed nothing.
 
 `WaveletTransformLayer(flatten_output=False)` returned an array of zeros —
 every coefficient it had just computed, discarded — and then declared a rank-2
@@ -265,6 +266,13 @@ serialized, and read nowhere: the output is identical whichever value you
 pass. The sin/cos components are requested by name, and always were —
 `features=["month_sin", "month_cos", "day_of_week_sin", "day_of_week_cos"]`.
 The flag is deprecated, warns when you pass it, and still loads.
+
+!!! warning "`month` is not cyclic"
+    If you asked for `month` and set `cyclic_encoding=True`, you were getting a
+    plain normalised month all along, where December and January sit at
+    opposite ends of the range. Add `month_sin` and `month_cos` to `features`
+    to get the encoding the flag promised. This widens your output, so re-fit
+    anything trained on it.
 
 ### A `NaN` at the edge of a series reached the model
 
@@ -302,12 +310,6 @@ A test now walks every class in `kdp` and fails on a constructor argument that
 is stored and never read unless its docstring says so, so this list cannot grow
 without someone deciding it should.
 
-!!! warning "`month` is not cyclic"
-    If you asked for `month` and set `cyclic_encoding=True`, you were getting a
-    plain normalised month all along, where December and January sit at
-    opposite ends of the range. Add `month_sin` and `month_cos` to `features`
-    to get the encoding the flag promised. This widens your output, so re-fit
-    anything trained on it.
 
 ## 🔤 `TextVectorizerOutputOptions`
 
