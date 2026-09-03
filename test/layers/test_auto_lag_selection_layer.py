@@ -256,6 +256,44 @@ class TestAutoLagSelectionLayer(unittest.TestCase):
             output = layer(tf.constant(series.reshape(1, 120, 1)))
             self.assertGreaterEqual(output.shape[0], 1)
 
+    def test_every_channel_votes_on_the_selected_lags(self):
+        """Lag selection used to read channel 0 and discard the rest.
+
+        A noisy first channel then picked the lags for every other channel, so
+        simply reordering the columns of the same data changed the output. The
+        autocorrelation is now averaged over the channels, which makes the
+        choice independent of the column order.
+        """
+        steps = np.arange(200)
+        noise = np.random.default_rng(0).normal(0, 1, 200)
+        wave = np.sin(2 * np.pi * steps / 10.0)
+
+        chosen = []
+        for stacked in (
+            np.stack([noise, wave], axis=-1),
+            np.stack([wave, noise], axis=-1),
+        ):
+            layer = AutoLagSelectionLayer(max_lag=30, n_lags=3, method="top_k")
+            layer(tf.constant(stacked[None, ...].astype("float32")), training=True)
+            chosen.append(sorted(layer.selected_lags.numpy().ravel().tolist()))
+
+        self.assertEqual(chosen[0], chosen[1])
+
+    def test_a_lone_channel_still_drives_its_own_lags(self):
+        """Averaging across channels must not disturb the single-series case."""
+        wave = np.sin(2 * np.pi * np.arange(200) / 10.0).astype("float32")
+
+        two_d = AutoLagSelectionLayer(max_lag=30, n_lags=3, method="top_k")
+        two_d(tf.constant(wave[None, :]), training=True)
+
+        three_d = AutoLagSelectionLayer(max_lag=30, n_lags=3, method="top_k")
+        three_d(tf.constant(wave.reshape(1, 200, 1)), training=True)
+
+        self.assertEqual(
+            sorted(two_d.selected_lags.numpy().ravel().tolist()),
+            sorted(three_d.selected_lags.numpy().ravel().tolist()),
+        )
+
     def test_compute_output_shape(self):
         """Test compute_output_shape method."""
         # Initialize layer with keep_original=True, drop_na=False

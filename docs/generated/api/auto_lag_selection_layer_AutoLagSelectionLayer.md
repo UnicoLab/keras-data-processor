@@ -6,6 +6,11 @@ This layer analyzes the autocorrelation of time series data to identify importan
 lag values, then creates lag features for those values. This is more efficient
 than creating lag features for all possible lags.
 
+One set of lags is selected for the whole input. Given a 3-D input of shape
+``(batch_size, time_steps, features)`` the autocorrelation is averaged over
+the batch and over the channels, so every channel contributes to the choice,
+and the selected lags are then applied to all of them.
+
 ### Parameters- **max_lag**: Maximum lag to consider
 - **n_lags**: Number of lag features to create (default: 5)
 - **threshold**: Autocorrelation significance threshold (default: 0.2)

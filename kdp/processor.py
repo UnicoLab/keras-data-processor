@@ -772,7 +772,10 @@ class PreprocessingModel:
         if apply_selection:
             feature_selector = PreprocessorLayerFactory.variable_selection_layer(
                 name=f"{feature_name}_feature_selection",
-                nr_features=1,  # Single feature for now
+                # One feature per selector: this gates a feature against
+                # itself. The features are scored against each other
+                # afterwards, in `_score_features_against_each_other`.
+                nr_features=1,
                 units=self.feature_selection_units,
                 dropout_rate=self.feature_selection_dropout,
             )
@@ -1146,14 +1149,22 @@ class PreprocessingModel:
         if feature.category_encoding == CategoryEncodingOptions.HASHING:
             return
 
-        # Handle empty vocabulary by providing a fallback
+        # An empty vocabulary means the statistics pass saw no values at all in
+        # this column. It used to be replaced with `["<UNK>"]`, which for a
+        # string feature encoded every real value to the out-of-vocabulary slot
+        # -- a constant column, silently -- and for an integer feature crashed
+        # inside Keras with "invalid literal for int() with base 10". A column
+        # that merely holds empty strings is a different thing: its vocabulary
+        # is `[""]`, not empty, and it builds.
         if not vocab:
-            logger.warning(
-                f"Empty vocabulary for categorical feature '{feature_name}'. "
-                "Using fallback vocabulary with placeholder values.",
+            raise ValueError(
+                f"Categorical feature {feature_name!r} has an empty "
+                "vocabulary: the statistics pass found no values in that "
+                "column. Check that the training data has rows and that the "
+                "column is present in them, or use "
+                "category_encoding=CategoryEncodingOptions.HASHING, which "
+                "needs no vocabulary.",
             )
-            # Provide a minimal vocabulary with unknown/placeholder values
-            vocab = ["<UNK>"]
 
         # Default behavior if no specific preprocessing is defined
         if feature.feature_type == FeatureType.STRING_CATEGORICAL:
@@ -1399,7 +1410,10 @@ class PreprocessingModel:
         ):
             feature_selector = PreprocessorLayerFactory.variable_selection_layer(
                 name=f"{feature_name}_feature_selection",
-                nr_features=1,  # Single feature for now
+                # One feature per selector: this gates a feature against
+                # itself. The features are scored against each other
+                # afterwards, in `_score_features_against_each_other`.
+                nr_features=1,
                 units=self.feature_selection_units,
                 dropout_rate=self.feature_selection_dropout,
             )
@@ -1477,7 +1491,10 @@ class PreprocessingModel:
         ):
             feature_selector = PreprocessorLayerFactory.variable_selection_layer(
                 name=f"{feature_name}_feature_selection",
-                nr_features=1,  # Single feature for now
+                # One feature per selector: this gates a feature against
+                # itself. The features are scored against each other
+                # afterwards, in `_score_features_against_each_other`.
+                nr_features=1,
                 units=self.feature_selection_units,
                 dropout_rate=self.feature_selection_dropout,
             )

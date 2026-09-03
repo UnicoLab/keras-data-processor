@@ -892,6 +892,13 @@ print("selected lags:", lags.selected_lags.numpy())
 
 </div>
 
+!!! note "One set of lags for every channel"
+    `AutoLagSelectionLayer` selects a single set of lags and applies it to the
+    whole input. On a 3-D input of shape `(batch, time, features)` the
+    autocorrelation is averaged over the channels as well as the batch, so
+    every channel contributes to the choice and reordering the columns does not
+    change it.
+
 `MissingValueHandlerLayer` fills gaps before any of the above. It takes a
 `(batch, time)` batch -- one row per series -- and `mask_value` names what
 counts as missing:

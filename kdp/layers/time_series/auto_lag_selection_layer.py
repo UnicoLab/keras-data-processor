@@ -12,6 +12,11 @@ class AutoLagSelectionLayer(Layer):
     lag values, then creates lag features for those values. This is more efficient
     than creating lag features for all possible lags.
 
+    One set of lags is selected for the whole input. Given a 3-D input of shape
+    ``(batch_size, time_steps, features)`` the autocorrelation is averaged over
+    the batch and over the channels, so every channel contributes to the choice,
+    and the selected lags are then applied to all of them.
+
     Args:
         max_lag: Maximum lag to consider
         n_lags: Number of lag features to create (default: 5)
@@ -84,9 +89,16 @@ class AutoLagSelectionLayer(Layer):
             multi_feature = False
         else:
             # Shape: (batch_size, time_steps, features)
-            # For now, just use the first feature for autocorrelation analysis
-            # This could be extended to analyze each feature separately
-            series = inputs[:, :, 0]
+            # Every channel votes on which lags to select. `_select_lags`
+            # already averages the autocorrelation across the batch axis, so
+            # folding the channels into that axis averages across them too.
+            # Reading channel 0 alone threw the other channels away: a noisy
+            # first channel then chose the lags for every other one. The lag
+            # features themselves are still built for every channel below.
+            series = tf.reshape(
+                tf.transpose(inputs, perm=[0, 2, 1]),
+                [-1, tf.shape(inputs)[1]],
+            )
             multi_feature = True
 
         # During training, compute the autocorrelation and select lags

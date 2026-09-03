@@ -21,6 +21,7 @@ configuration changes, but the numbers coming out of the preprocessor do.
 | Area | Before | Now |
 |------|--------|-----|
 | Time series layers | `DifferencingLayer`, `MovingAverageLayer`, `RollingStatsLayer`, `LagFeatureLayer` and `AutoLagSelectionLayer` returned fixed constants for certain shapes instead of computing over the input | Values are computed from the data in every case |
+| `AutoLagSelectionLayer` on multi-channel input | Lags were chosen from the autocorrelation of channel 0 alone, then applied to every channel, so reordering the columns of the same data changed the result | The autocorrelation is averaged over the channels as well as the batch, so every channel contributes and the choice does not depend on column order |
 | `DistributionTransformLayer` — `robust-scale` | Median and IQR were taken across the whole tensor | Computed per feature, as the transform is defined |
 | `DistributionTransformLayer` — `quantile` | Ranking was global | Ranked per feature |
 | Distribution-aware encoding | `preferred_distribution` was accepted and then ignored, so the layer always auto-detected | The requested distribution is honoured |
@@ -198,7 +199,7 @@ importances = preprocessor.get_feature_importances(batch)
 
 ## 🚫 Configurations that are now rejected
 
-Two configurations used to be accepted and then silently do the wrong thing.
+These configurations used to be accepted and then silently do the wrong thing.
 They raise now, with a message naming what to fix.
 
 <div class="code-container">
@@ -227,6 +228,18 @@ PreprocessingModel(
 
 An expert index outside the mixture, or a name the mixture never sees, is
 rejected the same way.
+
+A categorical feature whose column holds no values at all is the other case. Its
+vocabulary came back empty and was replaced with `["<UNK>"]`, which for a string
+feature encoded every real value to the out-of-vocabulary slot — a constant
+column, produced without a word — and for an integer feature failed inside Keras
+with `invalid literal for int() with base 10`, naming neither the feature nor
+the cause. Both now raise a `ValueError` that names the feature and points at
+`CategoryEncodingOptions.HASHING`, which needs no vocabulary.
+
+This check is deliberately narrow. A column of empty strings has the vocabulary
+`[""]` and a column with one repeated value has a vocabulary of length one;
+neither is empty, and both still build.
 
 ## 🔤 `TextVectorizerOutputOptions`
 
