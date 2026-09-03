@@ -19,35 +19,35 @@
     <thead>
       <tr>
         <th>Feature Type</th>
-        <th>Best For</th>
-        <th>Example Values</th>
-        <th>When to Use</th>
+        <th>What it does</th>
+        <th>Output width</th>
+        <th>When to use</th>
       </tr>
     </thead>
     <tbody>
       <tr>
         <td><code>FLOAT_NORMALIZED</code></td>
-        <td>Data with clear bounds</td>
-        <td>🧓 Age: 18-65, ⭐ Score: 0-100</td>
-        <td>When you know your data falls in a specific range</td>
-      </tr>
-      <tr>
-        <td><code>FLOAT_RESCALED</code></td>
-        <td>Unbounded, varied data</td>
-        <td>💰 Income: $0-$1M+, 📊 Revenue</td>
-        <td>When data has outliers or unknown bounds</td>
-      </tr>
-      <tr>
-        <td><code>FLOAT_DISCRETIZED</code></td>
-        <td>Values that form groups</td>
-        <td>📅 Years: 1-50, ⭐ Ratings: 1-5</td>
-        <td>When groups of values have special meaning</td>
+        <td>Standardised to zero mean and unit variance, using the mean and variance from the statistics pass.</td>
+        <td>1</td>
+        <td>The sensible default for most numeric columns.</td>
       </tr>
       <tr>
         <td><code>FLOAT</code></td>
-        <td>Default normalization</td>
-        <td>🔢 General numeric values</td>
-        <td>When you want standard normalization (identical to FLOAT_NORMALIZED)</td>
+        <td>Identical to <code>FLOAT_NORMALIZED</code>.</td>
+        <td>1</td>
+        <td>An alias; there is no separate behaviour.</td>
+      </tr>
+      <tr>
+        <td><code>FLOAT_RESCALED</code></td>
+        <td>Multiplied by <code>scale</code>, which <strong>defaults to 1.0</strong> &mdash; that is, unchanged.</td>
+        <td>1</td>
+        <td>Only useful when you pass <code>scale</code> yourself. See the warning below.</td>
+      </tr>
+      <tr>
+        <td><code>FLOAT_DISCRETIZED</code></td>
+        <td>One-hot over <code>num_bins</code> equal-width bins derived from the statistics.</td>
+        <td><code>num_bins</code> (default 10)</td>
+        <td>When groups of values carry meaning rather than the magnitude.</td>
       </tr>
     </tbody>
   </table>
@@ -66,10 +66,10 @@ from kdp import PreprocessingModel, FeatureType
 
 # ✨ Quick numerical feature definition
 features = {
-    "age": FeatureType.FLOAT_NORMALIZED,          # 🧓 Age gets 0-1 normalization
-    "income": FeatureType.FLOAT_RESCALED,         # 💰 Income gets robust scaling
-    "transaction_count": FeatureType.FLOAT,       # 🔢 Default normalization
-    "rating": FeatureType.FLOAT_DISCRETIZED       # ⭐ Discretized into bins
+    "age": FeatureType.FLOAT_NORMALIZED,          # 🧓 zero mean, unit variance
+    "income": FeatureType.FLOAT_NORMALIZED,       # 💰 also standardised (see the warning above)
+    "transaction_count": FeatureType.FLOAT,       # 🔢 alias for FLOAT_NORMALIZED
+    "rating": FeatureType.FLOAT_DISCRETIZED       # ⭐ one-hot over 10 bins
 }
 
 # 🏗️ Create your preprocessor
@@ -205,6 +205,8 @@ preprocessor = PreprocessingModel(
       <div class="code-container">
 
 ```python
+from kdp import FeatureType, NumericalFeature, PreprocessingModel
+
 # Configure numerical embeddings
 preprocessor = PreprocessingModel(
     features_specs={
@@ -235,6 +237,8 @@ preprocessor = PreprocessingModel(
     <div class="code-container">
 
 ```python
+from kdp import FeatureType, NumericalFeature, PreprocessingModel
+
 # 📈 Financial metrics with appropriate processing
 preprocessor = PreprocessingModel(
     features_specs={
@@ -270,6 +274,8 @@ preprocessor = PreprocessingModel(
     <div class="code-container">
 
 ```python
+from kdp import FeatureType, NumericalFeature, PreprocessingModel
+
 # 📡 Processing sensor readings
 preprocessor = PreprocessingModel(
     features_specs={
@@ -372,7 +378,7 @@ preprocessor = PreprocessingModel(
       <p>Neural representations</p>
     </div>
   </a>
-  <a href="../advanced/feature-selection.md" class="related-topic-card">
+  <a href="../optimization/feature-selection.md" class="related-topic-card">
     <span class="related-topic-icon">🎯</span>
     <div class="related-topic-content">
       <h3>Feature Selection</h3>

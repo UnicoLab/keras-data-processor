@@ -36,10 +36,10 @@ preprocessor = PreprocessingModel(
     # Enable performance-enhancing features
     use_distribution_aware=True,       # Smart distribution handling
     tabular_attention=True,            # Feature interaction learning
-    feature_selection_placement="all",  # Remove noise automatically
+    feature_selection_placement="all_features",  # Remove noise automatically
 
     # Performance optimizations
-    enable_caching=True,               # Speed up repeated processing
+    use_caching=True,               # Speed up repeated processing
     batch_size=10000                   # Process in manageable chunks
 )
 
@@ -63,12 +63,16 @@ preprocessor = PreprocessingModel(
 
     # Enable and customize distribution-aware encoding
     use_distribution_aware=True,
-    distribution_detection_confidence=0.85,   # Higher = more precise detection
-    adaptive_binning=True,                    # Learn optimal bin boundaries
     distribution_aware_bins=1000,             # More bins = finer-grained encoding
-    handle_outliers="clip"                    # Options: "clip", "remove", "special_token"
 )
 ```
+
+`distribution_aware_bins` is the only model-level knob. Periodicity detection,
+sparsity handling and adaptive binning are always on and are not configurable
+from `PreprocessingModel`; to change them, build a
+[`DistributionAwareEncoder`](../advanced/distribution-aware-encoding.md)
+yourself in a custom pipeline. To force a distribution for one column, set
+`preferred_distribution` on its `NumericalFeature`.
 
 ### 2. Feature Interaction Optimization
 
@@ -96,23 +100,31 @@ preprocessor = PreprocessingModel(
 preprocessor = PreprocessingModel(
     features_specs=features,
 
-    # Memory optimization
+    # Memory
     batch_size=50000,                         # Adjust based on available RAM
-    enable_caching=True,                      # Cache intermediate results
-    cache_location="memory",                  # Options: "memory", "disk"
-
-    # Computational efficiency
-    use_mixed_precision=True,                 # Faster computation with fp16
-    parallel_feature_processing=True,         # Process features in parallel
-    distribution_encoding_threads=4           # Parallel distribution encoding
+    use_caching=True,                         # Cache intermediate tensors
 )
 ```
+
+`batch_size` governs how much data the statistics pass holds at once, and
+`use_caching` reuses intermediate tensors while the graph is built. Features
+are already processed in parallel internally &mdash; there is no flag for it.
+
+!!! note "Mixed precision is a Keras setting, not a KDP one"
+    Set it globally before building, and every layer KDP creates picks it up:
+
+    ```python
+    import keras
+    keras.mixed_precision.set_global_policy("mixed_float16")
+    ```
 
 ## 📈 Real-World Optimization Examples
 
 ### Financial Fraud Detection
 
 ```python
+from kdp import FeatureType, PreprocessingModel
+
 # Optimize for fraud detection (imbalanced, complex distributions)
 preprocessor = PreprocessingModel(
     path_data="transactions.csv",
@@ -133,8 +145,8 @@ preprocessor = PreprocessingModel(
     tabular_attention_heads=12,              # More heads for complex interactions
 
     # Performance optimizations
-    feature_selection_placement="all",       # Focus on relevant signals
-    enable_caching=True,
+    feature_selection_placement="all_features",       # Focus on relevant signals
+    use_caching=True,
     batch_size=5000                          # Smaller batches for complex processing
 )
 ```
@@ -142,6 +154,8 @@ preprocessor = PreprocessingModel(
 ### E-Commerce Recommendations
 
 ```python
+from kdp import FeatureType, PreprocessingModel
+
 # Optimize for recommendation systems (high-dimensional, sparse)
 preprocessor = PreprocessingModel(
     path_data="user_product_interactions.csv",
@@ -153,17 +167,12 @@ preprocessor = PreprocessingModel(
         "past_purchases": FeatureType.TEXT,
         "last_visit": FeatureType.DATE
     },
-    # Memory optimization for high cardinality
-    categorical_embedding_dim=32,            # Smaller embeddings for many categories
-    max_vocabulary_size=100000,              # Limit vocabulary size
-
     # Specialized recommendation processing
-    feature_crosses=[("user_id", "category")],  # Important interaction
+    feature_crosses=[("user_id", "category", 32)],  # (feature_a, feature_b, nr_bins)
     use_feature_moe=True,                    # Mixture of Experts for different features
 
-    # Performance optimizations
-    enable_caching=True,
-    use_mixed_precision=True                 # Faster computation with mixed precision
+    # Performance
+    use_caching=True,
 )
 ```
 
@@ -249,7 +258,7 @@ plt.show()
    basic = PreprocessingModel(
        features_specs=features,
        use_distribution_aware=True,
-       enable_caching=True
+       use_caching=True
    )
 
    # Step 2: Add interaction learning
@@ -257,7 +266,7 @@ plt.show()
        features_specs=features,
        use_distribution_aware=True,
        tabular_attention=True,
-       enable_caching=True
+       use_caching=True
    )
 
    # Step 3: Full optimization
@@ -266,9 +275,8 @@ plt.show()
        use_distribution_aware=True,
        tabular_attention=True,
        transfo_nr_blocks=2,
-       feature_selection_placement="all",
-       use_mixed_precision=True,
-       enable_caching=True
+       feature_selection_placement="all_features",
+       use_caching=True,
    )
 
    # Compare metrics at each stage
@@ -289,7 +297,6 @@ plt.show()
            name="product_id",
            feature_type=FeatureType.STRING_CATEGORICAL,
            embedding_dim=16,             # Smaller embedding
-           max_vocabulary_size=10000,    # Limit vocabulary
            handle_unknown="use_oov"      # Handle unseen values
        ),
 
@@ -297,7 +304,6 @@ plt.show()
        "transaction_amount": NumericalFeature(
            name="transaction_amount",
            feature_type=FeatureType.FLOAT_RESCALED,
-           use_embedding=True,
            preferred_distribution="log_normal"  # Distribution hint
        )
    }
@@ -336,7 +342,6 @@ model = PreprocessingModel(
     path_data="large_dataset.csv",
     features_specs=features,
     batch_size=1024,  # Process in smaller batches
-    use_memory_optimization=True
 )
 ```
 
@@ -363,10 +368,13 @@ import pandas as pd
 # Sample dataset
 df = pd.read_csv("benchmark_dataset.csv")
 
-# KDP approach
+# KDP approach. There is no separate fit step: the statistics are computed
+# from `path_data` while the preprocessor is built.
 start_time = time.time()
-model = PreprocessingModel(features_specs=features)
-model.fit(df)
+model = PreprocessingModel(
+    path_data="benchmark_dataset.csv",
+    features_specs=features,
+)
 preprocessor = model.build_preprocessor()
 kdp_time = time.time() - start_time
 

@@ -58,6 +58,23 @@ jobs:
           python -m pip install --upgrade pip
           pip install poetry
           poetry install --no-interaction
+      - name: Every test belongs to a group the matrix runs
+        run: |
+          # The matrix selects by marker. A test carrying none of these markers
+          # is collected by nobody and never runs in CI, which is how the whole
+          # save/load round-trip suite went unexecuted.
+          orphans=$(poetry run pytest test/ --collect-only -q \
+            -m "not unit and not integration and not layers and not processor and not time_series" \
+            2>/dev/null | grep -c "::" || true)
+          if [ "$orphans" -ne 0 ]; then
+            echo "::error::$orphans test(s) match no CI marker group:"
+            poetry run pytest test/ --collect-only -q \
+              -m "not unit and not integration and not layers and not processor and not time_series"
+            exit 1
+          fi
+          echo "All collected tests belong to a marker group."
+        timeout-minutes: 3
+
       - name: Run smoke tests
         run: |
           poetry run pytest -m "micro" --maxfail=1 --tb=no -q --timeout=30
@@ -159,6 +176,32 @@ jobs:
       - name: Run tests
         run: poetry run pytest -c pytest-fast.ini --timeout=180
         timeout-minutes: 15
+
+  # The docs promise an API. This job runs every self-contained python example
+  # in docs/ against data synthesised from the block's own feature spec, which
+  # catches the defects a symbol check cannot: a wrong shape, an option
+  # combination Keras rejects, or a method whose return value the prose
+  # describes incorrectly.
+  doc-examples:
+    runs-on: ubuntu-latest
+    needs: [smoke-test]
+    if: always() && (needs.smoke-test.result == 'success' || github.event_name != 'pull_request')
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install poetry
+          poetry install --no-interaction
+
+      - name: Run every documented example
+        run: poetry run python scripts/verify_doc_examples.py
+        timeout-minutes: 25
 
   # Coverage job (only on main Python version)
   coverage:

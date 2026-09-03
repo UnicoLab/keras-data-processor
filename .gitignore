@@ -167,3 +167,6 @@ my_tests/*
 
 # derivative files
 *.csv
+
+# Images written by the example scripts
+examples/outputs/

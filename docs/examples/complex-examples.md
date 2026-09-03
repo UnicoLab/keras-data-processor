@@ -24,8 +24,7 @@ features = {
     "price": NumericalFeature(
         name="price",
         feature_type=FeatureType.FLOAT_NORMALIZED,
-        use_embedding=True,                  # Create richer representation
-        embedding_dim=8                      # Size of embedding
+        embedding_size=8                      # Size of embedding
     ),
     "quantity": NumericalFeature(
         name="quantity",
@@ -37,13 +36,12 @@ features = {
     "category": CategoricalFeature(
         name="category",
         feature_type=FeatureType.STRING_CATEGORICAL,
-        embedding_dim=32,                    # Larger embeddings for complex categories
-        max_vocabulary_size=1000            # Limit vocabulary size
+        embedding_size=32,                    # Larger embeddings for complex categories
     ),
     "brand": CategoricalFeature(
         name="brand",
         feature_type=FeatureType.STRING_CATEGORICAL,
-        embedding_dim=16
+        embedding_size=16
     ),
 
     # Text features with different token limits
@@ -51,7 +49,7 @@ features = {
         name="description",
         feature_type=FeatureType.TEXT,
         max_tokens=100,                      # Longer limit for descriptions
-        output_mode="embedding"              # Use text embeddings
+        output_mode="multi_hot"              # Bag-of-words over the vocabulary
     ),
     "title": TextFeature(
         name="title",
@@ -64,7 +62,6 @@ features = {
         name="sale_date",
         feature_type=FeatureType.DATE,
         add_season=True,                     # Add seasonal indicators
-        add_day_of_week=True                 # Add day of week information
     )
 }
 ```
@@ -100,7 +97,7 @@ preprocessor = PreprocessingModel(
     feature_selection_units=32,
 
     # Enable caching for better performance
-    enable_caching=True
+    use_caching=True
 )
 
 # Build the preprocessor
@@ -136,14 +133,15 @@ This example demonstrates using KDP to preprocess financial time series data for
 ### Setting Up Features
 
 ```python
+from kdp import CategoricalFeature, DateFeature, FeatureType, NumericalFeature, PreprocessingModel
+
 # Define financial features
 features = {
     # Price data with custom distribution handling
     "close_price": NumericalFeature(
         name="close_price",
         feature_type=FeatureType.FLOAT_RESCALED,
-        use_embedding=True,
-        embedding_dim=16,
+        embedding_size=16,
         preferred_distribution="heavy_tailed"  # Handle market data distributions
     ),
     "volume": NumericalFeature(
@@ -168,15 +166,13 @@ features = {
     "market_regime": CategoricalFeature(
         name="market_regime",
         feature_type=FeatureType.STRING_CATEGORICAL,
-        embedding_dim=8
+        embedding_size=8
     ),
 
     # Date information with market-specific features
     "date": DateFeature(
         name="date",
-        feature_type=FeatureType.DATE,
-        add_day_of_week=True,  # Markets behave differently on different days
-        add_month=True         # Capture seasonal effects
+        feature_type=FeatureType.DATE
     )
 }
 
@@ -186,8 +182,8 @@ financial_preprocessor = PreprocessingModel(
     features_specs=features,
 
     # Enable advanced numerical embeddings for better pattern detection
-    use_numerical_embedding=True,
-    numerical_embedding_dim=32,
+    use_advanced_numerical_embedding=True,
+    embedding_dim=32,
 
     # Enable distribution-aware encoding for market data
     use_distribution_aware=True,
@@ -211,6 +207,8 @@ This example shows how to preprocess user behavior data for churn prediction or 
 ### Setting Up Features
 
 ```python
+from kdp import CategoricalFeature, DateFeature, FeatureType, NumericalFeature, PreprocessingModel, TextFeature
+
 # Define user behavior features
 features = {
     # User demographics
@@ -221,13 +219,12 @@ features = {
     "gender": CategoricalFeature(
         name="gender",
         feature_type=FeatureType.STRING_CATEGORICAL,
-        embedding_dim=4
+        embedding_size=4
     ),
     "location": CategoricalFeature(
         name="location",
         feature_type=FeatureType.STRING_CATEGORICAL,
-        embedding_dim=16,
-        max_vocabulary_size=500  # Limit to top locations
+        embedding_size=16
     ),
 
     # Behavioral metrics
@@ -250,7 +247,7 @@ features = {
     "subscription_tier": CategoricalFeature(
         name="subscription_tier",
         feature_type=FeatureType.STRING_CATEGORICAL,
-        embedding_dim=8
+        embedding_size=8
     ),
 
     # Textual data
@@ -311,12 +308,13 @@ user_result = user_preprocessor.build_preprocessor()
 
 4. **Save Your Preprocessing Pipeline**
    ```python
-   # Save the complete pipeline for reuse
-   preprocessor.save_model("my_preprocessor.keras")
+   # Save the complete pipeline for reuse. The argument is a directory: the
+   # Keras model and the metadata needed to rebuild the pipeline go inside it.
+   preprocessor.save_model("my_preprocessor")
 
-   # Load it when needed
+   # Load it when needed. load_model returns the model and that metadata.
    from kdp import PreprocessingModel
-   loaded_preprocessor = PreprocessingModel.load_model("my_preprocessor.keras")
+   loaded_model, metadata = PreprocessingModel.load_model("my_preprocessor")
    ```
 
 ## 🔗 Related Topics

@@ -44,7 +44,7 @@
       <li><a href="advanced/distribution-aware-encoding.md">Distribution-Aware Encoding</a></li>
       <li><a href="advanced/tabular-attention.md">Tabular Attention</a></li>
       <li><a href="advanced/feature-moe.md">Feature-wise Mixture of Experts</a></li>
-      <li><a href="advanced/feature-selection.md">Feature Selection</a></li>
+      <li><a href="optimization/feature-selection.md">Feature Selection</a></li>
       <li><a href="advanced/numerical-embeddings.md">Advanced Numerical Embeddings</a></li>
       <li><a href="advanced/transformer-blocks.md">Transformer Blocks</a></li>
     </ul>

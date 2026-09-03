@@ -113,27 +113,41 @@ class TestModelAdvisor(unittest.TestCase):
         self.assertEqual(text_rec["feature_type"], "TextFeature")
         self.assertIn("TEXT_VECTORIZATION", text_rec["preprocessing"])
         self.assertIn("max_tokens", text_rec["config"])
-        self.assertIn("embedding_dim", text_rec["config"])
+        # `embedding_dim` was recommended here, but TextFeature forwards its
+        # keyword arguments to TextVectorization, which has no such argument --
+        # the generated snippet wrote a setting that was silently ignored.
+        self.assertNotIn("embedding_dim", text_rec["config"])
 
     def test_analyze_date_features(self):
-        """Test analysis of date features."""
+        """The recommendation must name options `DateFeature` actually reads.
+
+        It used to describe `extract`, `timezone_aware` and `cyclical_encoding`.
+        `DateFeature` reads only `format` and `add_season`; the components it
+        encodes and the cyclical encoding of them are not configurable, so
+        recommending them told the reader to write settings that do nothing.
+        """
         self.advisor._analyze_date_features()
 
-        # Check if recommendations were generated for date feature
         self.assertIn("date1", self.advisor.recommendations)
-
-        # Verify date feature recommendations
         date_rec = self.advisor.recommendations["date1"]
         self.assertEqual(date_rec["feature_type"], "DateFeature")
-        self.assertIn("DATE_FEATURES", date_rec["preprocessing"])
-        self.assertIn("extract", date_rec["config"])
+        self.assertIn("DATE_ENCODING", date_rec["preprocessing"])
 
-        # Check for cyclical encoding in advanced options
-        self.assertIn("advanced_options", date_rec)
-        self.assertTrue(date_rec["advanced_options"].get("cyclical_encoding", False))
+        # Only the two real options may appear.
+        self.assertTrue(set(date_rec["config"]) <= {"format", "add_season"})
+        self.assertNotIn("extract", date_rec["config"])
+        self.assertNotIn("cyclical_encoding", date_rec["advanced_options"])
 
-        # Since var_year is > 0.1, should recommend including year
-        self.assertIn("year", date_rec["config"]["extract"])
+        # The fixture declares cyclical patterns, so the season one-hot is on.
+        self.assertTrue(date_rec["config"].get("add_season"))
+
+    def test_date_statistics_are_read_under_the_key_stats_writes(self):
+        """`DatasetStatistics` writes "date"; this looked for "date_stats"."""
+        from kdp.model_advisor import ModelAdvisor
+
+        advisor = ModelAdvisor({"date": dict(self.mock_features_stats["date_stats"])})
+        advisor._analyze_date_features()
+        self.assertIn("date1", advisor.recommendations)
 
     def test_generate_global_recommendations(self):
         """Test generation of global recommendations."""

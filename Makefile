@@ -276,3 +276,8 @@ help:
 		printf "\n"; \
 	}' \
 	| more $(shell test $(shell uname) = Darwin && echo '--no-init --raw-control-chars')
+
+.PHONY: verify_doc_examples
+## Run every self-contained python example in docs/ against synthesised data
+verify_doc_examples:
+	poetry run python scripts/verify_doc_examples.py

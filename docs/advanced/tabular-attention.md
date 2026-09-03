@@ -7,6 +7,17 @@
   </div>
 </div>
 
+!!! note "Output width"
+    With the default placements the model's output is
+    `tabular_attention_dim` columns wide &mdash; attention projects every
+    feature into one shared space rather than concatenating them.
+    `multi_resolution` runs a numeric and a categorical branch and concatenates
+    the two, giving `2 x tabular_attention_dim`.
+
+    `tabular_attention_embedding_dim` sizes the categorical embedding inside
+    the multi-resolution branch, so it changes the parameter count but not the
+    output width.
+
 ## 📋 Overview
 
 <div class="overview-card">
@@ -177,7 +188,7 @@ The diagram shows how tabular attention transforms features through a multi-head
 
 ```python
 from kdp import PreprocessingModel, FeatureType
-from kdp.enums import TabularAttentionPlacementOptions
+from kdp import TabularAttentionPlacementOptions
 
 features_specs = {
     "customer_age": FeatureType.FLOAT_NORMALIZED,
@@ -203,7 +214,7 @@ preprocessor = PreprocessingModel(
 
 ```python
 from kdp import PreprocessingModel, FeatureType
-from kdp.enums import TabularAttentionPlacementOptions
+from kdp import TabularAttentionPlacementOptions
 
 features_specs = {
     # Numerical features
@@ -289,7 +300,7 @@ preprocessor = PreprocessingModel(
     <span class="topic-icon">⚡</span>
     <span class="topic-text">Transformer Blocks</span>
   </a>
-  <a href="feature-selection.md" class="topic-link">
+  <a href="../optimization/feature-selection.md" class="topic-link">
     <span class="topic-icon">🎯</span>
     <span class="topic-text">Feature Selection</span>
   </a>

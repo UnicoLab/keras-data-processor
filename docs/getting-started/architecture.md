@@ -91,6 +91,8 @@
   <div class="code-container">
 
 ```python
+from kdp import FeatureType, NumericalFeature, PreprocessingModel
+
 # This is your blueprint - tell KDP what you're working with
 features = {
     "age": FeatureType.FLOAT_NORMALIZED,          # Simple definition
@@ -204,7 +206,7 @@ preprocessor = PreprocessingModel(
     features_specs=features,
     use_distribution_aware=True,       # Smart distribution handling
     tabular_attention=True,            # Feature relationships
-    feature_selection_placement="all"  # Automatic feature importance
+    feature_selection_placement="all_features"  # Automatic feature importance
 )
 ```
 
@@ -255,12 +257,12 @@ preprocessor = PreprocessingModel(
 result = preprocessor.build_preprocessor()
 model = result["model"]  # Standard Keras model
 
-# Save for production
+# Save for production. The argument names a directory to write into.
 preprocessor.save_model("customer_preprocess_model")
 
-# Load anywhere
+# Load anywhere. You get the model back together with its metadata.
 from kdp import PreprocessingModel
-loaded = PreprocessingModel.load_model("customer_preprocess_model")
+loaded_model, metadata = PreprocessingModel.load_model("customer_preprocess_model")
 ```
 
   </div>
@@ -387,29 +389,36 @@ preprocessor = PreprocessingModel(
   </div>
 </div>
 
-### 🔄 Adaptive Learning
+### 🔄 Refreshing the Statistics
 
 <div class="decision-section">
   <div class="decision-description">
-    <p>KDP continually refines its understanding of your data:</p>
+    <p>Statistics are computed once, cached to <code>features_stats.json</code> and
+    reused on every later build. When the data moves underneath them, recompute
+    from the new file with <code>overwrite_stats=True</code>:</p>
   </div>
 
   <div class="code-container">
 
 ```python
-# Analyze additional data after initial build
-preprocessor.update_statistics(new_data)
+from kdp import PreprocessingModel
 
-# Preprocessor automatically adapts to:
-# - Shifting distributions
-# - New categorical values
-# - Changing relationships between features
+refreshed = PreprocessingModel(
+    path_data="data_including_the_new_rows.csv",
+    features_specs=features,
+    features_stats_path="features_stats.json",
+    overwrite_stats=True,          # recompute rather than load the cache
+)
+refreshed.build_preprocessor()
 ```
 
   </div>
 
   <div class="adaptive-note">
-    <p>This adaptive approach ensures your preprocessing remains optimal even as data evolves over time.</p>
+    <p>The statistics are a snapshot, not a running average: there is no
+    incremental update, so a refresh is a full recomputation over the data you
+    point it at. Schedule it whenever distributions shift, new categories appear,
+    or dates run past the range the cache was built from.</p>
   </div>
 </div>
 

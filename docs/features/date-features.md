@@ -3,539 +3,259 @@
 <div class="feature-header">
   <div class="feature-title">
     <h2>Date Features in KDP</h2>
-    <p>Extract powerful patterns from temporal data like timestamps, dates, and time series.</p>
+    <p>Turn date strings into cyclical encodings your model can actually learn from.</p>
   </div>
 </div>
 
 ## 📋 Overview
 
 <div class="overview-card">
-  <p>Date features transform timestamps and dates into ML-ready representations that capture important temporal patterns and seasonality. KDP automatically handles date parsing and formatting, enabling your models to learn from time-based signals.</p>
-</div>
-
-## 🚀 Date Processing Approaches
-
-<div class="approaches-container">
-  <div class="approach-card">
-    <span class="approach-icon">📆</span>
-    <h3>Component Extraction</h3>
-    <p>Breaking dates into day, month, year, etc.</p>
-  </div>
-
-  <div class="approach-card">
-    <span class="approach-icon">🔄</span>
-    <h3>Cyclical Encoding</h3>
-    <p>Representing cyclic time components (hour, weekday)</p>
-  </div>
-
-  <div class="approach-card">
-    <span class="approach-icon">📊</span>
-    <h3>Temporal Distances</h3>
-    <p>Computing time since reference points</p>
-  </div>
-
-  <div class="approach-card">
-    <span class="approach-icon">📈</span>
-    <h3>Seasonality Analysis</h3>
-    <p>Capturing seasonal patterns and trends</p>
-  </div>
+  <p>A date is a string until you encode it. KDP parses the column, splits it into year, month, day of month and day of week, and encodes each one <strong>cyclically</strong> &mdash; as a sine/cosine pair &mdash; so December and January sit next to each other rather than at opposite ends of a number line. Optionally it adds a one-hot season.</p>
 </div>
 
 ## 📝 Basic Usage
+
+The shorthand is enough for most columns:
 
 <div class="code-container">
 
 ```python
 from kdp import PreprocessingModel, FeatureType
 
-# Quick date feature definition
-features = {
-    "purchase_date": FeatureType.DATE,     # Transaction dates
-    "signup_date": FeatureType.DATE,       # User signup dates
-    "last_active": FeatureType.DATE        # Last activity timestamps
-}
-
-# Create your preprocessor
 preprocessor = PreprocessingModel(
-    path_data="customer_data.csv",
-    features_specs=features
+    path_data="data.csv",
+    features_specs={
+        "signup_date": FeatureType.DATE,
+    },
 )
+preprocessor.build_preprocessor()
 ```
 
 </div>
 
-## 🧠 Advanced Configuration
+Use the class when you need to set an option:
 
-<div class="advanced-section">
-  <p>For more control over date processing, use the <code>DateFeature</code> class:</p>
-
-  <div class="code-container">
+<div class="code-container">
 
 ```python
-from kdp.features import DateFeature
+from kdp import PreprocessingModel
+from kdp.features import DateFeature, FeatureType
 
-features = {
-    # Transaction date with component extraction
-    "transaction_date": DateFeature(
-        name="transaction_date",
-        feature_type=FeatureType.DATE,
-        add_day_of_week=True,      # Extract day of week
-        add_month=True,            # Extract month
-        add_quarter=True,          # Extract quarter
-        cyclical_encoding=True     # Use sine/cosine encoding for cyclical features
-    ),
-
-    # User signup date with time since reference
-    "signup_date": DateFeature(
-        name="signup_date",
-        feature_type=FeatureType.DATE,
-        add_time_since_reference=True,
-        reference_date="2020-01-01"  # Reference point
-    ),
-
-    # Event timestamp with hour component
-    "event_timestamp": DateFeature(
-        name="event_timestamp",
-        feature_type=FeatureType.DATE,
-        add_hour=True,             # Extract hour
-        add_day_of_week=True,      # Extract day of week
-        add_is_weekend=True        # Add weekend indicator
-    )
-}
+preprocessor = PreprocessingModel(
+    path_data="data.csv",
+    features_specs={
+        "signup_date": DateFeature(
+            name="signup_date",
+            feature_type=FeatureType.DATE,
+            format="YYYY-MM-DD",   # or "YYYY/MM/DD"
+            add_season=True,       # append a 4-dim one-hot season
+        ),
+    },
+)
+preprocessor.build_preprocessor()
 ```
 
-  </div>
 </div>
 
-## ⚙️ Key Configuration Parameters
+## ⚙️ Configuration Parameters
+
+`DateFeature` takes exactly two options. Anything else you pass is ignored.
 
 <div class="table-container">
-  <table class="config-table">
+  <table>
     <thead>
       <tr>
         <th>Parameter</th>
-        <th>Description</th>
+        <th>Type</th>
         <th>Default</th>
-        <th>Options</th>
+        <th>Description</th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td><code>add_year</code></td>
-        <td>Extract year component</td>
-        <td>False</td>
-        <td>Boolean</td>
+        <td><code>format</code></td>
+        <td>str</td>
+        <td><code>"YYYY-MM-DD"</code></td>
+        <td>Layout of the date string. Only <code>YYYY-MM-DD</code> and <code>YYYY/MM/DD</code> are supported; anything else raises at parse time.</td>
       </tr>
       <tr>
-        <td><code>add_month</code></td>
-        <td>Extract month component</td>
-        <td>False</td>
-        <td>Boolean</td>
-      </tr>
-      <tr>
-        <td><code>add_day</code></td>
-        <td>Extract day component</td>
-        <td>False</td>
-        <td>Boolean</td>
-      </tr>
-      <tr>
-        <td><code>add_day_of_week</code></td>
-        <td>Extract day of week</td>
-        <td>False</td>
-        <td>Boolean</td>
-      </tr>
-      <tr>
-        <td><code>add_hour</code></td>
-        <td>Extract hour component</td>
-        <td>False</td>
-        <td>Boolean</td>
-      </tr>
-      <tr>
-        <td><code>cyclical_encoding</code></td>
-        <td>Use sine/cosine encoding</td>
-        <td>False</td>
-        <td>Boolean</td>
-      </tr>
-      <tr>
-        <td><code>add_is_weekend</code></td>
-        <td>Add weekend indicator</td>
-        <td>False</td>
-        <td>Boolean</td>
+        <td><code>add_season</code></td>
+        <td>bool</td>
+        <td><code>False</code></td>
+        <td>Append a 4-dimensional one-hot season vector to the encoding.</td>
       </tr>
     </tbody>
   </table>
 </div>
 
-## 💡 Powerful Features
+!!! warning "Other date options do not exist"
+    Earlier documentation listed options such as `add_year`, `add_month`,
+    `add_day_of_week`, `add_hour`, `add_is_weekend`, `add_quarter`,
+    `cyclical_encoding`, `add_time_since_reference`, `reference_date` and
+    `time_since_unit`. None of them are read by KDP. `DateFeature` accepts
+    arbitrary keyword arguments without complaint, so passing them looks like
+    it works and silently changes nothing. Year, month, day of month and day
+    of week are **always** extracted and **always** cyclically encoded; that
+    is not configurable. For anything beyond that, use a
+    [custom preprocessing pipeline](../advanced/custom-preprocessing.md).
 
-<div class="power-features">
-  <div class="power-feature-card">
-    <h3>🔄 Cyclical Encoding</h3>
-    <p>Properly represent cyclical time components (like hour, day of week) using sine/cosine transformations:</p>
-    <div class="code-container">
+## 📐 What You Actually Get
+
+Each date column expands to a fixed-width block of floats:
+
+<div class="table-container">
+  <table>
+    <thead>
+      <tr>
+        <th>Configuration</th>
+        <th>Output width</th>
+        <th>Components</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Default</td>
+        <td><strong>8</strong></td>
+        <td>year, month, day of month, day of week &mdash; each as a <code>(sin, cos)</code> pair</td>
+      </tr>
+      <tr>
+        <td><code>add_season=True</code></td>
+        <td><strong>12</strong></td>
+        <td>the 8 above, plus a 4-dim one-hot season</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="code-container">
 
 ```python
-# Configure cyclical encoding for time components
-date_feature = DateFeature(
-    name="event_time",
-    feature_type=FeatureType.DATE,
-    add_hour=True,
-    add_day_of_week=True,
-    cyclical_encoding=True  # Enable cyclical encoding
-)
+import tensorflow as tf
 
-# Create preprocessor with cyclical date features
+# With add_season=True, "2021-06-15" encodes to 12 values:
+#   [sin_year, cos_year, sin_month, cos_month,
+#    sin_day, cos_day, sin_dow, cos_dow,
+#    season_0, season_1, season_2, season_3]
+output = preprocessor.model({"signup_date": tf.constant([["2021-06-15"]])})
+print(output.shape)   # (1, 12)
+```
+
+</div>
+
+### Why cyclical encoding
+
+Month 12 and month 1 are one step apart in reality but eleven apart as
+integers. Encoding each component as `(sin, cos)` places them adjacent on a
+circle, so a model can learn "end of year rolls into start of year" without
+having to memorise the discontinuity.
+
+## 🔗 Combining With Other Features
+
+### Feature selection
+
+Date features participate in learned feature selection:
+
+<div class="code-container">
+
+```python
+from kdp import FeatureType, PreprocessingModel
+
 preprocessor = PreprocessingModel(
-    path_data="events.csv",
-    features_specs={"event_time": date_feature}
+    path_data="data.csv",
+    features_specs={
+        "signup_date": FeatureType.DATE,
+        "amount": FeatureType.FLOAT_NORMALIZED,
+    },
+    feature_selection_placement="date",   # or "all_features"
+    feature_selection_units=32,
+    feature_selection_dropout=0.2,
 )
 ```
 
-    </div>
-  </div>
+</div>
 
-  <div class="power-feature-card">
-    <h3>📏 Time-Since Features</h3>
-    <p>Calculate time since reference points for meaningful temporal distances:</p>
-    <div class="code-container">
+Valid `feature_selection_placement` values are `"none"`, `"numeric"`,
+`"categorical"`, `"text"`, `"date"` and `"all_features"`.
+
+### Crossing a date with a categorical
+
+<div class="code-container">
 
 ```python
-# Compute days since reference date
-date_feature = DateFeature(
+from kdp import FeatureType, PreprocessingModel
+
+preprocessor = PreprocessingModel(
+    path_data="data.csv",
+    features_specs={
+        "signup_date": FeatureType.DATE,
+        "channel": FeatureType.STRING_CATEGORICAL,
+    },
+    feature_crosses=[("signup_date", "channel", 10)],
+)
+```
+
+</div>
+
+## 🛠️ Going Beyond the Built-in Encoding
+
+Need hour-of-day, a weekend flag, or days since a reference date? Those are
+not built in. Supply your own layers with `preprocessors`, which receives the
+raw string column:
+
+<div class="code-container">
+
+```python
+import keras
+from kdp.features import DateFeature, FeatureType
+
+DateFeature(
     name="signup_date",
     feature_type=FeatureType.DATE,
-    add_time_since_reference=True,
-    reference_date="2020-01-01",     # Fixed reference
-    time_since_unit="days"           # Unit for calculation
-)
-
-# Compute time since multiple references
-preprocessor = PreprocessingModel(
-    path_data="user_data.csv",
-    features_specs={
-        "signup_date": date_feature,
-        "last_purchase": DateFeature(
-            name="last_purchase",
-            add_time_since_reference=True,
-            reference_date="today",  # Dynamic reference (current date)
-            time_since_unit="days"
-        )
-    }
+    preprocessors=[MyDateParsingLayer, keras.layers.Dense],
+    units=16,           # forwarded to Dense
 )
 ```
 
-    </div>
-  </div>
 </div>
 
-## 🔧 Real-World Examples
+See [Custom Preprocessing Pipelines](../advanced/custom-preprocessing.md) for
+how `preprocessors` and forwarded keyword arguments work.
 
-<div class="examples-container">
-  <div class="example-card">
-    <h3>E-commerce Purchase Analysis</h3>
-    <div class="code-container">
+## ⏱️ Dates vs. Time Series
 
-```python
-# Analyze purchase patterns over time
-from kdp.features import DateFeature, NumericalFeature, CategoricalFeature
+A `DATE` feature encodes **one timestamp per row**, independently. If you need
+lags, rolling statistics or differencing across ordered rows, that is a
+[Time Series Feature](time_series_features.md) &mdash; where a date column
+serves as the `sort_by` key rather than as a feature itself.
 
-preprocessor = PreprocessingModel(
-    path_data="ecommerce_data.csv",
-    features_specs={
-        # Purchase date with rich time components
-        "purchase_date": DateFeature(
-            name="purchase_date",
-            add_day_of_week=True,
-            add_hour=True,
-            add_month=True,
-            add_is_weekend=True,
-            cyclical_encoding=True
-        ),
-
-        # User signup date to determine user tenure
-        "user_signup_date": DateFeature(
-            name="user_signup_date",
-            add_time_since_reference=True,
-            reference_date="today",
-            time_since_unit="days"
-        ),
-
-        # Additional features
-        "product_category": CategoricalFeature(
-            name="product_category",
-            feature_type=FeatureType.STRING_CATEGORICAL
-        ),
-        "purchase_amount": NumericalFeature(
-            name="purchase_amount",
-            feature_type=FeatureType.FLOAT_RESCALED
-        )
-    },
-
-    # Define crosses to capture time-based patterns
-    feature_crosses=[
-        ("purchase_date_day_of_week", "product_category", 16)
-    ]
-)
-```
-
-    </div>
-  </div>
-
-  <div class="example-card">
-    <h3>Time Series Forecasting</h3>
-    <div class="code-container">
-
-```python
-# Time series feature extraction for forecasting
-preprocessor = PreprocessingModel(
-    path_data="sensor_readings.csv",
-    features_specs={
-        # Timestamp with multiple components
-        "timestamp": DateFeature(
-            name="timestamp",
-            add_year=True,
-            add_month=True,
-            add_day=True,
-            add_hour=True,
-            add_day_of_week=True,
-            cyclical_encoding=True
-        ),
-
-        # Numerical features to predict
-        "value": NumericalFeature(
-            name="value",
-            feature_type=FeatureType.FLOAT_RESCALED,
-            use_distribution_aware=True
-        ),
-
-        # Additional context features
-        "sensor_id": CategoricalFeature(
-            name="sensor_id",
-            feature_type=FeatureType.STRING_CATEGORICAL
-        )
-    },
-
-    # Enable tabular attention for discovering temporal patterns
-    tabular_attention=True
-)
-```
-
-    </div>
-  </div>
-</div>
-
-## 💎 Pro Tips
+## 💡 Practical Notes
 
 <div class="pro-tips-grid">
   <div class="pro-tip-card">
-    <h3>🔍 Date Format Handling</h3>
-    <p>KDP automatically handles common date formats, but you can specify custom formats:</p>
-    <div class="code-container">
-
-```python
-# Handle custom date formats
-from datetime import datetime
-import pandas as pd
-
-# Convert dates to standard format before feeding to KDP
-def standardize_date(date_str):
-    try:
-        # Try parsing custom format
-        dt = datetime.strptime(date_str, "%d-%b-%Y")
-        return dt.strftime("%Y-%m-%d")
-    except:
-        return date_str
-
-# Apply standardization to your data
-data = pd.read_csv("custom_dates.csv")
-data["standard_date"] = data["custom_date"].apply(standardize_date)
-
-# Use standardized dates in KDP
-preprocessor = PreprocessingModel(
-    path_data=data,
-    features_specs={"standard_date": FeatureType.DATE}
-)
-```
-
-    </div>
+    <h4>Keep dates as strings in your CSV</h4>
+    <p>KDP parses the string itself. Pre-converting to epoch integers turns the column numeric and skips date handling entirely.</p>
   </div>
-
   <div class="pro-tip-card">
-    <h3>🧠 Feature Selection</h3>
-    <p>Use feature selection to identify important temporal patterns:</p>
-    <div class="code-container">
-
-```python
-# Determine which date components matter most
-preprocessor = PreprocessingModel(
-    path_data="events.csv",
-    features_specs={
-        "event_date": DateFeature(
-            name="event_date",
-            # Extract all potentially relevant components
-            add_year=True,
-            add_quarter=True,
-            add_month=True,
-            add_day=True,
-            add_day_of_week=True,
-            add_hour=True,
-            add_is_weekend=True
-        )
-    },
-    # Enable feature selection to identify important components
-    use_feature_selection=True,
-    feature_selection_strategy="gradient_based"
-)
-
-# After training, check feature importance
-result = preprocessor.build_preprocessor()
-importance = result["feature_importance"]
-print("Most important date components:", importance)
-```
-
-    </div>
+    <h4>Match the format exactly</h4>
+    <p>Only <code>YYYY-MM-DD</code> and <code>YYYY/MM/DD</code> parse. Normalise other layouts before writing the CSV.</p>
   </div>
-
   <div class="pro-tip-card">
-    <h3>➕ Cross Features</h3>
-    <p>Create crosses with date components to capture context-dependent patterns:</p>
-    <div class="code-container">
-
-```python
-# Cross date components with categorical features
-preprocessor = PreprocessingModel(
-    path_data="transactions.csv",
-    features_specs={
-        # Date with components
-        "transaction_date": DateFeature(
-            name="transaction_date",
-            add_day_of_week=True,
-            add_hour=True,
-            add_is_weekend=True
-        ),
-
-        # Categorical context
-        "store_location": FeatureType.STRING_CATEGORICAL,
-        "product_category": FeatureType.STRING_CATEGORICAL
-    },
-
-    # Define crosses to capture contextual patterns
-    feature_crosses=[
-        # Weekend shopping differs by location
-        ("transaction_date_is_weekend", "store_location", 16),
-
-        # Day of week impacts product category popularity
-        ("transaction_date_day_of_week", "product_category", 32),
-
-        # Hour of day impacts product selections
-        ("transaction_date_hour", "product_category", 32)
-    ]
-)
-```
-
-    </div>
+    <h4>add_season is cheap</h4>
+    <p>Four extra dimensions, no statistics needed. Worth enabling when seasonality plausibly matters.</p>
   </div>
-
   <div class="pro-tip-card">
-    <h3>🌍 Handling Timezones</h3>
-    <p>Standardize timezone handling for consistent date processing:</p>
-    <div class="code-container">
-
-```python
-# Standardize timezones before processing
-import pandas as pd
-from datetime import datetime
-import pytz
-
-# Convert timestamps to a standard timezone
-def standardize_timezone(timestamp_str, from_tz='UTC', to_tz='America/New_York'):
-    if pd.isna(timestamp_str):
-        return None
-
-    # Parse timestamp and set timezone
-    dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
-    if dt.tzinfo is None:
-        dt = pytz.timezone(from_tz).localize(dt)
-
-    # Convert to target timezone
-    dt = dt.astimezone(pytz.timezone(to_tz))
-    return dt.isoformat()
-
-# Apply timezone standardization
-data = pd.read_csv("global_events.csv")
-data["standardized_time"] = data["event_timestamp"].apply(
-    lambda x: standardize_timezone(x, from_tz='UTC', to_tz='America/New_York')
-)
-
-# Use standardized timestamps in KDP
-preprocessor = PreprocessingModel(
-    path_data=data,
-    features_specs={"standardized_time": FeatureType.DATE}
-)
-```
-
-    </div>
-  </div>
-</div>
-
-## 📊 Model Architecture
-
-<div class="architecture-diagram">
-  <div class="mermaid">
-    graph TD
-      A[Raw Date Data] -->|Parsing| B[Date Components]
-      B -->|Cyclical Encoding| C1[Sine/Cosine Components]
-      B -->|Direct Encoding| C2[Normalized Components]
-      B -->|Reference Distance| C3[Time Since Features]
-
-      C1 --> D[Date Representation]
-      C2 --> D
-      C3 --> D
-
-      style A fill:#f9f9f9,stroke:#ccc,stroke-width:2px
-      style B fill:#e3f2fd,stroke:#64b5f6,stroke-width:2px
-      style C1 fill:#e8f5e9,stroke:#66bb6a,stroke-width:2px
-      style C2 fill:#fff8e1,stroke:#ffd54f,stroke-width:2px
-      style C3 fill:#f3e5f5,stroke:#ce93d8,stroke-width:2px
-      style D fill:#e8eaf6,stroke:#7986cb,stroke-width:2px
-  </div>
-  <div class="diagram-caption">
-    <p>KDP processes dates by extracting components, applying appropriate transformations, and then combining them into a unified representation that captures temporal patterns.</p>
+    <h4>Dates need no statistics pass</h4>
+    <p>The encoding is deterministic, so nothing is learned from your data for this column.</p>
   </div>
 </div>
 
 ## 🔗 Related Topics
 
 <div class="related-topics">
-  <a href="numerical-features.md" class="topic-link">
-    <span class="topic-icon">🔢</span>
-    <span class="topic-text">Numerical Features</span>
-  </a>
-  <a href="cross-features.md" class="topic-link">
-    <span class="topic-icon">➕</span>
-    <span class="topic-text">Cross Features</span>
-  </a>
-  <a href="../advanced/tabular-attention.md" class="topic-link">
-    <span class="topic-icon">👁️</span>
-    <span class="topic-text">Tabular Attention</span>
-  </a>
-  <a href="../advanced/feature-selection.md" class="topic-link">
-    <span class="topic-icon">🎯</span>
-    <span class="topic-text">Feature Selection</span>
-  </a>
-</div>
-
----
-
-<div class="nav-container">
-  <a href="text-features.md" class="nav-button prev">
-    <span class="nav-icon">←</span>
-    <span class="nav-text">Text Features</span>
-  </a>
-  <a href="cross-features.md" class="nav-button next">
-    <span class="nav-text">Cross Features</span>
-    <span class="nav-icon">→</span>
-  </a>
+  <a href="time_series_features.md" class="topic-link">📊 Time Series Features</a>
+  <a href="cross-features.md" class="topic-link">➕ Cross Features</a>
+  <a href="../advanced/custom-preprocessing.md" class="topic-link">🛠️ Custom Preprocessing</a>
+  <a href="overview.md" class="topic-link">🛠️ Features Overview</a>
 </div>
 
 <style>

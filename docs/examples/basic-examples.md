@@ -5,6 +5,8 @@ Let us go trough some different examples of case scenarios. To get a feeling how
 ## Example 1: Numerical features
 
 ```python
+import tensorflow as tf
+
 from kdp.features import NumericalFeature, FeatureType
 from kdp.processor import PreprocessingModel, OutputModeOptions
 
@@ -70,7 +72,7 @@ ppr = PreprocessingModel(
     overwrite_stats=True,
     output_mode=OutputModeOptions.CONCAT,
 
-    # Add feature selection to get the most important features
+    # Gate every feature through a variable-selection layer
     feature_selection_placement="numeric", # Choose between (all_features|numeric|categorical)
     feature_selection_units=32,
     feature_selection_dropout=0.10,
@@ -88,6 +90,22 @@ ppr = PreprocessingModel(
 result = ppr.build_preprocessor()
 
 # Transform data using direct model prediction
+# A batch is one entry per feature. String features need string values, so
+# build each column from the feature's own type.
+def _sample(feature):
+    ft = getattr(feature, "feature_type", feature)
+    name = ft.name if hasattr(ft, "name") else str(ft)
+    if name == "STRING_CATEGORICAL":
+        return tf.constant([["a"]])
+    if name == "INTEGER_CATEGORICAL":
+        return tf.constant([[0]], dtype=tf.int32)
+    if name == "TEXT":
+        return tf.constant([["some text"]])
+    if name == "DATE":
+        return tf.constant([["2021-06-15"]])
+    return tf.constant([[0.0]])
+
+test_batch = {name: _sample(feature) for name, feature in features.items()}
 transformed_data = ppr.model.predict(test_batch)
 
 # Get feature importances
@@ -181,6 +199,22 @@ ppr = PreprocessingModel(
 result = ppr.build_preprocessor()
 
 # Transform data using direct model prediction
+# A batch is one entry per feature. String features need string values, so
+# build each column from the feature's own type.
+def _sample(feature):
+    ft = getattr(feature, "feature_type", feature)
+    name = ft.name if hasattr(ft, "name") else str(ft)
+    if name == "STRING_CATEGORICAL":
+        return tf.constant([["a"]])
+    if name == "INTEGER_CATEGORICAL":
+        return tf.constant([[0]], dtype=tf.int32)
+    if name == "TEXT":
+        return tf.constant([["some text"]])
+    if name == "DATE":
+        return tf.constant([["2021-06-15"]])
+    return tf.constant([[0.0]])
+
+test_batch = {name: _sample(feature) for name, feature in features.items()}
 transformed_data = ppr.model.predict(test_batch)
 
 # Get feature importances
@@ -296,6 +330,8 @@ Normally the distribution aware encoder works well in automatic mode, once use_d
 However we can also manually set the prefered distribution for each numerical feature if we would like to.
 
 ```python
+import tensorflow as tf
+
 from kdp.features import NumericalFeature, FeatureType
 from kdp.processor import PreprocessingModel, OutputModeOptions
 from kdp.layers.distribution_aware_encoder_layer import DistributionAwareEncoder
@@ -314,7 +350,7 @@ features = {
         name="rescaled_float",
         feature_type=FeatureType.FLOAT_RESCALED,
         scale=2.0,
-        prefered_distribution="gamma"
+        preferred_distribution="gamma"
     ),
     # 3. Custom preprocessing pipeline with a custom set normal distribution
     "custom_float": NumericalFeature(
@@ -323,13 +359,13 @@ features = {
         preprocessors=[
             tf.keras.layers.Rescaling,
             tf.keras.layers.Normalization,
-            DistributionAwareEncoder,
+            DistributionAwareEncoder,  # from kdp.layers
         ],
         bin_boundaries=[0.0, 1.0, 2.0],
         mean=0.0,
         variance=1.0,
         scale=4.0,
-        prefered_distribution="normal"
+        preferred_distribution="normal"
     ),
 }
 
@@ -341,7 +377,7 @@ ppr = PreprocessingModel(
     overwrite_stats=True,
     output_mode=OutputModeOptions.CONCAT,
 
-    # Add feature selection to get the most important features
+    # Gate every feature through a variable-selection layer
     feature_selection_placement="numeric", # Choose between (all_features|numeric|categorical)
 
     # Add tabular attention to check for feature interactions
@@ -355,6 +391,22 @@ ppr = PreprocessingModel(
 result = ppr.build_preprocessor()
 
 # Transform data using direct model prediction
+# A batch is one entry per feature. String features need string values, so
+# build each column from the feature's own type.
+def _sample(feature):
+    ft = getattr(feature, "feature_type", feature)
+    name = ft.name if hasattr(ft, "name") else str(ft)
+    if name == "STRING_CATEGORICAL":
+        return tf.constant([["a"]])
+    if name == "INTEGER_CATEGORICAL":
+        return tf.constant([[0]], dtype=tf.int32)
+    if name == "TEXT":
+        return tf.constant([["some text"]])
+    if name == "DATE":
+        return tf.constant([["2021-06-15"]])
+    return tf.constant([[0.0]])
+
+test_batch = {name: _sample(feature) for name, feature in features.items()}
 transformed_data = ppr.model.predict(test_batch)
 
 # Get feature importances
@@ -374,6 +426,9 @@ Numerical embedding is a technique that allows us to embed numerical features in
 This can be useful for capturing non-linear relationships within/between numerical feature/s.
 
 ```python
+from kdp.layers import DistributionAwareEncoder
+import tensorflow as tf
+
 from kdp.features import NumericalFeature, FeatureType
 from kdp.processor import PreprocessingModel, OutputModeOptions
 
@@ -397,8 +452,11 @@ features = {
         preprocessors=[
             tf.keras.layers.Rescaling,
             tf.keras.layers.Normalization,
-            DistributionAwareEncoder,
+            DistributionAwareEncoder,  # from kdp.layers
         ],
+        # Extra keyword arguments are forwarded to the layer that accepts them.
+        # Rescaling has no default scale, so it has to be supplied.
+        scale=1.0,
     ),
 }
 
@@ -422,6 +480,22 @@ ppr = PreprocessingModel(
 result = ppr.build_preprocessor()
 
 # Transform data using direct model prediction
+# A batch is one entry per feature. String features need string values, so
+# build each column from the feature's own type.
+def _sample(feature):
+    ft = getattr(feature, "feature_type", feature)
+    name = ft.name if hasattr(ft, "name") else str(ft)
+    if name == "STRING_CATEGORICAL":
+        return tf.constant([["a"]])
+    if name == "INTEGER_CATEGORICAL":
+        return tf.constant([[0]], dtype=tf.int32)
+    if name == "TEXT":
+        return tf.constant([["some text"]])
+    if name == "DATE":
+        return tf.constant([["2021-06-15"]])
+    return tf.constant([[0.0]])
+
+test_batch = {name: _sample(feature) for name, feature in features.items()}
 transformed_data = ppr.model.predict(test_batch)
 
 # Get feature importances

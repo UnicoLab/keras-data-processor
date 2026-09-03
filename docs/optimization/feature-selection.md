@@ -2,7 +2,7 @@
 
 ## 📋 Quick Overview
 
-Feature Selection in KDP automatically identifies and prioritizes your most important features, cutting through the noise to focus on what really drives your predictions. Built on the advanced Gated Residual Variable Selection Network (GRVSN) architecture, it's like having a data scientist automatically analyze your feature importance.
+Feature Selection puts a Gated Residual Variable Selection Network (GRVSN) in front of your features, so the model learns a gate for each one instead of consuming it raw. The gates are trainable weights of the preprocessor, which lets a downstream model attenuate features it does not need. See the note below on what the reported weights do, and do not, tell you today.
 
 ## ✨ Key Benefits
 
@@ -42,13 +42,18 @@ preprocessor = PreprocessingModel(
 result = preprocessor.build_preprocessor()
 model = result["model"]
 
-# Now you can see which features matter most!
-importances = preprocessor.get_feature_importances()
-print("Top features:", sorted(
-    importances.items(),
-    key=lambda x: x[1],
-    reverse=True
-)[:3])  # Shows your 3 most important features
+# Importances are a per-row softmax, so they need a batch to score
+import tensorflow as tf
+
+importances = preprocessor.get_feature_importances({
+    "age": tf.constant([[35.0]]),
+    "income": tf.constant([[70000.0]]),
+    "education": tf.constant([["bsc"]]),
+    "occupation": tf.constant([["engineer"]]),
+    "marital_status": tf.constant([["single"]]),
+    "last_purchase": tf.constant([["2021-06-15"]]),
+})
+print(sorted(importances.items(), key=lambda x: x[1], reverse=True)[:3])
 ```
 
 ## 🧩 Architecture
@@ -60,12 +65,30 @@ Feature Selection can be applied at different points in your KDP pipeline:
 preprocessor = PreprocessingModel(
     features_specs=features,
     feature_selection_placement="all_features",
-    feature_selection_method="correlation",
-    feature_selection_threshold=0.01
+    feature_selection_units=32,        # width of the selection network
+    feature_selection_dropout=0.2,     # dropout inside it
 )
 ```
 
-*Note: Feature selection integrates directly into your model architecture. The importance scores are calculated during training and can be visualized using the provided utility methods.*
+*Note: selection is learned, not statistical &mdash; a `VariableSelection` layer
+is added to the graph and its weights are trained with the rest of your model.
+There is no correlation filter or threshold; `feature_selection_placement`
+chooses which feature groups get the layer, and the two parameters above size
+it. Valid placements are `"none"`, `"numeric"`, `"categorical"`, `"text"`,
+`"date"` and `"all_features"`.*
+
+!!! info "How the weights are produced"
+    Each feature passes through its own gated residual transform, and then a
+    single softmax scores every selected feature against the others. The scores
+    sum to `1.0` across features and scale each feature's output, so
+    `get_feature_importances()` returns a share per feature that you can rank.
+    They are computed per row, so they depend on the batch you pass.
+
+    A model with only one selected feature has nothing to compare against, and
+    that feature's weight is `1.0`.
+
+    Calling it without a batch returns a description of each weight tensor
+    instead, which is what earlier releases always returned.
 
 ## 🎛️ Configuration Options
 
@@ -93,6 +116,8 @@ Choose where to apply feature selection with the `feature_selection_placement` p
 ### Customer Churn Prediction
 
 ```python
+from kdp import FeatureType, PreprocessingModel
+
 # Perfect for churn prediction with many potential factors
 preprocessor = PreprocessingModel(
     path_data="customer_data.csv",
@@ -117,12 +142,15 @@ preprocessor = PreprocessingModel(
 )
 
 # After building, analyze what drives churn
+preprocessor.build_preprocessor()
 importances = preprocessor.get_feature_importances()
 ```
 
 ### Medical Diagnosis Support
 
 ```python
+from kdp import FeatureType, PreprocessingModel
+
 # For medical applications where feature interpretation is critical
 preprocessor = PreprocessingModel(
     path_data="patient_data.csv",
@@ -142,27 +170,39 @@ preprocessor = PreprocessingModel(
     feature_selection_dropout=0.2,
 
     # Medical applications benefit from careful regularization
-    use_numerical_embedding=True,
-    numerical_embedding_dim=32
+    use_advanced_numerical_embedding=True,
+    embedding_dim=32
 )
 ```
 
-## 📊 Visualizing Feature Importance
+## 📊 Inspecting the Selection Layers
 
-KDP provides utilities to visualize which features are most important:
+`get_feature_importances()` is the only accessor: it returns a plain
+`{feature_name: weight}` dictionary, which you can chart with whatever plotting
+library you already use.
 
 ```python
-# After building and training your preprocessor
-feature_importance = preprocessor.get_feature_importance()
+import matplotlib.pyplot as plt
 
-# Visualize the importance scores
-preprocessor.plot_feature_importance()
+importances = preprocessor.get_feature_importances()
 
-# Get the top N most important features
-top_features = preprocessor.get_top_features(n=10)
+names = list(importances)
+plt.barh(names, [importances[name] for name in names])
+plt.xlabel("selection weight")
+plt.tight_layout()
+plt.savefig("feature_importances.png")
 ```
 
-*Note: The feature importance visualization shows a bar chart with features sorted by their importance scores, helping you identify which features contribute most to your model's performance.*
+To see where the selection layers sit in the graph, write the architecture out
+as an image:
+
+```python
+preprocessor.plot_model("preprocessor_architecture.png")
+```
+
+!!! note "The chart depends on the batch"
+    The scores are a softmax computed per row, so the chart reflects the batch
+    you pass. Score a representative sample rather than a single record.
 
 ## 💡 Pro Tips for Feature Selection
 
@@ -182,20 +222,20 @@ top_features = preprocessor.get_top_features(n=10)
    preprocessor = PreprocessingModel(
        features_specs=many_features,
        feature_selection_placement="numeric",  # Start with just numerical
-       enable_caching=True  # Speed up repeated processing
+       use_caching=True  # Speed up repeated processing
    )
    ```
 
 3. **Progressive Feature Refinement**
+
+   Score a representative batch, keep the features that carry weight, and build
+   the refined preprocessor over those. Corroborate with your downstream model
+   where the decision matters: these scores come from an untrained preprocessor
+   unless you have trained it as part of a larger model.
+
    ```python
-   # First run to identify important features
-   importances = first_preprocessor.get_feature_importances()
-
-   # Keep only features with importance > 0.05
-   important_features = {k: v for k, v in features.items()
-                        if importances.get(k, 0) > 0.05}
-
-   # Create refined model with just important features
+   # importances = preprocessor.get_feature_importances(batch)
+   # important_features = {k: v for k, v in features.items() if importances[k] > 0.05}
    refined_preprocessor = PreprocessingModel(
        features_specs=important_features,
        # More advanced processing now with fewer features
@@ -212,6 +252,7 @@ top_features = preprocessor.get_top_features(n=10)
 
    # Save importance scores with timestamp
    def log_importances(preprocessor, name):
+       preprocessor.build_preprocessor()
        importances = preprocessor.get_feature_importances()
        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
        with open(f"importance_{name}_{timestamp}.json", "w") as f:

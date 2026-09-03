@@ -5,6 +5,7 @@ This allows for automatic documentation generation directly from the code.
 """
 
 import importlib
+import pathlib
 import os
 import re
 import inspect
@@ -16,17 +17,43 @@ project_root = str(Path(__file__).resolve().parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-MODULES_TO_DOCUMENT = [
+# Hand-listed modules that are not layers.
+CORE_MODULES = [
     "kdp.processor",
     "kdp.dynamic_pipeline",
     "kdp.features",
-    "kdp.layers.distribution_aware_encoder_layer",
-    "kdp.layers.distribution_transform_layer",
-    "kdp.layers.global_numerical_embedding_layer",
-    "kdp.layers.numerical_embedding_layer",
-    "kdp.layers.tabular_attention_layer",
-    "kdp.layers.multi_resolution_tabular_attention_layer",
+    "kdp.stats",
+    "kdp.auto_config",
+    "kdp.model_advisor",
+    "kdp.moe",
+    "kdp.pipeline",
+    "kdp.layers_factory",
+    "kdp.inference.base",
+    "kdp.time_series.inference",
 ]
+
+
+def _layer_modules() -> list[str]:
+    """Every layer module under kdp/layers, including the time series ones.
+
+    Listing them by hand meant fourteen of the twenty layer modules were never
+    documented; discovering them keeps the reference complete as layers are
+    added.
+    """
+    import kdp.layers
+
+    roots = [pathlib.Path(kdp.layers.__file__).parent]
+    found = []
+    for root in roots:
+        for path in sorted(root.rglob("*.py")):
+            if path.name == "__init__.py":
+                continue
+            relative = path.relative_to(root).with_suffix("")
+            found.append("kdp.layers." + ".".join(relative.parts))
+    return found
+
+
+MODULES_TO_DOCUMENT = CORE_MODULES + _layer_modules()
 
 
 def docstring_to_markdown(docstring):
@@ -162,12 +189,31 @@ def extract_module_docs(module, output_dir):
     module_name = module.__name__.split(".")[-1]
 
     # Create output directory if it doesn't exist
-    (Path(output_dir) / "api").mkdir(exist_ok=True, parents=True)
+    api_dir = Path(output_dir) / "api"
+    api_dir.mkdir(exist_ok=True, parents=True)
+
+    # The index is built by globbing this directory, so a page left behind by a
+    # class that has since been removed or moved stays in the published API
+    # reference forever. Clear this module's pages and write only what exists.
+    current = {
+        f"{module_name}_{name}.md"
+        for name, obj in inspect.getmembers(module, predicate=inspect.isclass)
+        if obj.__module__ == module.__name__ and not name.startswith("_")
+    }
+    for stale in api_dir.glob(f"{module_name}_*.md"):
+        if stale.name not in current:
+            stale.unlink()
+            print(f"Removed stale page {stale}")
 
     # Find all classes in the module
     for name, obj in inspect.getmembers(module, predicate=inspect.isclass):
         # Skip imported classes
         if obj.__module__ != module.__name__:
+            continue
+
+        # Skip private helpers: they are implementation detail, and publishing
+        # them puts names users cannot import into the API index.
+        if name.startswith("_"):
             continue
 
         # Generate documentation
@@ -176,7 +222,11 @@ def extract_module_docs(module, output_dir):
         # Write to file
         output_file = Path(output_dir) / "api" / f"{module_name}_{name}.md"
         with open(output_file, "w") as f:
-            f.write(docs)
+            # Exactly one newline at the end. Each class section is appended
+            # with a trailing blank line, so the file used to end with two --
+            # which `end-of-file-fixer` strips, so every regeneration left the
+            # tree dirty and the pre-commit CI job failed on it.
+            f.write(docs.rstrip() + "\n")
 
         print(f"Generated docs for {module.__name__}.{name} at {output_file}")
 
@@ -191,27 +241,36 @@ def generate_module_index(modules, output_dir):
     """
     output_file = Path(output_dir) / "api_index.md"
 
+    lines = [
+        "# API Reference",
+        "",
+        "This section provides detailed API documentation extracted directly "
+        "from the codebase.",
+        "",
+    ]
+
+    for module in modules:
+        module_name = module.__name__
+        lines += [f"## {module_name}", ""]
+
+        # Find all documented classes in this module
+        doc_dir = Path(output_dir) / "api"
+        module_short_name = module_name.split(".")[-1]
+
+        # List documented classes
+        for doc_file in sorted(doc_dir.glob(f"{module_short_name}_*.md")):
+            # Strip the module prefix rather than splitting on the first
+            # underscore -- every multi-word module name (for example
+            # distribution_aware_encoder_layer) was otherwise cut mid-name.
+            class_name = doc_file.stem[len(module_short_name) + 1 :]
+            relative_path = os.path.relpath(doc_file, Path(output_dir))
+            lines.append(f"- [{class_name}]({relative_path})")
+
+        lines.append("")
+
+    # One trailing newline, so `end-of-file-fixer` has nothing to change.
     with open(output_file, "w") as f:
-        f.write("# API Reference\n\n")
-        f.write(
-            "This section provides detailed API documentation extracted directly from the codebase.\n\n",
-        )
-
-        for module in modules:
-            module_name = module.__name__
-            f.write(f"## {module_name}\n\n")
-
-            # Find all documented classes in this module
-            doc_dir = Path(output_dir) / "api"
-            module_short_name = module_name.split(".")[-1]
-
-            # List documented classes
-            for doc_file in sorted(doc_dir.glob(f"{module_short_name}_*.md")):
-                class_name = doc_file.stem.split("_", 1)[1]
-                relative_path = os.path.relpath(doc_file, Path(output_dir))
-                f.write(f"- [{class_name}]({relative_path})\n")
-
-            f.write("\n")
+        f.write("\n".join(lines).rstrip() + "\n")
 
     print(f"Generated API index at {output_file}")
 

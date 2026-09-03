@@ -29,11 +29,21 @@ from kdp.features import (
     FeatureType,
     NumericalFeature,
     PassthroughFeature,
+    # Re-exported: `kdp.processor` used to define a second class of this name
+    # whose members were different values, so an import from the wrong module
+    # produced an option that silently did nothing.
+    TextVectorizerOutputOptions,
 )
 from kdp.layers_factory import PreprocessorLayerFactory
 from kdp.pipeline import FeaturePreprocessor
 from kdp.stats import DatasetStatistics
-from kdp.moe import FeatureMoE, StackFeaturesLayer, UnstackLayer
+from kdp.moe import (
+    FeatureMoE,
+    PadFeatureLayer,
+    PerFeatureDense,
+    StackFeaturesLayer,
+    UnstackLayer,
+)
 
 
 def _to_tensor_mapping(data: dict) -> dict:
@@ -108,14 +118,6 @@ class OutputModeOptions(str, Enum):
     DICT = "dict"
 
 
-class TextVectorizerOutputOptions(str, Enum):
-    """Output options for text vectorization."""
-
-    TF_IDF = "tf_idf"
-    INT = "int"
-    MULTI_HOT = "multi_hot"
-
-
 class TransformerBlockPlacementOptions(str, Enum):
     """Placement options for transformer blocks."""
 
@@ -142,6 +144,41 @@ class FeatureSelectionPlacementOptions(str, Enum):
     TEXT = "text"
     DATE = "date"
     ALL_FEATURES = "all_features"
+
+
+def _validate_option(value, options, param_name: str) -> str:
+    """Normalise a placement/mode option and reject anything unrecognised.
+
+    These are compared against the option constants by string equality, so a
+    value that merely looks right -- "all" instead of "all_features" -- matched
+    nothing and the feature it controls was silently skipped rather than
+    raising.
+
+    Args:
+        value: The caller-supplied option, in any casing.
+        options: The class holding the valid string constants.
+        param_name: Name of the parameter, used in the error message.
+
+    Returns:
+        str: The canonical option value.
+
+    Raises:
+        ValueError: If the value is not one of the valid options.
+    """
+    valid = {
+        v.value if isinstance(v, Enum) else v
+        for k, v in vars(options).items()
+        if not k.startswith("_") and isinstance(v, str | Enum)
+    }
+    if isinstance(value, Enum):
+        value = value.value
+    if isinstance(value, str):
+        for option in valid:
+            if value.lower() == option.lower():
+                return option
+    raise ValueError(
+        f"Unsupported {param_name} {value!r}. Expected one of {sorted(valid)}.",
+    )
 
 
 class PreprocessingModel:
@@ -201,6 +238,7 @@ class PreprocessingModel:
         feature_moe_freeze_experts: bool = False,
         feature_moe_use_residual: bool = True,
         include_passthrough_in_output: bool = True,
+        name: str = "preprocessor",
     ) -> None:
         """Initialize a preprocessing model.
 
@@ -263,6 +301,10 @@ class PreprocessingModel:
             feature_moe_dropout (float): Dropout rate applied inside the mixture of experts.
             feature_moe_freeze_experts (bool): Whether expert weights are frozen during training.
             feature_moe_use_residual (bool): Whether to add a residual connection around the mixture.
+            name (str): Name given to the built Keras model. Keras requires
+                operation names to be unique within a graph, so give each
+                preprocessor its own name when combining several in one model
+                (a two-tower recommender, for example).
             include_passthrough_in_output (bool): Whether passthrough features appear in the model output.
         """
         self.path_data = path_data
@@ -287,11 +329,19 @@ class PreprocessingModel:
         self.tabular_attention_heads = tabular_attention_heads
         self.tabular_attention_dim = tabular_attention_dim
         self.tabular_attention_dropout = tabular_attention_dropout
-        self.tabular_attention_placement = tabular_attention_placement
+        self.tabular_attention_placement = _validate_option(
+            tabular_attention_placement,
+            TabularAttentionPlacementOptions,
+            "tabular_attention_placement",
+        )
         self.tabular_attention_embedding_dim = tabular_attention_embedding_dim
 
         # feature selection control
-        self.feature_selection_placement = feature_selection_placement
+        self.feature_selection_placement = _validate_option(
+            feature_selection_placement,
+            FeatureSelectionPlacementOptions,
+            "feature_selection_placement",
+        )
         self.feature_selection_units = feature_selection_units
         self.use_distribution_aware = use_distribution_aware
         self.distribution_aware_bins = distribution_aware_bins
@@ -332,6 +382,7 @@ class PreprocessingModel:
 
         # Passthrough features control
         self.include_passthrough_in_output = include_passthrough_in_output
+        self.model_name = name
 
         # Initialize feature type lists
         self.numeric_features = []
@@ -349,7 +400,15 @@ class PreprocessingModel:
         self.processed_features = {}  # All processed features before final output
         self.passthrough_outputs = {}  # Passthrough features (unprocessed)
         self.concat_all = None  # Final concatenated output for CONCAT mode
+        self.model = None  # Set by build_preprocessor
         self._preprocessed_cache = {} if use_caching else None
+
+        # `_monitor_performance` measured the time and GPU memory of every step
+        # it wrapped and then wrote them to a debug log, so `get_timing_metrics`
+        # and `get_memory_usage` -- both of which the documentation shows -- had
+        # nothing to read and did not exist. The measurements are kept here now.
+        self._step_seconds: dict[str, float] = {}
+        self._step_memory_bytes: dict[str, int] = {}
 
         if log_to_file:
             logger.info("Logging to file enabled")
@@ -421,6 +480,16 @@ class PreprocessingModel:
                 # Calculate metrics
                 execution_time = end_time - start_time
                 memory_used = end_memory - start_memory
+
+                # Keep the measurements as well as logging them; the getters
+                # below are the documented way to read them back.
+                self._step_seconds[func.__name__] = (
+                    self._step_seconds.get(func.__name__, 0.0) + execution_time
+                )
+                self._step_memory_bytes[func.__name__] = max(
+                    self._step_memory_bytes.get(func.__name__, 0),
+                    memory_used,
+                )
 
                 # Log performance metrics
                 logger.debug(
@@ -637,76 +706,6 @@ class PreprocessingModel:
                     logger.error(f"Error processing feature {feature_name}: {str(e)}")
                     raise
 
-    def _parallel_setup_inputs(self, features_dict: dict[str, dict]) -> None:
-        """Set up inputs for features in parallel.
-
-        Args:
-            features_dict: Dictionary of feature names and their stats
-        """
-
-        def setup_input(feature_name: str, stats: dict) -> None:
-            dtype = stats.get("dtype", tf.string)  # Default to string if not specified
-            self._add_input_column(feature_name=feature_name, dtype=dtype)
-            self._add_input_signature(feature_name=feature_name, dtype=dtype)
-
-        with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
-            futures = []
-            for feature_name, stats in features_dict.items():
-                futures.append(executor.submit(setup_input, feature_name, stats))
-
-            # Wait for all futures to complete
-            for future in futures:
-                future.result()
-
-    @_monitor_performance
-    def _process_features_parallel(self, features_dict: dict) -> None:
-        """Process multiple features in parallel using thread pools.
-
-        Args:
-            features_dict: Dictionary of feature names and their stats
-        """
-        # Group features by type
-        numeric_features = []
-        categorical_features = []
-        text_features = []
-        date_features = []
-        passthrough_features = []
-        time_series_features = []  # Add time series features list
-
-        for feature_name, stats in features_dict.items():
-            if "mean" in stats:
-                numeric_features.append((feature_name, stats))
-            elif "vocab" in stats and feature_name not in self.text_features:
-                categorical_features.append((feature_name, stats))
-            elif feature_name in self.text_features:
-                text_features.append((feature_name, stats))
-            elif feature_name in self.date_features:
-                date_features.append((feature_name, stats))
-            elif feature_name in self.time_series_features:
-                time_series_features.append(
-                    (feature_name, stats),
-                )  # Handle time series features
-            elif feature_name in self.passthrough_features:
-                passthrough_features.append((feature_name, stats))
-
-        # Set up inputs in parallel
-        self._parallel_setup_inputs(features_dict)
-
-        # Process each feature type in parallel
-        feature_groups = [
-            (numeric_features, "numeric"),
-            (categorical_features, "categorical"),
-            (text_features, "text"),
-            (date_features, "date"),
-            (time_series_features, "time_series"),  # Add time series feature group
-            (passthrough_features, "passthrough"),
-        ]
-
-        for features, feature_type in feature_groups:
-            if features:
-                logger.info(f"Processing {feature_type} features in parallel")
-                self._process_feature_batch(features, feature_type)
-
     def _create_feature_preprocessor(
         self,
         feature_name: str,
@@ -773,7 +772,10 @@ class PreprocessingModel:
         if apply_selection:
             feature_selector = PreprocessorLayerFactory.variable_selection_layer(
                 name=f"{feature_name}_feature_selection",
-                nr_features=1,  # Single feature for now
+                # One feature per selector: this gates a feature against
+                # itself. The features are scored against each other
+                # afterwards, in `_score_features_against_each_other`.
+                nr_features=1,
                 units=self.feature_selection_units,
                 dropout_rate=self.feature_selection_dropout,
             )
@@ -833,8 +835,16 @@ class PreprocessingModel:
                     stats,
                 )
 
-        # Check for advanced numerical embedding.
-        if self.use_advanced_numerical_embedding:
+        # Check for advanced numerical embedding. `NumericalFeature` carries a
+        # `use_embedding` flag with an `embedding_dim` beside it, and nothing
+        # read it: a feature asking for its own embedding was handed straight
+        # through at its original width. It turns the embedding on for that one
+        # feature now, as the model-level switch does for all of them.
+        if self.use_advanced_numerical_embedding or getattr(
+            _feature,
+            "use_embedding",
+            False,
+        ):
             self._add_advanced_numerical_embedding(
                 preprocessor,
                 feature_name,
@@ -1028,19 +1038,40 @@ class PreprocessingModel:
             input_layer: Input layer for the feature
         """
         logger.info(f"Using NumericalEmbedding for {feature_name}")
-        # Obtain the embedding layer.
-        embedding_layer = feature.get_embedding_layer(input_shape=input_layer.shape)
+        # These were passed to `add_processing_step` below, where the layer
+        # creator ignored every keyword argument and returned an already-built
+        # layer, so none of them reached the embedding. They are handed to the
+        # feature instead, which uses them for whatever it did not set itself.
+        embedding_layer = feature.get_embedding_layer(
+            input_shape=input_layer.shape,
+            defaults={
+                "embedding_dim": self.embedding_dim,
+                "mlp_hidden_units": self.mlp_hidden_units,
+                "num_bins": self.num_bins,
+                "init_min": self.init_min,
+                "init_max": self.init_max,
+                "dropout_rate": self.dropout_rate,
+                "use_batch_norm": self.use_batch_norm,
+            },
+        )
         preprocessor.add_processing_step(
             layer_creator=lambda **kwargs: embedding_layer,
             layer_class="NumericalEmbedding",
             name=f"advanced_embedding_{feature_name}",
-            embedding_dim=self.embedding_dim,
-            mlp_hidden_units=self.mlp_hidden_units,
-            num_bins=self.num_bins,
-            init_min=self.init_min,
-            init_max=self.init_max,
-            dropout_rate=self.dropout_rate,
-            use_batch_norm=self.use_batch_norm,
+        )
+
+        # `NumericalEmbedding` embeds each column it is given, so a feature that
+        # arrives one column wide comes back rank 2 while a discretised one --
+        # ten one-hot columns -- comes back rank 3. Mixing the two then failed
+        # in `Concatenate`, and a model of only discretised features silently
+        # produced a three-dimensional output. Flattening makes every numeric
+        # feature rank 2; it is a no-op for the ones already there.
+        preprocessor.add_processing_step(
+            layer_creator=lambda **kwargs: keras.layers.Flatten(
+                name=f"flatten_advanced_embedding_{feature_name}",
+            ),
+            layer_class="Flatten",
+            name=f"flatten_advanced_embedding_{feature_name}",
         )
 
     @_monitor_performance
@@ -1118,14 +1149,22 @@ class PreprocessingModel:
         if feature.category_encoding == CategoryEncodingOptions.HASHING:
             return
 
-        # Handle empty vocabulary by providing a fallback
+        # An empty vocabulary means the statistics pass saw no values at all in
+        # this column. It used to be replaced with `["<UNK>"]`, which for a
+        # string feature encoded every real value to the out-of-vocabulary slot
+        # -- a constant column, silently -- and for an integer feature crashed
+        # inside Keras with "invalid literal for int() with base 10". A column
+        # that merely holds empty strings is a different thing: its vocabulary
+        # is `[""]`, not empty, and it builds.
         if not vocab:
-            logger.warning(
-                f"Empty vocabulary for categorical feature '{feature_name}'. "
-                "Using fallback vocabulary with placeholder values.",
+            raise ValueError(
+                f"Categorical feature {feature_name!r} has an empty "
+                "vocabulary: the statistics pass found no values in that "
+                "column. Check that the training data has rows and that the "
+                "column is present in them, or use "
+                "category_encoding=CategoryEncodingOptions.HASHING, which "
+                "needs no vocabulary.",
             )
-            # Provide a minimal vocabulary with unknown/placeholder values
-            vocab = ["<UNK>"]
 
         # Default behavior if no specific preprocessing is defined
         if feature.feature_type == FeatureType.STRING_CATEGORICAL:
@@ -1242,6 +1281,46 @@ class PreprocessingModel:
                 name=f"cast_to_float_{feature_name}",
             )
 
+    def _adapted_text_vectorizer(
+        self,
+        feature_name: str,
+        **kwargs: Any,
+    ) -> keras.layers.TextVectorization:
+        """Build a `TextVectorization` adapted on one column of the data.
+
+        Args:
+            feature_name: The column to read.
+            **kwargs: Passed to `TextVectorization`.
+
+        Returns:
+            A layer whose vocabulary and IDF weights come from the data.
+
+        Raises:
+            ValueError: If there is no data to adapt on.
+        """
+        if not self.path_data:
+            raise ValueError(
+                f"{feature_name}: output_mode='tf_idf' needs the data to compute "
+                "IDF weights from, so `path_data` is required.",
+            )
+
+        vectorizer = keras.layers.TextVectorization(**kwargs)
+        pattern = DatasetStatistics._get_csv_file_pattern(path=self.path_data)
+        dataset = tf.data.experimental.make_csv_dataset(
+            file_pattern=pattern,
+            num_epochs=1,
+            shuffle=False,
+            ignore_errors=True,
+            batch_size=self.batch_size,
+            select_columns=[feature_name],
+        )
+        vectorizer.adapt(dataset.map(lambda batch: batch[feature_name]))
+        logger.info(
+            f"Adapted the text vectorizer for {feature_name} on the data; "
+            f"vocabulary size {len(vectorizer.get_vocabulary())}",
+        )
+        return vectorizer
+
     @_monitor_performance
     def _add_pipeline_text(self, feature_name: str, input_layer, stats: dict) -> None:
         """Add a text preprocessing step to the pipeline.
@@ -1278,16 +1357,42 @@ class PreprocessingModel:
                     name=f"text_preprocessor_{feature_name}",
                     **_feature.kwargs,
                 )
-            if "output_sequence_length" not in _feature.kwargs:
+            # `output_sequence_length` only applies to the "int" output mode;
+            # TextVectorization rejects it outright for multi_hot, count and
+            # tf_idf, so defaulting it unconditionally made those modes
+            # unreachable.
+            if (
+                _feature.kwargs.get("output_mode", TextVectorizerOutputOptions.INT)
+                == TextVectorizerOutputOptions.INT
+                and "output_sequence_length" not in _feature.kwargs
+            ):
                 _feature.kwargs["output_sequence_length"] = 35
 
-            # adding text vectorization
-            preprocessor.add_processing_step(
-                layer_class="TextVectorization",
-                name=f"text_vactorizer_{feature_name}",
-                vocabulary=_vocab,
-                **_feature.kwargs,
-            )
+            # `tf_idf` weights every token by how rare it is across documents,
+            # and Keras refuses a vocabulary in that mode without the matching
+            # `idf_weights`, which KDP's statistics do not collect -- so the
+            # documented, exported `TF_IDF` output mode could not build at all.
+            # Letting the layer adapt on the column computes both the vocabulary
+            # and the weights, from the same data the statistics came from.
+            if _feature.kwargs.get("output_mode") == TextVectorizerOutputOptions.TF_IDF:
+                vectorizer = self._adapted_text_vectorizer(
+                    feature_name=feature_name,
+                    name=f"text_vactorizer_{feature_name}",
+                    **_feature.kwargs,
+                )
+                preprocessor.add_processing_step(
+                    layer_creator=lambda _vectorizer=vectorizer, **kwargs: _vectorizer,
+                    layer_class="TextVectorization",
+                    name=f"text_vactorizer_{feature_name}",
+                )
+            else:
+                # adding text vectorization
+                preprocessor.add_processing_step(
+                    layer_class="TextVectorization",
+                    name=f"text_vactorizer_{feature_name}",
+                    vocabulary=_vocab,
+                    **_feature.kwargs,
+                )
             # for concatenation we need the same format
             # so the cast to float 32 is necessary
             preprocessor.add_processing_step(
@@ -1305,7 +1410,10 @@ class PreprocessingModel:
         ):
             feature_selector = PreprocessorLayerFactory.variable_selection_layer(
                 name=f"{feature_name}_feature_selection",
-                nr_features=1,  # Single feature for now
+                # One feature per selector: this gates a feature against
+                # itself. The features are scored against each other
+                # afterwards, in `_score_features_against_each_other`.
+                nr_features=1,
                 units=self.feature_selection_units,
                 dropout_rate=self.feature_selection_dropout,
             )
@@ -1350,19 +1458,23 @@ class PreprocessingModel:
                     name=f"date_parsing_{feature_name}",
                 )
 
-                logger.debug("Adding Date Encoding layer")
-                preprocessor.add_processing_step(
-                    layer_creator=PreprocessorLayerFactory.date_encoding_layer,
-                    name=f"date_encoding_{feature_name}",
-                )
-
-                # Optionally, add SeasonLayer
+                # The season is read from the month as a number, so it has to
+                # come before the cyclic encoding replaces it. Running it after
+                # meant `SeasonLayer` read column 1 of the encoding -- the
+                # cosine of the year, which is 1.0 for every row -- and called
+                # every date winter: four constant columns, added silently.
                 if _feature.kwargs.get("add_season", False):
                     logger.debug("Adding Season layer")
                     preprocessor.add_processing_step(
                         layer_creator=PreprocessorLayerFactory.date_season_layer,
                         name=f"date_season_{feature_name}",
                     )
+
+                logger.debug("Adding Date Encoding layer")
+                preprocessor.add_processing_step(
+                    layer_creator=PreprocessorLayerFactory.date_encoding_layer,
+                    name=f"date_encoding_{feature_name}",
+                )
 
                 # Add cast to float32 for concatenation compatibility
                 preprocessor.add_processing_step(
@@ -1383,7 +1495,10 @@ class PreprocessingModel:
         ):
             feature_selector = PreprocessorLayerFactory.variable_selection_layer(
                 name=f"{feature_name}_feature_selection",
-                nr_features=1,  # Single feature for now
+                # One feature per selector: this gates a feature against
+                # itself. The features are scored against each other
+                # afterwards, in `_score_features_against_each_other`.
+                nr_features=1,
                 units=self.feature_selection_units,
                 dropout_rate=self.feature_selection_dropout,
             )
@@ -1512,19 +1627,29 @@ class PreprocessingModel:
                 feature_name=feature_name,
             )
         else:
-            # Default time series processing
-            # Cast to float32 for concatenation compatibility
-            preprocessor.add_processing_step(
-                layer_creator=PreprocessorLayerFactory.cast_to_float32_layer,
-                name=f"cast_to_float_{feature_name}",
+            # A calendar feature arrives as date strings, so the numeric front of
+            # this pipeline has to be skipped: casting a date to float raised
+            # "Cast string to float is not supported" and made the option
+            # unusable. `CalendarFeatureLayer` returns numbers, so the cast
+            # happens after it instead.
+            reads_dates = getattr(feature, "calendar_feature_config", None) and (
+                getattr(feature, "dtype", None) == tf.string
             )
 
-            # Add normalization if specified
-            if feature.kwargs.get("normalize", True):
+            if not reads_dates:
+                # Default time series processing
+                # Cast to float32 for concatenation compatibility
                 preprocessor.add_processing_step(
-                    layer_class="Normalization",
-                    name=f"norm_{feature_name}",
+                    layer_creator=PreprocessorLayerFactory.cast_to_float32_layer,
+                    name=f"cast_to_float_{feature_name}",
                 )
+
+                # Add normalization if specified
+                if feature.kwargs.get("normalize", True):
+                    preprocessor.add_processing_step(
+                        layer_class="Normalization",
+                        name=f"norm_{feature_name}",
+                    )
 
             # Add time series transformation layers
             if hasattr(feature, "build_layers"):
@@ -1540,6 +1665,14 @@ class PreprocessingModel:
                     logger.info(
                         f"Adding time series layer: {layer_name} to the pipeline",
                     )
+
+            if reads_dates:
+                # The calendar layer turns the dates into numbers; everything
+                # downstream concatenates floats.
+                preprocessor.add_processing_step(
+                    layer_creator=PreprocessorLayerFactory.cast_to_float32_layer,
+                    name=f"cast_to_float_{feature_name}",
+                )
 
         # Process the feature
         _output_pipeline = preprocessor.chain(input_layer=input_layer)
@@ -1595,9 +1728,71 @@ class PreprocessingModel:
             self.processed_features[feature_name] = _output_pipeline
 
     @_monitor_performance
+    def _score_features_against_each_other(self) -> None:
+        """Give every selected feature a weight relative to the others.
+
+        Selection wraps each feature in its own `VariableSelection` with
+        `nr_features=1`, and that layer's softmax runs over its feature list --
+        over one element, so the weight it reports is 1.0 for everything. The
+        gating worked, but `get_feature_importances()` returned a constant for
+        every feature, and the documentation had to warn that the numbers
+        carried no ranking.
+
+        One softmax over all the selected features fixes that: each feature is
+        scored against the others, and the score scales its output. Widths are
+        untouched, so the shape of the model does not change.
+        """
+        selected = sorted(
+            key[: -len("_weights")]
+            for key in self.processed_features
+            if key.endswith("_weights")
+        )
+        if len(selected) < 2:
+            # One feature has nothing to be compared against, and its weight is
+            # legitimately 1.0.
+            return
+
+        outputs = [self.processed_features[name] for name in selected]
+        joint = keras.layers.Concatenate(name="feature_selection_scores_input")(
+            outputs,
+        )
+        scores = keras.layers.Dense(
+            len(selected),
+            activation="softmax",
+            name="feature_selection_scores",
+        )(joint)
+
+        # Stack, scale and unstack rather than slicing each weight out with a
+        # `Lambda`: a Lambda carries a serialized Python closure, which is
+        # exactly the kind of layer that does not survive a save/load.
+        # Selection leaves every feature `feature_selection_units` wide, so
+        # they stack cleanly.
+        stacked = StackFeaturesLayer(name="feature_selection_stack")(outputs)
+        weights = keras.layers.Reshape(
+            (len(selected), 1),
+            name="feature_selection_weights",
+        )(scores)
+        scaled = keras.layers.Multiply(name="feature_selection_scaled")(
+            [stacked, weights],
+        )
+
+        scaled_features = UnstackLayer(name="feature_selection_unstack")(scaled)
+        per_feature_weights = UnstackLayer(name="feature_selection_weight_split")(
+            weights,
+        )
+        for index, name in enumerate(selected):
+            self.processed_features[name] = scaled_features[index]
+            self.processed_features[f"{name}_weights"] = per_feature_weights[index]
+
+        logger.info(
+            f"Feature selection scored {len(selected)} features against each other",
+        )
+
     def _prepare_outputs(self) -> None:
         """Prepare model outputs based on output mode."""
         logger.info("Building preprocessor Model")
+        if self.feature_selection_placement != FeatureSelectionPlacementOptions.NONE:
+            self._score_features_against_each_other()
         if self.output_mode == OutputModeOptions.CONCAT:
             self._prepare_concat_mode_outputs()
         else:
@@ -1615,63 +1810,38 @@ class PreprocessingModel:
         # Combine all features
         self._combine_all_features(concat_num, concat_cat)
 
-        # Store output dimensions needed for Feature MoE
+        # Store output dimensions needed for Feature MoE. These used to be read
+        # off `norm_<name>` / `flatten_<name>` layers, keyed by looking feature
+        # *tensors* up in `self.inputs`, which is a mapping of names -- so the
+        # dictionary was always empty and the mixture fell back to cutting
+        # `concat_all` into equal parts. With features of unequal width that
+        # split lands mid-feature: every "feature" the router sees is a slice
+        # spanning several real ones. The widths come from the tensors that
+        # were actually concatenated now.
         if self.use_feature_moe and self.concat_all is not None:
-            # Get the processed features and their dimensions
-            self.processed_features_dims = {}
+            # `GlobalNumericalEmbedding` replaces the whole numeric block with a
+            # single learned vector, so the per-feature slices no longer exist
+            # inside `concat_all` and there is nothing to route feature-wise.
+            if self.use_global_numerical_embedding and self.numeric_features:
+                raise ValueError(
+                    "use_feature_moe cannot be combined with "
+                    "use_global_numerical_embedding when numeric features are "
+                    "present: the global embedding merges every numeric feature "
+                    "into one vector, leaving no per-feature slices for the "
+                    "mixture to route.",
+                )
 
-            # Add numeric features
-            if numeric_features:
-                for feature_name in numeric_features:
-                    if feature_name in self.inputs:
-                        # Get the shape from the corresponding normalization layer
-                        norm_layer = (
-                            self.preprocessors.get(feature_name, {})
-                            .get("layers", {})
-                            .get(f"norm_{feature_name}")
-                        )
-                        if norm_layer is not None:
-                            self.processed_features_dims[
-                                feature_name
-                            ] = norm_layer.output.shape[-1]
-                        else:
-                            self.processed_features_dims[
-                                feature_name
-                            ] = 1  # Default dimension
-
-            # Add categorical features
-            if categorical_features:
-                for feature_name in categorical_features:
-                    if feature_name in self.inputs:
-                        # Get shape from the corresponding flatten layer
-                        flatten_layer = (
-                            self.preprocessors.get(feature_name, {})
-                            .get("layers", {})
-                            .get(f"flatten_{feature_name}")
-                        )
-                        if flatten_layer is not None:
-                            self.processed_features_dims[
-                                feature_name
-                            ] = flatten_layer.output.shape[-1]
-                        else:
-                            self.processed_features_dims[
-                                feature_name
-                            ] = 10  # Default dimension
-
-            # Create output_dims with None for batch dimension
-            if self.processed_features_dims:
-                self.output_dims = [
-                    (None, dim) for dim in self.processed_features_dims.values()
-                ]
-                # If we have concat_all but no individual dimensions, we'll use equal splits
-                if not self.output_dims and self.concat_all is not None:
-                    total_dim = self.concat_all.shape[-1]
-                    num_features = len(self.inputs)
-                    if num_features > 0:
-                        split_size = total_dim // num_features
-                        self.output_dims = [
-                            (None, split_size) for _ in range(num_features)
-                        ]
+            self.processed_features_dims = {
+                name: int(tensor.shape[-1])
+                for name, tensor in zip(
+                    self._concat_feature_names,
+                    self._concat_feature_tensors,
+                    strict=True,
+                )
+            }
+            self.output_dims = [
+                (None, dim) for dim in self.processed_features_dims.values()
+            ]
 
         # Apply transformations if needed
         if self.use_feature_moe:
@@ -1730,6 +1900,15 @@ class PreprocessingModel:
         passthrough_features_numeric = []
         passthrough_features_string = []
 
+        # The names behind those tensors, in the same order. The mixture of
+        # experts has to cut the concatenated tensor back into features, and it
+        # can only do that correctly if it knows which feature each slice is
+        # and how wide it is. It previously guessed an equal split.
+        numeric_names = []
+        categorical_names = []
+        passthrough_names_numeric = []
+        passthrough_names_string = []
+
         # Group processed features by type
         for feature_name, feature in self.processed_features.items():
             # Skip feature weights
@@ -1750,12 +1929,14 @@ class PreprocessingModel:
             ):
                 logger.debug(f"Adding {feature_name} to numeric features")
                 numeric_features.append(feature)
+                numeric_names.append(feature_name)
             elif (
                 feature_name in self.categorical_features
                 or feature_name in self.text_features
             ):
                 logger.debug(f"Adding {feature_name} to categorical features")
                 categorical_features.append(feature)
+                categorical_names.append(feature_name)
             elif feature_name in self.passthrough_features:
                 # Only include passthrough features in concatenation if they're meant to be in output
                 # When include_passthrough_in_output=False, they should be stored separately
@@ -1767,11 +1948,13 @@ class PreprocessingModel:
                             f"Adding {feature_name} to string passthrough features",
                         )
                         passthrough_features_string.append(feature)
+                        passthrough_names_string.append(feature_name)
                     else:
                         logger.debug(
                             f"Adding {feature_name} to numeric passthrough features",
                         )
                         passthrough_features_numeric.append(feature)
+                        passthrough_names_numeric.append(feature_name)
                 else:
                     logger.debug(
                         f"Skipping {feature_name} from concatenation (stored separately)",
@@ -1782,11 +1965,18 @@ class PreprocessingModel:
         # Add numeric passthrough features to numeric features (only if include_passthrough_in_output=True)
         if passthrough_features_numeric:
             numeric_features.extend(passthrough_features_numeric)
+            numeric_names.extend(passthrough_names_numeric)
 
         # Add string passthrough features to categorical features (only if include_passthrough_in_output=True)
         # (since categorical features are typically strings and handled separately)
         if passthrough_features_string:
             categorical_features.extend(passthrough_features_string)
+            categorical_names.extend(passthrough_names_string)
+
+        # `concat_all` is numeric first, then categorical, so this is the order
+        # of the slices inside it.
+        self._concat_feature_names = [*numeric_names, *categorical_names]
+        self._concat_feature_tensors = [*numeric_features, *categorical_features]
 
         return numeric_features, categorical_features
 
@@ -2147,7 +2337,15 @@ class PreprocessingModel:
         feature_names = []
         individual_features = []
 
-        for feature_name in self.inputs:
+        # Sorted, and that is load-bearing. `.keras` stores a layer's weights
+        # under a name derived from its class and the order it was created --
+        # `dense`, `dense_1`, `dense_2` -- not under the name we gave it. On
+        # load the layers are rebuilt in the config's order, and Keras lists a
+        # dict input's layers alphabetically, so building these in
+        # `self.inputs` order made the two sequences disagree: two features
+        # came back holding each other's projection weights. Building in the
+        # same order Keras rebuilds in keeps them lined up.
+        for feature_name in sorted(self.inputs):
             if feature_name in self.processed_features:
                 feature_names.append(feature_name)
                 individual_features.append(self.processed_features[feature_name])
@@ -2155,6 +2353,29 @@ class PreprocessingModel:
         if not individual_features:
             logger.warning("No individual features found for Feature MoE in dict mode.")
             return
+
+        # Same padding as the concat branch: stacking needs one width, and
+        # dict mode hands over the processed features untouched, so a
+        # normalised float (one column) and a discretised one (ten) were
+        # stacked together. The build succeeded -- `StackFeaturesLayer` used to
+        # report the first feature's width whatever the rest were -- and the
+        # model raised on its first real batch.
+        widths = [int(feature.shape[-1]) for feature in individual_features]
+        if len(set(widths)) > 1:
+            # Every feature gets a padding layer, including the widest, where it
+            # is a no-op. Padding only the narrow ones leaves the features at
+            # different graph depths, and Keras restores weights in traversal
+            # order: on reload two projection layers swapped kernels and their
+            # features came back with each other's values.
+            target_width = max(widths)
+            individual_features = [
+                PadFeatureLayer(target_width, name=f"moe_pad_dict_{name}")(feature)
+                for name, feature in zip(
+                    feature_names,
+                    individual_features,
+                    strict=True,
+                )
+            ]
 
         # Stack the features along a new axis
         stacked_features = StackFeaturesLayer(name="stacked_features_for_moe_dict")(
@@ -2178,18 +2399,30 @@ class PreprocessingModel:
         # Apply the MoE layer
         moe_outputs = moe(stacked_features)
 
-        # Unstack the outputs back to individual features
-        unstacked_outputs = UnstackLayer()(moe_outputs)
+        # One projection per feature, in a single layer. This used to be one
+        # `Dense` per feature, and `.keras` stores a layer's weights under a
+        # name derived from its class and build order rather than the name it
+        # was given -- so when Keras reordered those sibling layers rebuilding
+        # the graph, two features came back holding each other's kernels.
+        projected = PerFeatureDense(
+            self.feature_moe_expert_dim,
+            activation="relu",
+            name="moe_projection_dict",
+        )(moe_outputs)
 
-        # Create a projection layer for each feature to maintain its original meaning
+        # Unstack the outputs back to individual features
+        unstacked_outputs = UnstackLayer(name="unstack_moe_features_dict")(projected)
+
         for i, feature_name in enumerate(feature_names):
-            feature_output = unstacked_outputs[i]
-            # Add a projection layer for this feature
-            projection = keras.layers.Dense(
-                self.feature_moe_expert_dim,
-                activation="relu",
-                name=f"{feature_name}_moe_projection_dict",
-            )(feature_output)
+            projection = unstacked_outputs[i]
+
+            # Same residual as the concat branch, where the widths allow it.
+            if self.feature_moe_use_residual:
+                original = individual_features[i]
+                if original.shape[-1] == projection.shape[-1]:
+                    projection = keras.layers.Add(
+                        name=f"{feature_name}_moe_residual_dict",
+                    )([original, projection])
 
             # Update the processed features with the MoE-enhanced version
             self.processed_features[feature_name] = projection
@@ -2212,91 +2445,82 @@ class PreprocessingModel:
             logger.warning("No concatenated features found to apply Feature MoE")
             return
 
-        # Get dimensions of the output
-        output_dims = None
-        if hasattr(self, "processed_features_dims") and self.processed_features_dims:
-            output_dims = []
-            for feature_type in ["numeric", "categorical"]:
-                if feature_type in self.processed_features_dims:
-                    for dims in self.processed_features_dims[feature_type].values():
-                        if dims is not None:
-                            output_dims.append(dims)
+        # The concatenation order and the real width of every slice, recorded
+        # when the features were grouped. Reading them off layer names and
+        # falling back to an equal split cut features mid-value.
+        moe_feature_names = list(getattr(self, "_concat_feature_names", []) or [])
+        feature_dims = [
+            int(dim)
+            for dim in (getattr(self, "processed_features_dims", {}) or {}).values()
+        ]
+        if not moe_feature_names or not feature_dims:
+            logger.warning("No features found to apply Feature MoE")
+            return
 
-        # If output_dims not available, calculate equal splits
-        if not output_dims:
-            logger.warning("Output dimensions not found, calculating equal splits")
-            if hasattr(self, "numeric_features") and self.numeric_features:
-                num_numeric = len(self.numeric_features)
-            else:
-                num_numeric = 0
+        logger.info(
+            f"Splitting concat_all into {len(feature_dims)} features "
+            f"for Feature MoE: {dict(zip(moe_feature_names, feature_dims, strict=False))}",
+        )
+        feature_outputs = SplitLayer(feature_dims, name="split_layer")(self.concat_all)
 
-            if hasattr(self, "categorical_features") and self.categorical_features:
-                num_categorical = len(self.categorical_features)
-            else:
-                num_categorical = 0
-
-            total_features = num_numeric + num_categorical
-            if total_features == 0:
-                logger.warning("No features found to apply Feature MoE")
-                return
-
-            # Set equal dimensions for all features if actual dimensions are not available
-            feature_dim = int(self.concat_all.shape[-1]) // total_features
-            output_dims = [feature_dim] * total_features
-
-            # Store these calculated dimensions for future use
-            logger.info(f"Using equal split sizes: {output_dims}")
-
-        # Try to get individual feature outputs from pipelines
-        feature_outputs = []
-
-        if hasattr(self, "numeric_features") and self.numeric_features:
-            for feature_name in self.numeric_features:
-                if hasattr(self, f"pipeline_{feature_name}") and hasattr(
-                    getattr(self, f"pipeline_{feature_name}"),
-                    "output",
-                ):
-                    feature_outputs.append(
-                        getattr(self, f"pipeline_{feature_name}").output,
-                    )
-
-        if hasattr(self, "categorical_features") and self.categorical_features:
-            for feature_name in self.categorical_features:
-                if hasattr(self, f"pipeline_{feature_name}") and hasattr(
-                    getattr(self, f"pipeline_{feature_name}"),
-                    "output",
-                ):
-                    feature_outputs.append(
-                        getattr(self, f"pipeline_{feature_name}").output,
-                    )
-
-        # If we couldn't get individual features, we'll split the concatenated tensor
-        if not feature_outputs:
-            logger.info("Using concat_all tensor and splitting it for Feature MoE")
-            # Calculate the feature dimensions
-            feature_dims = (
-                output_dims if output_dims else [feature_dim] * total_features
-            )
-
-            # Split the concatenated tensor into individual features
-            split_layer = SplitLayer(feature_dims)
-            feature_outputs = split_layer(self.concat_all)
+        # Stacking needs one width for every feature, and a real feature set has
+        # several -- one column for a normalised float, ten for a discretised
+        # one. Padding keeps each feature whole; projecting would cost
+        # parameters and a feature already at the target width is untouched, so
+        # a uniform-width model is unaffected.
+        target_width = max(feature_dims)
+        if len(set(feature_dims)) > 1:
+            # Padded uniformly, widest included, so every feature sits at the
+            # same graph depth; see the dict-mode branch for why that matters.
+            feature_outputs = [
+                PadFeatureLayer(target_width, name=f"moe_pad_{name}")(output)
+                for name, output in zip(
+                    moe_feature_names,
+                    feature_outputs,
+                    strict=True,
+                )
+            ]
 
         # Stack the features for the MoE layer
         stacked_features = StackFeaturesLayer(name="stacked_features_for_moe")(
             feature_outputs,
         )
 
-        # Create and apply the Feature MoE layer
+        # Only `num_experts`, `expert_dim` and `routing` used to be forwarded
+        # here, so `feature_moe_hidden_dims`, `feature_moe_sparsity`,
+        # `feature_moe_freeze_experts` and `feature_moe_dropout` did nothing in
+        # concat mode, and `routing="predefined"` raised because the assignments
+        # never arrived. The dict-mode branch already passed them all.
         feature_moe = FeatureMoE(
             num_experts=self.feature_moe_num_experts,
             expert_dim=self.feature_moe_expert_dim,
+            expert_hidden_dims=self.feature_moe_hidden_dims,
             routing=self.feature_moe_routing,
+            sparsity=self.feature_moe_sparsity,
+            feature_names=moe_feature_names,
+            predefined_assignments=self.feature_moe_assignments,
+            freeze_experts=self.feature_moe_freeze_experts,
+            dropout_rate=self.feature_moe_dropout,
             name="feature_moe_concat",
         )(stacked_features)
 
         # Unstack the features after MoE processing using a custom layer
         unstacked_features = UnstackLayer(name="unstack_moe_features")(feature_moe)
+
+        # `feature_moe_use_residual` was stored on the model and read nowhere, so
+        # the residual connection it names never existed. It is added here on
+        # the features whose width the mixture preserved; where the expert
+        # changed the width there is nothing to add the original to.
+        if self.feature_moe_use_residual:
+            with_residual = []
+            for index, expert_output in enumerate(unstacked_features):
+                original = feature_outputs[index]
+                if original.shape[-1] == expert_output.shape[-1]:
+                    expert_output = keras.layers.Add(
+                        name=f"moe_residual_{index}",
+                    )([original, expert_output])
+                with_residual.append(expert_output)
+            unstacked_features = with_residual
 
         # Concatenate the processed features back together
         self.concat_all = keras.layers.Concatenate(axis=-1, name="concat_moe_features")(
@@ -2538,7 +2762,7 @@ class PreprocessingModel:
                     self.model = keras.Model(
                         inputs=self.inputs,
                         outputs=self.passthrough_outputs,
-                        name="preprocessor",
+                        name=self.model_name,
                     )
                     _output_dims = "passthrough_only"
                 elif self.concat_all is None:
@@ -2567,7 +2791,7 @@ class PreprocessingModel:
                     self.model = keras.Model(
                         inputs=self.inputs,
                         outputs=model_outputs,
-                        name="preprocessor",
+                        name=self.model_name,
                     )
                     _output_dims = (
                         self.model.output_shape[1]
@@ -2598,7 +2822,7 @@ class PreprocessingModel:
                 self.model = keras.Model(
                     inputs=self.inputs,
                     outputs=final_outputs,
-                    name="preprocessor",
+                    name=self.model_name,
                 )
                 _output_dims = self.model.output_shape
 
@@ -2750,11 +2974,97 @@ class PreprocessingModel:
             # Apply preprocessing
             yield self.model(batch)
 
-    def get_feature_importances(self) -> dict:
-        """Get feature importance weights if feature selection was enabled.
+    def get_timing_metrics(self) -> dict:
+        """Report how long the monitored build steps took.
 
         Returns:
-            Dictionary mapping feature names to their importance weights information
+            dict: `total_seconds` for the whole build plus a `steps` mapping of
+            each monitored method to the seconds it accounted for. Empty of
+            steps until `build_preprocessor` has run.
+        """
+        return {
+            "total_seconds": sum(self._step_seconds.values()),
+            "steps": dict(self._step_seconds),
+        }
+
+    def get_memory_usage(self) -> dict:
+        """Report the GPU memory the monitored build steps needed.
+
+        The figures come from `tf.config.experimental.get_memory_info`, which
+        only reports GPU memory. On a CPU-only machine, and for steps that
+        allocated nothing, every figure is `0.0`.
+
+        Returns:
+            dict: `peak_mb` for the largest single step and a `steps` mapping of
+            each monitored method to the megabytes it peaked at.
+        """
+        steps = {
+            name: value / (1024 * 1024)
+            for name, value in self._step_memory_bytes.items()
+        }
+        return {
+            "peak_mb": max(steps.values(), default=0.0),
+            "steps": steps,
+        }
+
+    def plot_model(self, to_file: str = "model_architecture.png", **kwargs: Any) -> Any:
+        """Write a diagram of the preprocessing model to an image file.
+
+        Args:
+            to_file: Where to write the image.
+            **kwargs: Passed through to `keras.utils.plot_model`; the shape,
+                dtype and layer-name flags default to on because they are what
+                makes a preprocessing graph readable.
+
+        Returns:
+            Whatever `keras.utils.plot_model` returns, so the diagram renders
+            inline in a notebook.
+
+        Raises:
+            ValueError: If the preprocessor has not been built yet.
+            ImportError: If `pydot` and Graphviz are not installed.
+        """
+        if self.model is None:
+            raise ValueError(
+                "There is no model to plot yet. Call build_preprocessor() first.",
+            )
+
+        options = {
+            "show_shapes": True,
+            "show_dtype": True,
+            "show_layer_names": True,
+            **kwargs,
+        }
+        result = keras.utils.plot_model(self.model, to_file=to_file, **options)
+
+        # `keras.utils.plot_model` prints its complaint and returns None when
+        # pydot or Graphviz are missing, so a caller who only looked at the
+        # return value would think the diagram had been written.
+        if not Path(to_file).exists():
+            raise ImportError(
+                "Plotting the model needs `pydot` and Graphviz, and no image "
+                f"was written to {to_file!r}. Install them with "
+                "`pip install pydot` and your system's `graphviz` package.",
+            )
+        return result
+
+    def get_feature_importances(self, data: dict | None = None) -> dict:
+        """Get feature importance weights if feature selection was enabled.
+
+        The selection layer computes a softmax over features for every row, so
+        the importances depend on the data rather than being fixed weights.
+        Pass a batch to get numbers; without one there is nothing to score and
+        only a description of each weight tensor can be returned.
+
+        Args:
+            data: Optional mapping of feature name to a batch of values. When
+                given, the model is run and the mean importance per feature is
+                returned as a float.
+
+        Returns:
+            dict: Feature name to mean importance (a float) when `data` is
+                supplied, otherwise feature name to a description of its weight
+                tensor.
 
         Raises:
             ValueError: If feature selection was not enabled or model hasn't been built
@@ -2773,14 +3083,31 @@ class PreprocessingModel:
                 feature_name = key.replace("_weights", "")
                 tensor = self.processed_features[key]
 
-                # Instead of returning the KerasTensor directly, provide its description
+                # Without data there is nothing to score, so describe the
+                # tensor the weights will come from.
                 feature_importances[feature_name] = {
                     "shape": str(tensor.shape),
                     "dtype": str(tensor.dtype),
                     "layer_name": tensor.name if hasattr(tensor, "name") else "unknown",
                 }
 
-        return feature_importances
+        if data is None:
+            return feature_importances
+
+        weight_tensors = {
+            key.replace("_weights", ""): self.processed_features[key]
+            for key in self.processed_features
+            if key.endswith("_weights")
+        }
+        if not weight_tensors:
+            return {}
+
+        weights_model = keras.Model(inputs=self.inputs, outputs=weight_tensors)
+        scored = weights_model(_to_tensor_mapping(data))
+        return {
+            name: float(tf.reduce_mean(tf.cast(value, tf.float32)))
+            for name, value in scored.items()
+        }
 
     @staticmethod
     def _is_value_sequence(value) -> bool:

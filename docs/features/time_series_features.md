@@ -203,12 +203,17 @@ sales_feature = TimeSeriesFeature(
         "stride": 1,                   # Stride for sliding window
         "drop_na": True,               # Handle missing values
         "normalize": False             # Whether to normalize features
-    },
+    }
+)
 
-    # Calendar feature configuration for date input
+# Calendar features read the date column, not the numeric one, so they are a
+# feature of their own. Combining them with the configs above would ask one
+# column to be both a date and a number, and KDP raises if you try.
+calendar_feature = TimeSeriesFeature(
+    name="date",
     calendar_feature_config={
-        "features": ["month", "day", "day_of_week", "is_weekend"],  # Features to extract
-        "cyclic_encoding": True,       # Use cyclic encoding for cyclical features
+        # Ask for the sin/cos components by name to get them.
+        "features": ["month_sin", "month_cos", "day_of_week", "is_weekend"],
         "input_format": "%Y-%m-%d",    # Input date format
         "normalize": True              # Whether to normalize outputs
     }
@@ -217,7 +222,7 @@ sales_feature = TimeSeriesFeature(
 # Create features dictionary
 features = {
     "sales": sales_feature,
-    "date": "DATE",
+    "date": calendar_feature,
     "store_id": "STRING_CATEGORICAL"
 }
 
@@ -261,6 +266,30 @@ preprocessor = PreprocessingModel(
         <td>Column for grouping multiple series</td>
         <td>None</td>
         <td>Optional, for handling multiple related series</td>
+      </tr>
+      <tr>
+        <td><code>sequence_length</code></td>
+        <td>Declared sequence length</td>
+        <td>None</td>
+        <td>Recorded on the feature and round-trips through <code>get_config()</code>, but the built pipeline does not read it.</td>
+      </tr>
+      <tr>
+        <td><code>is_target</code></td>
+        <td>Marks the column as a prediction target</td>
+        <td>False</td>
+        <td>Metadata only &mdash; see the note below.</td>
+      </tr>
+      <tr>
+        <td><code>exclude_from_input</code></td>
+        <td>Marks the column as not an input</td>
+        <td>False</td>
+        <td>Metadata only &mdash; see the note below.</td>
+      </tr>
+      <tr>
+        <td><code>input_type</code></td>
+        <td>Declared signal type</td>
+        <td>"continuous"</td>
+        <td>Metadata only &mdash; see the note below.</td>
       </tr>
       <tr>
         <td><code>lags</code></td>
@@ -318,9 +347,9 @@ preprocessor = PreprocessingModel(
       </tr>
       <tr>
         <td><code>cyclic_encoding</code></td>
-        <td>Use sine/cosine encoding for cyclical features</td>
-        <td>True</td>
-        <td>Better captures cyclical nature of time features</td>
+        <td>Deprecated, and ignored. Name the components instead</td>
+        <td>—</td>
+        <td>Add <code>month_sin</code>, <code>month_cos</code>, <code>day_of_week_sin</code>, <code>day_of_week_cos</code> to <code>features</code></td>
       </tr>
       <tr>
         <td><code>drop_na</code></td>
@@ -331,6 +360,59 @@ preprocessor = PreprocessingModel(
     </tbody>
   </table>
 </div>
+
+### Calendar features
+
+`calendar_feature_config={"features": [...]}` accepts these names, and nothing
+else &mdash; an unrecognised one raises `ValueError: Invalid feature: <name>`.
+Holiday detection is not among them; KDP ships no holiday calendar.
+
+<div class="table-container">
+  <table>
+    <thead>
+      <tr>
+        <th>Group</th>
+        <th>Names</th>
+        <th>Encoding</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Cyclic</td>
+        <td><code>month</code>, <code>day</code>, <code>day_of_week</code>, <code>day_of_year</code>, <code>week_of_year</code>, <code>quarter</code>, <code>hour</code>, <code>minute</code>, <code>second</code></td>
+        <td>sin/cos pair each. Append <code>_sin</code> or <code>_cos</code> to a name to take just one half.</td>
+      </tr>
+      <tr>
+        <td>Scalar</td>
+        <td><code>year</code></td>
+        <td>Single value.</td>
+      </tr>
+      <tr>
+        <td>Clock</td>
+        <td><code>hour</code>, <code>minute</code>, <code>second</code></td>
+        <td>Read from the timestamp. A date-only column such as
+        <code>2021-06-15</code> has no time, so all three are 0.</td>
+      </tr>
+      <tr>
+        <td>Boolean flags</td>
+        <td><code>is_weekend</code>, <code>is_month_start</code>, <code>is_month_end</code>, <code>is_quarter_start</code>, <code>is_quarter_end</code>, <code>is_year_start</code>, <code>is_year_end</code></td>
+        <td>0.0 or 1.0.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+!!! note "Four parameters are metadata, not behaviour"
+    `sequence_length`, `is_target`, `exclude_from_input` and `input_type` are
+    stored on the feature and serialized by `get_config()`, so they survive a
+    save/load round-trip and are available to your own code. **The
+    preprocessing pipeline does not read them** &mdash; setting `is_target=True`
+    does not remove the column from the model output, and
+    `exclude_from_input=True` does not drop its input. Use them to carry your
+    own intent alongside the spec, and handle the split yourself. To keep a
+    column out of the concatenated output, use
+    [passthrough features](passthrough-features.md) with
+    `include_passthrough_in_output=False`.
 
 ## 💡 Powerful Features
 
@@ -477,14 +559,17 @@ traffic_data = TimeSeriesFeature(
 
     # Lag features for short-term patterns
     lag_config={"lags": [1, 2, 3, 24, 24*7]},  # Hours back
+)
 
-    # Calendar features for temporal patterns
+# The calendar features come off the timestamp column, so they are declared on
+# that column rather than on the numeric series.
+timestamp_calendar = TimeSeriesFeature(
+    name="timestamp",
     calendar_feature_config={
         "features": [
-            "month", "day_of_week", "hour", "is_weekend",
+            "month_sin", "month_cos", "day_of_week", "hour", "is_weekend",
             "is_month_start", "is_month_end"
         ],
-        "cyclic_encoding": True,     # Use sine/cosine encoding for cyclical features
         "input_format": "%Y-%m-%d %H:%M:%S"  # Datetime format
     }
 )
@@ -492,7 +577,7 @@ traffic_data = TimeSeriesFeature(
 # Create features dictionary
 features = {
     "traffic_volume": traffic_data,
-    "timestamp": "DATE",
+    "timestamp": timestamp_calendar,
     "location_id": "STRING_CATEGORICAL"
 }
 
@@ -545,24 +630,29 @@ features = {
         # Weekly, monthly, quarterly smoothing
         moving_average_config={
             "periods": [7, 30, 90]
-        },
-        # Calendar features for seasonal patterns
+        }
+    ),
+
+    # Calendar features for seasonal patterns. They read the date column, so
+    # they belong to that column rather than to the numeric sales series --
+    # one column cannot be both a date and a number.
+    "date": TimeSeriesFeature(
+        name="date",
         calendar_feature_config={
-            "features": ["month", "day_of_week", "is_weekend", "is_holiday"],
-            "cyclic_encoding": True
+            "features": ["month_sin", "month_cos", "day_of_week", "is_weekend"],
         }
     ),
 
     # Store features
     "store_id": CategoricalFeature(
         name="store_id",
-        embedding_dim=8
+        embedding_size=8
     ),
 
     # Product category
     "product_category": CategoricalFeature(
         name="product_category",
-        embedding_dim=8
+        embedding_size=8
     )
 }
 
@@ -634,15 +724,14 @@ features = {
     # Sector/industry
     "sector": CategoricalFeature(
         name="sector",
-        embedding_dim=12
+        embedding_size=12
     ),
 
     # Date feature with calendar effects
     "date": TimeSeriesFeature(
         name="date",
         calendar_feature_config={
-            "features": ["month", "day_of_week", "is_month_start", "is_month_end", "quarter"],
-            "cyclic_encoding": True
+            "features": ["month_sin", "month_cos", "is_month_start", "is_month_end", "quarter"],
         }
     )
 }
@@ -732,15 +821,14 @@ features = {
     "gender": CategoricalFeature(name="gender"),
     "diagnosis": CategoricalFeature(
         name="diagnosis",
-        embedding_dim=16
+        embedding_size=16
     ),
 
     # Time information with calendar features
     "timestamp": TimeSeriesFeature(
         name="timestamp",
         calendar_feature_config={
-            "features": ["hour", "day_of_week", "is_weekend", "month"],
-            "cyclic_encoding": True,
+            "features": ["hour", "day_of_week", "is_weekend", "month_sin", "month_cos"],
             "normalize": True
         }
     )
@@ -761,6 +849,134 @@ patient_monitor = PreprocessingModel(
     </div>
   </div>
 </div>
+
+## 🧰 Layers you can use directly
+
+`TimeSeriesFeature` covers the seven transformations configured above. Four
+more ship with KDP and are used as ordinary Keras layers, so you can drop them
+into a model of your own rather than configure them on a feature.
+
+<div class="code-container">
+
+```python
+import numpy as np
+import tensorflow as tf
+
+from kdp.layers.time_series.fft_feature_layer import FFTFeatureLayer
+from kdp.layers.time_series.seasonal_decomposition_layer import (
+    SeasonalDecompositionLayer,
+)
+from kdp.layers.time_series.missing_value_handler_layer import (
+    MissingValueHandlerLayer,
+)
+from kdp.layers.time_series.auto_lag_selection_layer import AutoLagSelectionLayer
+
+steps = np.arange(120, dtype="float32")
+series = 10 + 3 * np.sin(2 * np.pi * steps / 12) + 0.05 * steps
+
+# Frequency content: the strongest components of the signal, appended to it.
+spectrum = FFTFeatureLayer(num_features=3)(tf.constant(series.reshape(-1, 1)))
+
+# Trend, seasonal and residual components of a series with a known period.
+parts = SeasonalDecompositionLayer(period=12)(tf.constant(series.reshape(-1, 1)))
+
+# Lags chosen by autocorrelation rather than by hand.
+lags = AutoLagSelectionLayer(max_lag=10, n_lags=3)
+lagged = lags(tf.constant(series.reshape(-1, 1)))
+print("selected lags:", lags.selected_lags.numpy())
+```
+
+</div>
+
+!!! note "Cyclic calendar components are requested by name"
+    `month` gives the month as a plain number, so December and January land at
+    opposite ends of the range. To get the wrap-around encoding, put the
+    components themselves in `features`: `month_sin`, `month_cos`,
+    `day_sin`, `day_cos`, `day_of_week_sin`, `day_of_week_cos`. The
+    `cyclic_encoding` flag has never done this and is deprecated.
+
+!!! note "One set of lags for every channel"
+    `AutoLagSelectionLayer` selects a single set of lags and applies it to the
+    whole input. On a 3-D input of shape `(batch, time, features)` the
+    autocorrelation is averaged over the channels as well as the batch, so
+    every channel contributes to the choice and reordering the columns does not
+    change it.
+
+`MissingValueHandlerLayer` fills gaps before any of the above. It takes a
+`(batch, time)` batch -- one row per series -- and `mask_value` names what
+counts as missing:
+
+<div class="code-container">
+
+```python
+import numpy as np
+import tensorflow as tf
+
+from kdp.layers.time_series.missing_value_handler_layer import (
+    MissingValueHandlerLayer,
+)
+
+gappy = np.arange(1.0, 13.0, dtype="float32").reshape(1, -1)
+gappy[0, 3] = np.nan
+
+filled = MissingValueHandlerLayer(
+    mask_value=float("nan"),      # or 0.0, or any sentinel your data uses
+    strategy="linear_interpolation",
+    add_indicators=True,          # appends a column flagging what was filled
+)(tf.constant(gappy))
+```
+
+</div>
+
+<div class="table-container">
+  <table class="config-table">
+    <thead>
+      <tr>
+        <th>Layer</th>
+        <th>What it produces</th>
+        <th>Main options</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>FFTFeatureLayer</code></td>
+        <td>The strongest frequency components of each series</td>
+        <td><code>num_features</code>, <code>feature_type</code>, <code>window_function</code>, <code>keep_original</code>, <code>normalize</code></td>
+      </tr>
+      <tr>
+        <td><code>SeasonalDecompositionLayer</code></td>
+        <td>Trend, seasonal and residual components</td>
+        <td><code>period</code> (required), <code>method</code>, <code>trend_window</code>, <code>extrapolate_trend</code>, <code>keep_original</code></td>
+      </tr>
+      <tr>
+        <td><code>MissingValueHandlerLayer</code></td>
+        <td>The series with gaps filled, optionally with indicator columns</td>
+        <td><code>mask_value</code>, <code>strategy</code>, <code>window_size</code>, <code>seasonal_period</code>, <code>add_indicators</code></td>
+      </tr>
+      <tr>
+        <td><code>AutoLagSelectionLayer</code></td>
+        <td>Lags picked by autocorrelation, readable from <code>selected_lags</code></td>
+        <td><code>max_lag</code>, <code>n_lags</code>, <code>threshold</code>, <code>method</code>, <code>keep_original</code></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+!!! note "Gaps at the ends of a series"
+    No strategy can reach a gap at the very start or end: there is nothing on
+    one side to fill from. `extrapolate` (default `True`) gives those gaps the
+    nearest value that is not itself a gap, so the layer never returns a
+    missing value. Until this release the flag was accepted and ignored, and
+    with `mask_value=float("nan")` a leading `NaN` went straight into the
+    model.
+
+!!! note "Strategies for missing values"
+    `forward_fill`, `backward_fill`, `linear_interpolation`, `mean`, `median`,
+    `rolling_mean` and `seasonal`. Until this release only a literal sentinel
+    such as `0.0` could be detected; `NaN` matched nothing, because it does not
+    compare equal to itself.
+
+Full signatures for all of them are in the [API reference](../generated/api_index.md).
 
 ## 💎 Pro Tips
 
@@ -831,7 +1047,7 @@ features = {
     <div class="code-container">
 
 ```python
-# Comprehensive time series feature engineering
+# Comprehensive time series feature engineering, over the numeric column
 sensor_feature = TimeSeriesFeature(
     name="sensor_data",
     sort_by="timestamp",
@@ -840,15 +1056,23 @@ sensor_feature = TimeSeriesFeature(
     lag_config={"lags": [1, 2, 3]},
     rolling_stats_config={"window_size": 10, "statistics": ["mean", "std"]},
 
-    # Advanced features
+    # Advanced features. The wavelet needs a window to decompose, which the
+    # lags above provide -- on a bare column it has a single step and raises.
     wavelet_transform_config={"levels": 3},
-    tsfresh_feature_config={"features": ["mean", "variance", "abs_energy"]},
+    tsfresh_feature_config={"features": ["mean", "variance", "abs_energy"]}
+)
+
+# Calendar features read the timestamp column, so they are a feature of that
+# column. A column cannot be both a date and a number, and KDP raises if you
+# configure both on one feature.
+timestamp_feature = TimeSeriesFeature(
+    name="timestamp",
     calendar_feature_config={"features": ["hour", "day_of_week"]}
 )
 
-# This combination captures temporal dependencies (lags),
-# local statistics (rolling stats), multi-scale patterns (wavelets),
-# global statistics (tsfresh), and temporal context (calendar)
+# Together these capture temporal dependencies (lags), local statistics
+# (rolling stats), multi-scale patterns (wavelets), global statistics
+# (tsfresh), and temporal context (calendar)
 ```
 
    </div>
@@ -910,13 +1134,13 @@ sensor_feature = TimeSeriesFeature(
     <span class="topic-icon">🔢</span>
     <span class="topic-text">Numerical Features</span>
   </a>
-  <a href="../advanced/custom-layers.md" class="topic-link">
+  <a href="../advanced/custom-preprocessing.md" class="topic-link">
     <span class="topic-icon">🧩</span>
     <span class="topic-text">Custom Preprocessing Layers</span>
   </a>
-  <a href="../examples/time-series-forecasting.md" class="topic-link">
+  <a href="../time_series_inference.md" class="topic-link">
     <span class="topic-icon">📈</span>
-    <span class="topic-text">Time Series Forecasting Examples</span>
+    <span class="topic-text">Time Series Inference</span>
   </a>
 </div>
 
@@ -927,8 +1151,8 @@ sensor_feature = TimeSeriesFeature(
     <span class="nav-icon">←</span>
     <span class="nav-text">Text Features</span>
   </a>
-  <a href="image-features.md" class="nav-button next">
-    <span class="nav-text">Image Features</span>
+  <a href="passthrough-features.md" class="nav-button next">
+    <span class="nav-text">Passthrough Features</span>
     <span class="nav-icon">→</span>
   </a>
 </div>

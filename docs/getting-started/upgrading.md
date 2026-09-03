@@ -21,16 +21,430 @@ configuration changes, but the numbers coming out of the preprocessor do.
 | Area | Before | Now |
 |------|--------|-----|
 | Time series layers | `DifferencingLayer`, `MovingAverageLayer`, `RollingStatsLayer`, `LagFeatureLayer` and `AutoLagSelectionLayer` returned fixed constants for certain shapes instead of computing over the input | Values are computed from the data in every case |
+| `AutoLagSelectionLayer` on multi-channel input | Lags were chosen from the autocorrelation of channel 0 alone, then applied to every channel, so reordering the columns of the same data changed the result | The autocorrelation is averaged over the channels as well as the batch, so every channel contributes and the choice does not depend on column order |
+| `TimeSeriesFeature.get_output_dim()` on wavelet, tsfresh or calendar configs | Counted those transforms as columns added to the series. They replace it: the wavelet returns coefficients, tsfresh returns statistics, the calendar returns date components. The declared width matched no configuration at all | Each layer is asked for its own width, so the number matches the tensor the stack produces |
+| `DateFeature(add_season=True)` | The season layer ran after the cyclic encoding and read its column 1 — the cosine of the year, `1.0` for every row — as the month, so every date came out winter and the four season columns were constant | The season is read from the month before the encoding replaces it, so the four columns carry the season. The output is the same width as before |
 | `DistributionTransformLayer` — `robust-scale` | Median and IQR were taken across the whole tensor | Computed per feature, as the transform is defined |
 | `DistributionTransformLayer` — `quantile` | Ranking was global | Ranked per feature |
 | Distribution-aware encoding | `preferred_distribution` was accepted and then ignored, so the layer always auto-detected | The requested distribution is honoured |
 | Output width | `get_output_dim()` combined dimensions additively for some feature configurations | Combined multiplicatively, matching the tensor the model actually produces |
 | Time series + other features | A time series feature could not be combined with any other feature: the warm-up rows `drop_na` removes left that column shorter and `Concatenate` raised | Transforms preserve rows by default, so the documented combinations build |
+| Feature MoE in `concat` mode | Only `feature_moe_num_experts`, `feature_moe_expert_dim` and `feature_moe_routing` reached the layer; `feature_moe_hidden_dims`, `feature_moe_sparsity`, `feature_moe_freeze_experts` and `feature_moe_dropout` were dropped on the floor | Every option reaches the mixture, so a model that set them now has the network it asked for |
+| `feature_moe_use_residual` | Stored on the model and read nowhere, so the residual connection it names never existed | The original feature is added back onto its expert output wherever the widths match |
+| `feature_moe_freeze_experts` | Passed `training=False` to the experts, which only changes dropout and batch norm; the weights still received gradients | The experts are marked non-trainable, which is what the option says |
+| `feature_moe_sparsity` | The top-k mask that enforces it sat behind `routing_activation != "softmax"`, which `PreprocessingModel` never exposes, so every feature was routed densely to every expert | Each feature reaches at most `feature_moe_sparsity` experts, as documented. With the defaults (4 experts, sparsity 2) a learned-routing model produces different values than it did |
 
 !!! warning "Re-train downstream models"
     If you trained a model on top of KDP output from 1.11.x and any of the
     rows above apply to your feature set, the preprocessor now feeds it
     different numbers. Re-fit before you compare metrics.
+
+## 🧩 Feature MoE routed slices, not features
+
+Three defects compounded here, and together they meant the mixture was rarely
+routing what it claimed to.
+
+`processed_features_dims` was written as a flat `{name: dim}` mapping and read
+back as a nested one keyed by `"numeric"`/`"categorical"`, so the lookup always
+missed. The code then fell back to cutting the concatenated tensor into equal
+parts. With features of unequal width -- a normalised float is one column, a
+discretised one is ten -- that split lands mid-feature: given widths 1, 1 and
+10 it cut 12 columns as `[4, 4, 4]`, so every "feature" the router saw was a
+slice spanning several real ones, and `feature_moe_assignments` named the wrong
+thing. Nothing raised; the model built, trained and produced numbers.
+
+In `dict` output mode the same mismatch raised instead, on the first batch
+rather than at build time: `StackFeaturesLayer` reported the *first* feature's
+width whatever the others were, so Keras built a graph the layer could not
+execute.
+
+Both are fixed by taking the widths and names from the tensors that were
+actually concatenated, and padding features up to a common width before
+stacking. Padding is parameter-free, so a model whose features are all the same
+width is unchanged; a model with mixed widths was previously routing scrambled
+input and now routes real features.
+
+!!! warning "Retrain any model that used Feature MoE with mixed-width features"
+    Its inputs were being sliced at the wrong offsets. The numbers coming out
+    of the mixture are different now, and correct.
+
+`use_feature_moe` combined with `use_global_numerical_embedding` raises rather
+than producing nonsense: the global embedding merges every numeric feature into
+one vector, leaving no per-feature slices for the mixture to route.
+
+## 🎲 Feature MoE routing no longer depends on the batch
+
+Learned routing fed a Dense layer the *batch mean* of the features, so the
+routing weights changed with whatever rows happened to share a batch. Changing
+one row moved every row's output, and the same record scored alone did not
+match itself scored in a batch: training and single-record serving disagreed
+for reasons nothing in the configuration explained.
+
+Feature-level routing is a property of the feature, not of the data passing
+through, so the logits now live in a trainable weight with one row per feature.
+Routing is identical for every row and every batch, and still learned.
+
+<div class="code-container">
+
+```python
+moe = preprocessor.model.get_layer("feature_moe_concat")
+
+moe.routing_logits          # (num_features, num_experts), trainable
+```
+
+</div>
+
+!!! warning "Retrain models that used learned Feature MoE routing"
+    The old `router` Dense layer is gone, so its weights cannot be loaded, and
+    the routing a trained model learned was a function of its batches.
+
+## 🔢 Advanced numerical embedding on discretised features
+
+`NumericalEmbedding` embeds each column it receives, so a feature arriving one
+column wide came back rank 2 and a discretised one -- ten one-hot columns --
+came back rank 3. Mixing the two failed in `Concatenate`, and a model built only
+from discretised features silently produced a three-dimensional output. The
+embedding output is flattened now, so every numeric feature is rank 2:
+a discretised feature with `embedding_dim=8` contributes 80 columns rather
+than a `(10, 8)` block.
+
+### Dict output mode plus Feature MoE round-trips again
+
+That combination used to come back from a save/load with two features holding
+each other's projection weights. `.keras` stores a layer's weights under a name
+derived from its class and the order it was built -- `dense`, `dense_1` -- not
+the name you gave it, and Keras reorders sibling layers when it rebuilds a
+functional graph from config. Dict mode used one `Dense` per feature, so four
+siblings were enough to cross them.
+
+The per-feature projections are one `PerFeatureDense` layer now, holding a
+kernel and bias per feature. The arithmetic is identical and there is no
+sibling to be confused with, so the round trip is exact.
+
+## 🔤 `output_mode="tf_idf"` works
+
+TF-IDF weights each token by how rare it is across documents, and Keras refuses
+a vocabulary in that mode without matching `idf_weights` -- which KDP's
+statistics never collected. The documented, exported `TF_IDF` mode therefore
+could not build at all. The vectorizer is adapted on the column now, which
+computes the vocabulary and the weights together from the same data the
+statistics came from.
+
+## 🧮 `NumericalFeature(use_embedding=True)` is honoured
+
+The flag was stored on the feature and read nowhere, so a feature asking for its
+own embedding came through at its original width. It now turns the embedding on
+for that feature alone, the way `use_advanced_numerical_embedding` does for all
+of them:
+
+<div class="code-container">
+
+```python
+from kdp.features import FeatureType, NumericalFeature
+
+NumericalFeature(
+    name="revenue",
+    feature_type=FeatureType.FLOAT_NORMALIZED,
+    use_embedding=True,
+    embedding_dim=6,      # this feature is six columns wide now, not one
+)
+```
+
+</div>
+
+## 📅 Calendar features read dates, not floats
+
+`calendar_feature_config` on a `TimeSeriesFeature` failed with "Cast string to
+float is not supported": the pipeline declared the column float and cast it
+before the calendar layer ever saw it. Such a feature declares a string column
+now and skips the numeric front of the pipeline. Because one column cannot be
+both a date and a number, combining it with `lag_config`,
+`rolling_stats_config`, `differencing_config`, `moving_average_config`,
+`wavelet_transform_config` or `tsfresh_feature_config` raises -- declare those
+as separate features.
+
+## 〰️ `wavelet_transform_config` needs a window
+
+The wavelet layer computed `min(window, time_steps // 2)`, which is `0` for the
+one-column input a time series feature hands it, and the empty coefficients
+failed to broadcast. It also wrote the window sizes back onto itself, so the
+first batch pinned them for good. Both are fixed, and a wavelet with only one
+step to work on now raises instead of emitting a constant column of zeros:
+combine it with `lag_config`, `rolling_stats_config` or `moving_average_config`
+so there is a window to decompose.
+
+## 🎯 Feature importances rank features now
+
+`get_feature_importances()` returned `1.0` for every feature, on every input.
+Selection wrapped each feature in its own `VariableSelection` with
+`nr_features=1`, and a softmax over one element is `1.0` by definition: the
+gating was real, the numbers ranked nothing, and the documentation had to say
+so.
+
+A single softmax now scores every selected feature against the others. The
+scores sum to one across features and scale each feature's output, so the
+importances are shares you can sort. The output width is unchanged -- each
+selected feature is still `feature_selection_units` wide.
+
+<div class="code-container">
+
+```python
+importances = preprocessor.get_feature_importances(batch)
+# {"age": 0.39, "income": 0.35, "city": 0.18, "signup_date": 0.08}
+```
+
+</div>
+
+!!! warning "Feature selection changes values"
+    Each selected feature is scaled by its score, where before it was
+    multiplied by `1.0`. A model trained on the old output should be retrained.
+
+## 🚫 Configurations that are now rejected
+
+These configurations used to be accepted and then silently do the wrong thing.
+They raise now, with a message naming what to fix.
+
+<div class="code-container">
+
+```python
+from kdp import PreprocessingModel, FeatureType
+
+features = {
+    "age": FeatureType.FLOAT_NORMALIZED,
+    "income": FeatureType.FLOAT_RESCALED,
+}
+
+# Predefined MoE routing with an incomplete map. "income" had no expert, so
+# its routing row was all zeros and the feature was multiplied away -- the
+# model built, ran, and silently dropped the column.
+PreprocessingModel(
+    path_data="data.csv",
+    features_specs=features,
+    use_feature_moe=True,
+    feature_moe_routing="predefined",
+    feature_moe_assignments={"age": 0, "income": 1},  # every feature, or ValueError
+)
+```
+
+</div>
+
+An expert index outside the mixture, or a name the mixture never sees, is
+rejected the same way.
+
+A categorical feature whose column holds no values at all is the other case. Its
+vocabulary came back empty and was replaced with `["<UNK>"]`, which for a string
+feature encoded every real value to the out-of-vocabulary slot — a constant
+column, produced without a word — and for an integer feature failed inside Keras
+with `invalid literal for int() with base 10`, naming neither the feature nor
+the cause. Both now raise a `ValueError` that names the feature and points at
+`CategoryEncodingOptions.HASHING`, which needs no vocabulary.
+
+This check is deliberately narrow. A column of empty strings has the vocabulary
+`[""]` and a column with one repeated value has a vocabulary of length one;
+neither is empty, and both still build.
+
+## 〰️ Time series options that did not do what they said
+
+Two of these raised on every input they were given. The rest were accepted and
+changed nothing.
+
+`WaveletTransformLayer(flatten_output=False)` returned an array of zeros —
+every coefficient it had just computed, discarded — and then declared a rank-2
+shape for the rank-3 tensor it returned, so `set_shape` rejected it before the
+zeros could reach anyone. It now returns the same coefficients as
+`flatten_output=True`, split out per input channel, and inside a
+`TimeSeriesFeature` they are folded back into the feature's columns, so the
+width is the same either way.
+
+`TSFreshFeatureLayer(window_size=...)` computed the window count from the raw
+`window_size` while the extraction clamped it to the length of the series.
+A window longer than the series therefore declared a negative number of
+windows and raised `Dimension -1 must be >= 0`. A window longer than the
+series now covers all of it, which is one window.
+
+`CalendarFeatureLayer(cyclic_encoding=...)` was accepted, stored and
+serialized, and read nowhere: the output is identical whichever value you
+pass. The sin/cos components are requested by name, and always were —
+`features=["month_sin", "month_cos", "day_of_week_sin", "day_of_week_cos"]`.
+The flag is deprecated, warns when you pass it, and still loads.
+
+!!! warning "`month` is not cyclic"
+    If you asked for `month` and set `cyclic_encoding=True`, you were getting a
+    plain normalised month all along, where December and January sit at
+    opposite ends of the range. Add `month_sin` and `month_cos` to `features`
+    to get the encoding the flag promised. This widens your output, so re-fit
+    anything trained on it.
+
+### A `NaN` at the edge of a series reached the model
+
+No imputation strategy can fill a gap at the very start or end of a series: a
+gap at the start has nothing before it to carry forward, a gap at the end
+nothing after it to carry back. `MissingValueHandlerLayer` has an `extrapolate`
+option, documented and defaulting to `True`, that names exactly this case — and
+it was read nowhere. With the default `forward_fill` strategy and
+`mask_value=float("nan")`, a leading `NaN` came back untouched and went
+straight into the model; `backward_fill` and `linear_interpolation` did the
+same at the end.
+
+Those gaps now take the nearest value that is not itself a gap, so no strategy
+leaves a missing value behind. A series missing everywhere has nothing to reach
+for and becomes zeros. Setting `extrapolate=False` keeps the old behaviour, and
+now genuinely means it.
+
+### Options that are accepted and do nothing
+
+Each of these was stored, round-tripped through `get_config`, and read nowhere.
+None of them raises — they are documented as inert so nobody plans around
+behaviour that is not there:
+
+| Option | Why it does nothing |
+|--------|---------------------|
+| `WaveletTransformLayer(drop_na=...)` | The transform zero-fills, so no row carries a `NaN` for it to drop |
+| `MovingAverageLayer(pad_value=...)` | With `drop_na=False` the leading rows keep their original values instead of being padded |
+| `CalendarFeatureLayer(onehot_categorical=...)` | Every requested feature comes back as one numeric column |
+| `CalendarFeatureLayer(cyclic_encoding=...)` | See above — the components are requested by name |
+| `DistributionAwareEncoder(handle_sparsity=...)` | Sparse data is detected and handled as one of the recognised distributions either way |
+| `DateParsingLayer(date_format=...)` | Both `YYYY-MM-DD` and `YYYY/MM/DD` are parsed regardless; the separator is normalised first |
+| `FeatureMoE(routing_activation=...)` | Routing is always a softmax. For fewer experts per feature, use `sparsity` |
+
+A test now walks every class in `kdp` and fails on a constructor argument that
+is stored and never read unless its docstring says so, so this list cannot grow
+without someone deciding it should.
+
+
+## 🔤 `TextVectorizerOutputOptions`
+
+`kdp.features` and `kdp.processor` each defined a class of this name.  The
+`kdp.processor` one held the strings Keras accepts; the `kdp.features` one held
+`auto()` integers, so `TextFeature(output_mode=TextVectorizerOutputOptions.TF_IDF)`
+produced `1` and matched nothing. There is one class now, exported from `kdp`,
+whose members are the strings:
+
+<div class="code-container">
+
+```python
+from kdp import TextVectorizerOutputOptions
+
+TextVectorizerOutputOptions.TF_IDF == "tf_idf"      # True, was False
+```
+
+</div>
+
+If you compared against `.value` and got `1`, `2` or `3`, that comparison now
+sees `"tf_idf"`, `"int"` and `"multi_hot"`.
+
+## 📐 `DistributionType`
+
+Like `TextVectorizerOutputOptions`, this enum existed twice. The `kdp.features`
+copy carried a `WEIBULL` member the encoder has never known, so
+`preferred_distribution=DistributionType.WEIBULL` was warned about and replaced
+with `"normal"`. There is one class now -- the encoder's own -- and every
+member it exposes is a distribution the encoder accepts. `WEIBULL` is gone
+rather than silently ignored.
+
+Note also that `BOUNDED`, `ORDINAL` and `POISSON` can be requested explicitly
+but are never returned by automatic detection: the detector scores no evidence
+for them.
+
+## ✍️ `preferred_distribution`, spelled with two "r"s
+
+`kdp.layers` and the model advisor spell this option `prefered_distribution`,
+with one "r", while `NumericalFeature` takes `preferred_distribution`. The
+feature swallows `**kwargs`, so the misspelling was discarded and the feature
+stayed on automatic detection while looking configured. The advisor's own
+recommendation went the same way, and the code snippet it generates never
+carried the distribution at all -- so following `auto_configure()` end to end
+gave you none of its distribution advice.
+
+Three changes:
+
+- `NumericalFeature` accepts `prefered_distribution` as a deprecated alias and
+  warns. Existing code keeps working.
+- The advisor's recommendation now uses the key `preferred_distribution`. If
+  you read `recommendation["config"]["prefered_distribution"]`, read the
+  correctly spelled key instead.
+- The generated snippet writes `preferred_distribution=...` onto the feature.
+
+<div class="code-container">
+
+```python
+from kdp.features import FeatureType, NumericalFeature
+
+NumericalFeature(
+    name="revenue",
+    feature_type=FeatureType.FLOAT_RESCALED,
+    preferred_distribution="log_normal",   # two "r"s
+)
+```
+
+</div>
+
+## 🕳️ `MissingValueHandlerLayer` and NaN
+
+Missing values were found with `inputs == mask_value`, and NaN compares equal
+to nothing -- not even itself -- so a series carrying the marker pandas and
+numpy actually use passed through untouched, and those NaNs then poisoned
+every statistic computed from it. No value of `mask_value` could select them.
+Setting `mask_value` to NaN now does:
+
+<div class="code-container">
+
+```python
+from kdp.layers.time_series.missing_value_handler_layer import (
+    MissingValueHandlerLayer,
+)
+
+MissingValueHandlerLayer(mask_value=float("nan"), strategy="linear_interpolation")
+```
+
+</div>
+
+A sentinel such as `0.0` behaves exactly as before.
+
+## 📊 `FeatureMoE.get_expert_assignments()`
+
+It returned an empty dictionary for learned routing -- the default -- so the
+documented way to see which expert handles which feature reported nothing. It
+answers for both routing modes now, as `{feature: {expert_index: weight}}`.
+Learned routing decides from the data, so pass it a batch:
+
+<div class="code-container">
+
+```python
+moe = preprocessor.model.get_layer("feature_moe_concat")
+
+moe.get_expert_assignments()            # predefined routing
+moe.get_expert_assignments(batch)       # learned routing
+```
+
+</div>
+
+Predefined routing used to return the map you passed in, unchanged. It now
+returns the same information as weights: `{"age": 0}` reads back as
+`{"age": {0: 1.0}}`.
+
+## 🆕 Methods the documentation promised
+
+`get_timing_metrics()`, `get_memory_usage()` and `plot_model()` appeared in the
+docs and did not exist. They do now:
+
+<div class="code-container">
+
+```python
+preprocessor.build_preprocessor()
+
+print(preprocessor.get_timing_metrics()["total_seconds"])
+print(preprocessor.get_memory_usage()["peak_mb"])
+preprocessor.plot_model("architecture.png")   # needs pydot and Graphviz
+```
+
+</div>
+
+`get_feature_importance()`, `plot_feature_importance()`, `get_top_features()`,
+`update_statistics()`, `transform()` and `fit()` were documented too and were
+never real. The pages that used them now show the working equivalents:
+`get_feature_importances()`, an `overwrite_stats=True` rebuild, and calling the
+built Keras model on a batch.
 
 ## 🗂️ Existing `features_stats.json` files
 

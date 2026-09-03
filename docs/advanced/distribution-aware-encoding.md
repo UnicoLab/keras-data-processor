@@ -108,6 +108,8 @@ preprocessor = PreprocessingModel(
 <div class="code-container">
 
 ```python
+from kdp import FeatureType, PreprocessingModel
+
 from kdp.features import NumericalFeature
 from kdp.layers.distribution_aware_encoder_layer import DistributionType
 
@@ -129,8 +131,6 @@ preprocessor = PreprocessingModel(
     features_specs=features_specs,
     use_distribution_aware=True,
     distribution_aware_bins=1000,
-    detect_periodicity=True,  # Enable periodic pattern detection
-    handle_sparsity=True     # Enable sparse data handling
 )
 ```
 
@@ -251,6 +251,10 @@ preprocessor = PreprocessingModel(
 
 ## ⚙️ Configuration Options
 
+### On `PreprocessingModel`
+
+These two are the whole model-level surface:
+
 <div class="table-container">
   <table class="config-table">
     <thead>
@@ -274,6 +278,88 @@ preprocessor = PreprocessingModel(
         <td>1000</td>
         <td>Number of bins for distribution analysis</td>
       </tr>
+    </tbody>
+  </table>
+</div>
+
+Per feature, set `preferred_distribution` on a `NumericalFeature` to skip
+automatic detection and force a specific distribution.
+
+!!! warning "Automatic detection is a heuristic, and it is not always right"
+    Measured over six seeded samples, detection identifies `heavy_tailed`,
+    `log_normal`, `discrete`, `periodic`, `sparse` and `beta` correctly and
+    consistently. Four shapes are consistently confused with a neighbour:
+
+    | Actual | Detected as |
+    |---|---|
+    | `normal` | `multimodal` |
+    | `uniform` | `multimodal` |
+    | `multimodal` | `periodic` |
+    | `exponential` | `log_normal` |
+
+    The encoding still works &mdash; a neighbouring distribution's transform is
+    usually a reasonable choice &mdash; but if a column's shape matters to you,
+    set `preferred_distribution` on the feature rather than relying on
+    detection. `test/layers/test_distribution_aware_encoder.py` pins this
+    behaviour, so it cannot change without being noticed.
+
+### Available transformations
+
+`transform_type` accepts these; anything else raises. `auto` is the default on
+the encoder and picks from the rest using the column's own shape &mdash;
+whether it is bounded, contains zeros, or contains negative values.
+
+<div class="table-container">
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Requires</th>
+        <th>Use for</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td><code>auto</code></td><td>&mdash;</td><td>Let KDP choose from the column's shape.</td></tr>
+      <tr><td><code>none</code></td><td>&mdash;</td><td>Pass the values through unchanged.</td></tr>
+      <tr><td><code>log</code></td><td>Strictly positive</td><td>Long right tails, such as income.</td></tr>
+      <tr><td><code>sqrt</code></td><td>Non-negative</td><td>Milder right skew; tolerates zeros.</td></tr>
+      <tr><td><code>cube-root</code></td><td>Any sign</td><td>Skew in data that also goes negative.</td></tr>
+      <tr><td><code>arcsinh</code></td><td>Any sign</td><td>Log-like compression that accepts zero and negatives.</td></tr>
+      <tr><td><code>box-cox</code></td><td>Strictly positive</td><td>Power transform toward normality.</td></tr>
+      <tr><td><code>yeo-johnson</code></td><td>Any sign</td><td>Box-Cox for data including zero and negatives.</td></tr>
+      <tr><td><code>logit</code></td><td>Values inside (0, 1)</td><td>Proportions and rates.</td></tr>
+      <tr><td><code>min-max</code></td><td>&mdash;</td><td>Rescale to a fixed range.</td></tr>
+      <tr><td><code>robust-scale</code></td><td>&mdash;</td><td>Median and IQR per feature; resists outliers.</td></tr>
+      <tr><td><code>quantile</code></td><td>&mdash;</td><td>Rank-based, per feature; flattens any shape.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+!!! tip "`auto` narrows the candidates to what the data allows"
+    A column with zeros never gets `log`, and one with negative values never
+    gets `box-cox`, so `auto` cannot produce infinities from an unsuitable
+    transform. Restrict the search yourself with
+    `auto_candidates=["log", "sqrt"]`.
+
+### On the `DistributionAwareEncoder` layer
+
+The processor builds this layer for you with `detect_periodicity=True`,
+`handle_sparsity=True`, `adaptive_binning=True` and `mixture_components=3`
+fixed. To change them, use the layer directly through a
+[custom preprocessing pipeline](custom-preprocessing.md) &mdash; passing them
+to `PreprocessingModel` raises `TypeError`.
+
+<div class="table-container">
+  <table class="config-table">
+    <thead>
+      <tr>
+        <th>Parameter</th>
+        <th>Type</th>
+        <th>Default</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
       <tr>
         <td><code>detect_periodicity</code></td>
         <td>bool</td>
@@ -285,6 +371,12 @@ preprocessor = PreprocessingModel(
         <td>bool</td>
         <td>True</td>
         <td>Special handling for sparse data</td>
+      </tr>
+      <tr>
+        <td><code>adaptive_binning</code></td>
+        <td>bool</td>
+        <td>None</td>
+        <td>Learn bin boundaries from the batch rather than using fixed ones</td>
       </tr>
       <tr>
         <td><code>embedding_dim</code></td>
@@ -385,10 +477,7 @@ preprocessor = PreprocessingModel(
     features_specs=features_specs,
     use_distribution_aware=True,
     distribution_aware_bins=1000,
-    detect_periodicity=True,  # For daily/weekly patterns
-    handle_sparsity=True,    # For low-volume periods
     embedding_dim=32,        # Project to fixed dimension
-    add_distribution_embedding=True  # Add distribution information
 )
 ```
 
@@ -400,6 +489,8 @@ preprocessor = PreprocessingModel(
     <div class="code-container">
 
 ```python
+from kdp import DistributionType, FeatureType, NumericalFeature, PreprocessingModel
+
 features_specs = {
     "temperature": NumericalFeature(
         name="temperature",
@@ -423,8 +514,6 @@ preprocessor = PreprocessingModel(
     features_specs=features_specs,
     use_distribution_aware=True,
     distribution_aware_bins=500,  # Fewer bins for simpler distributions
-    detect_periodicity=True,      # For daily temperature cycles
-    handle_sparsity=False,       # No sparse data expected
     embedding_dim=16             # Smaller embedding for simpler patterns
 )
 ```
@@ -457,7 +546,7 @@ preprocessor = PreprocessingModel(
     <span class="topic-icon">👁️</span>
     <span class="topic-text">Tabular Attention</span>
   </a>
-  <a href="feature-selection.md" class="topic-link">
+  <a href="../optimization/feature-selection.md" class="topic-link">
     <span class="topic-icon">🎯</span>
     <span class="topic-text">Feature Selection</span>
   </a>

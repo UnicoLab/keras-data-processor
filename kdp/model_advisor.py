@@ -189,15 +189,25 @@ class ModelAdvisor:
 
         elif dist_type == "uniform":
             recommendation["preprocessing"].append("FLOAT_RESCALED")
-            recommendation["config"]["min"] = stats.get("min", 0)
-            recommendation["config"]["max"] = stats.get("max", 1)
+            # `FLOAT_RESCALED` multiplies by `scale`, which defaults to 1.0 --
+            # recommending the type while recording only `min` and `max`, which
+            # the feature does not read, produced a configuration that left the
+            # column untouched. The factor is derived from the observed range so
+            # the recommendation does what its note says.
+            low = float(stats.get("min", 0.0))
+            high = float(stats.get("max", 1.0))
+            span = high - low
+            recommendation["config"]["scale"] = (
+                round(1.0 / span, 10) if span > 0 else 1.0
+            )
             recommendation["notes"] = [
-                "Uniform distribution detected, rescaling recommended",
+                "Uniform distribution detected, rescaling by "
+                f"1/{span:g} to bring the range near unit width",
             ]
 
         elif dist_type == "heavy_tailed":
             recommendation["preprocessing"].append("DISTRIBUTION_AWARE")
-            recommendation["config"]["prefered_distribution"] = "heavy_tailed"
+            recommendation["config"]["preferred_distribution"] = "heavy_tailed"
             recommendation["config"]["robust_scaling"] = True
             recommendation["notes"] = [
                 "Heavy-tailed distribution detected, robust scaling recommended",
@@ -205,7 +215,7 @@ class ModelAdvisor:
 
         elif dist_type == "log_normal":
             recommendation["preprocessing"].append("DISTRIBUTION_AWARE")
-            recommendation["config"]["prefered_distribution"] = "log_normal"
+            recommendation["config"]["preferred_distribution"] = "log_normal"
             recommendation["config"]["log_transform"] = True
             recommendation["notes"] = [
                 "Log-normal distribution detected, logarithmic transformation recommended",
@@ -213,7 +223,7 @@ class ModelAdvisor:
 
         elif dist_type == "periodic":
             recommendation["preprocessing"].append("DISTRIBUTION_AWARE")
-            recommendation["config"]["prefered_distribution"] = "periodic"
+            recommendation["config"]["preferred_distribution"] = "periodic"
             recommendation["config"]["trigonometric_features"] = True
             recommendation["notes"] = [
                 "Periodic distribution detected, trigonometric features recommended",
@@ -221,7 +231,7 @@ class ModelAdvisor:
 
         elif dist_type == "multimodal":
             recommendation["preprocessing"].append("DISTRIBUTION_AWARE")
-            recommendation["config"]["prefered_distribution"] = "multimodal"
+            recommendation["config"]["preferred_distribution"] = "multimodal"
             recommendation["config"]["mixture_model"] = True
             recommendation["notes"] = [
                 "Multimodal distribution detected, mixture model encoding recommended",
@@ -229,7 +239,7 @@ class ModelAdvisor:
 
         elif dist_type == "sparse":
             recommendation["preprocessing"].append("DISTRIBUTION_AWARE")
-            recommendation["config"]["prefered_distribution"] = "sparse"
+            recommendation["config"]["preferred_distribution"] = "sparse"
             recommendation["config"]["zero_handling"] = "special"
             recommendation["notes"] = [
                 "Sparse distribution detected, specialized zero handling recommended",
@@ -502,9 +512,9 @@ class ModelAdvisor:
                 "standardize"
             ] = self._determine_text_standardization(special_char_ratio, language)
 
-            # Smart embedding dimension calculation
-            embedding_dim = self._calculate_text_embedding_dim(vocab_size)
-            recommendation["config"]["embedding_dim"] = embedding_dim
+            # No embedding dimension is recorded: TextFeature has no such
+            # option, so recommending one told the reader to write a setting
+            # that does nothing.
 
             # Add advanced text processing options
             if special_char_ratio > 0.1:
@@ -549,7 +559,14 @@ class ModelAdvisor:
 
     def _analyze_date_features(self) -> None:
         """Analyze date features and generate specific recommendations."""
-        date_stats = self.features_stats.get("date_stats", {})
+        # `DatasetStatistics` writes date statistics under "date"; this looked
+        # for "date_stats" and so never found any, which is why a dataset with
+        # a date column came back with no recommendation for it at all. Both
+        # spellings are accepted so a stats file from either side still works.
+        date_stats = self.features_stats.get("date") or self.features_stats.get(
+            "date_stats",
+            {},
+        )
 
         for feature, stats in date_stats.items():
             recommendation = {
@@ -565,30 +582,29 @@ class ModelAdvisor:
             timezone_info = stats.get("timezone_info", None)
             cyclical_patterns = stats.get("cyclical_patterns", [])
 
-            # Basic date feature extraction
-            recommendation["preprocessing"].append("DATE_FEATURES")
-            recommendation["config"]["extract"] = [
-                "year",
-                "month",
-                "day",
-                "dayofweek",
-                "quarter",
-            ]
+            # `DateFeature` reads exactly two options, so the recommendation
+            # only offers those. Year, month, day of month and day of week are
+            # always extracted and always cyclically encoded; the earlier
+            # `extract`, `timezone_aware` and `cyclical_encoding` entries named
+            # settings that do not exist.
+            recommendation["preprocessing"].append("DATE_ENCODING")
+            recommendation["config"]["format"] = stats.get("format", "YYYY-MM-DD")
+            recommendation["notes"].append(
+                "Year, month, day of month and day of week are always encoded "
+                "as sine/cosine pairs (8 columns).",
+            )
 
-            if has_time:
-                recommendation["config"]["extend"].extend(["hour", "minute", "second"])
-
-            # Add timezone handling if needed
-            if timezone_info:
-                recommendation["config"]["timezone_aware"] = True
-                recommendation["config"]["timezone"] = timezone_info
-
-            # Add cyclical encoding for detected patterns
-            if cyclical_patterns:
-                recommendation["advanced_options"]["cyclical_encoding"] = True
-                recommendation["config"]["cyclical_features"] = cyclical_patterns
+            if cyclical_patterns or has_time:
+                recommendation["config"]["add_season"] = True
                 recommendation["notes"].append(
-                    "Cyclical patterns detected, using cyclical encoding",
+                    "Seasonal pattern detected, adding the season one-hot "
+                    "(4 more columns).",
+                )
+
+            if timezone_info:
+                recommendation["notes"].append(
+                    f"Timezone {timezone_info} detected. KDP parses dates only; "
+                    "normalise the timezone before writing the CSV.",
                 )
 
             self.recommendations[feature] = recommendation
@@ -682,8 +698,19 @@ class ModelAdvisor:
                     code.append("        feature_type=FeatureType.FLOAT_NORMALIZED,")
                 elif "FLOAT_RESCALED" in preprocessing:
                     code.append("        feature_type=FeatureType.FLOAT_RESCALED,")
+                    # Without `scale` this feature type is the identity.
+                    if "scale" in config:
+                        code.append(f"        scale={config['scale']},")
                 elif "FLOAT_DISCRETIZED" in preprocessing:
                     code.append("        feature_type=FeatureType.FLOAT_DISCRETIZED,")
+                # The recommended distribution was computed, stored and then
+                # left out of the snippet, so following the advisor produced a
+                # feature on automatic detection instead.
+                if config.get("preferred_distribution"):
+                    code.append(
+                        "        preferred_distribution="
+                        f"\"{config['preferred_distribution']}\",",
+                    )
                 if config.get("use_embedding", False):
                     code.append("        use_embedding=True,")
                     code.append(
@@ -760,8 +787,9 @@ class ModelAdvisor:
                     code.append(
                         f"        output_sequence_length={config['output_sequence_length']},",
                     )
-                if "embedding_dim" in config:
-                    code.append(f"        embedding_dim={config['embedding_dim']},")
+                # `embedding_dim` was emitted here, but TextFeature forwards its
+                # keyword arguments to TextVectorization, which has no such
+                # argument -- it was accepted and silently ignored.
                 code.append("    ),")
 
             elif feature_type == "DateFeature":
@@ -769,15 +797,13 @@ class ModelAdvisor:
                 code.append(f'    "{feature_name}": DateFeature(')
                 code.append(f'        name="{feature_name}",')
                 code.append("        feature_type=FeatureType.DATE,")
-                if "date_format" in config:
-                    code.append(f'        date_format="{config["date_format"]}",')
-                if "output_format" in config:
-                    code.append(f'        output_format="{config["output_format"]}",')
-                if config.get("extract", []):
-                    extract_str = (
-                        "[" + ", ".join([f'"{e}"' for e in config["extract"]]) + "]"
-                    )
-                    code.append(f"        extract={extract_str},")
+                # `date_format`, `output_format` and `extract` were emitted
+                # here; DateFeature reads neither. The two real options are
+                # `format` and `add_season`.
+                if "format" in config:
+                    code.append(f'        format="{config["format"]}",')
+                if config.get("add_season"):
+                    code.append("        add_season=True,")
                 code.append("    ),")
 
         code.append("}")

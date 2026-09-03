@@ -5,13 +5,44 @@ import keras
 import tensorflow as tf
 from loguru import logger
 
+from kdp.layers.distribution_aware_encoder_layer import (
+    DistributionType as _EncoderDistributionType,
+)
 from kdp.layers_factory import PreprocessorLayerFactory
 
 
-class TextVectorizerOutputOptions(Enum):
-    TF_IDF = auto()
-    INT = auto()
-    MULTI_HOT = auto()
+def _columns(shape: tuple) -> int:
+    """How many columns a layer output occupies once flattened.
+
+    A transform that returns a rank-3 tensor -- one block per window, or per
+    input channel -- contributes the product of those dimensions to the feature
+    vector, because the pipeline flattens it.
+
+    Args:
+        shape: The shape a layer reports, batch dimension first.
+
+    Returns:
+        int: The number of columns, ignoring the batch dimension.
+    """
+    width = 1
+    for size in shape[1:]:
+        width *= int(size)
+    return width
+
+
+class TextVectorizerOutputOptions(str, Enum):
+    """Output modes accepted by `TextFeature(output_mode=...)`.
+
+    The members are the exact strings `keras.layers.TextVectorization` and
+    KDP's own checks compare against. They used to be `auto()` integers here
+    while `kdp.processor` defined a second, string-valued class of the same
+    name, so whichever one a caller imported decided whether their option
+    worked or was quietly discarded.
+    """
+
+    TF_IDF = "tf_idf"
+    INT = "int"
+    MULTI_HOT = "multi_hot"
 
 
 class CategoryEncodingOptions:
@@ -20,8 +51,15 @@ class CategoryEncodingOptions:
     HASHING = "HASHING"
 
 
-class CrossFeatureOutputOptions(Enum):
-    INT = auto()
+class CrossFeatureOutputOptions(str, Enum):
+    """Output mode of a crossed feature.
+
+    `feature_crosses` are hashed into integer bins, so `"int"` is the only
+    mode there is. It is spelled as the string the layer takes, for the same
+    reason as `TextVectorizerOutputOptions`.
+    """
+
+    INT = "int"
 
 
 class FeatureType(Enum):
@@ -32,6 +70,9 @@ class FeatureType(Enum):
     INTEGER_CATEGORICAL = auto()
     STRING_CATEGORICAL = auto()
     TEXT = auto()
+    # Crosses are configured with `PreprocessingModel(feature_crosses=[...])`,
+    # not by giving a column this type: a feature declared as CROSSES is
+    # rejected by the feature-space converter.
     CROSSES = auto()
     DATE = auto()
     TIME_SERIES = auto()
@@ -56,26 +97,12 @@ class FeatureType(Enum):
             raise ValueError(f"Unknown feature type: {type_str}")
 
 
-class DistributionType(str, Enum):
-    """Supported distribution types for feature encoding."""
-
-    NORMAL = "normal"
-    HEAVY_TAILED = "heavy_tailed"
-    MULTIMODAL = "multimodal"
-    UNIFORM = "uniform"
-    EXPONENTIAL = "exponential"
-    LOG_NORMAL = "log_normal"
-    DISCRETE = "discrete"
-    PERIODIC = "periodic"
-    SPARSE = "sparse"
-    BETA = "beta"
-    GAMMA = "gamma"
-    POISSON = "poisson"
-    WEIBULL = "weibull"
-    CAUCHY = "cauchy"
-    ZERO_INFLATED = "zero_inflated"
-    BOUNDED = "bounded"
-    ORDINAL = "ordinal"
+# `kdp.features` defined a second `DistributionType` whose members differed from
+# the encoder's own: it carried a `WEIBULL` the encoder does not know, so
+# `preferred_distribution=DistributionType.WEIBULL` was warned about and
+# silently replaced with "normal". The encoder's class is the one that decides
+# what is valid, so it is the one re-exported here.
+DistributionType = _EncoderDistributionType
 
 
 class Feature:
@@ -135,6 +162,29 @@ class Feature:
         return FeatureType.from_string(type_str)
 
 
+class _Unset:
+    """Sentinel marking a parameter the caller never supplied.
+
+    A model-level setting can then fill it in without overriding a value the
+    caller chose. A bare `object()` would render as `<object object at 0x...>`
+    in the generated API reference, so the repr is spelled out here to keep
+    those pages readable and stable across runs.
+    """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        """Render as `<unset>` wherever a default is printed."""
+        return "<unset>"
+
+    def __bool__(self) -> bool:
+        """A missing value is falsy, like the `None` it stands in for."""
+        return False
+
+
+_UNSET = _Unset()
+
+
 class NumericalFeature(Feature):
     """NumericalFeature with dynamic kwargs passing and embedding support."""
 
@@ -144,8 +194,8 @@ class NumericalFeature(Feature):
         feature_type: FeatureType = FeatureType.FLOAT_NORMALIZED,
         preferred_distribution: DistributionType | None = None,
         use_embedding: bool = False,
-        embedding_dim: int = 8,
-        num_bins: int = 10,
+        embedding_dim: int | _Unset = _UNSET,
+        num_bins: int | _Unset = _UNSET,
         **kwargs,
     ) -> None:
         """Initializes a NumericalFeature instance.
@@ -159,16 +209,42 @@ class NumericalFeature(Feature):
             num_bins (int): Number of bins for discretization.
             **kwargs: Additional keyword arguments for the feature.
         """
+        # `kdp.layers` and the model advisor both spell this option with one
+        # "r", so callers reach for that spelling too -- and it landed in
+        # `**kwargs`, which this class swallows, leaving the feature on
+        # automatic detection while looking configured.
+        legacy = kwargs.pop("prefered_distribution", None)
+        if legacy is not None:
+            if preferred_distribution is None:
+                preferred_distribution = legacy
+            logger.warning(
+                f"{name}: `prefered_distribution` is a misspelling of "
+                "`preferred_distribution` and is accepted for compatibility. "
+                "Use `preferred_distribution`.",
+            )
+
         super().__init__(name, feature_type, **kwargs)
         self.dtype = tf.float32
         self.preferred_distribution = preferred_distribution
         self.use_embedding = use_embedding
-        self.embedding_dim = embedding_dim
-        self.num_bins = num_bins
+        # Remember what the caller actually asked for. `PreprocessingModel`
+        # passes its own embedding settings, and those must not overwrite a
+        # value set on the feature itself.
+        self._explicit_embedding_options = {
+            name
+            for name, value in (
+                ("embedding_dim", embedding_dim),
+                ("num_bins", num_bins),
+            )
+            if value is not _UNSET
+        }
+        self.embedding_dim = 8 if embedding_dim is _UNSET else embedding_dim
+        self.num_bins = 10 if num_bins is _UNSET else num_bins
 
     def get_embedding_layer(
         self,
         input_shape: tuple | None = None,  # noqa: ARG002 - kept for API compatibility
+        defaults: dict | None = None,
     ) -> keras.layers.Layer:
         """Creates and returns a NumericalEmbedding layer configured for this feature.
 
@@ -177,20 +253,46 @@ class NumericalFeature(Feature):
                 in its own `build`, so nothing here depends on the shape. The
                 parameter is kept, and optional, so existing callers that pass
                 it keep working.
+            defaults: Model-level embedding settings, used for every option
+                this feature did not set itself. `PreprocessingModel` passes
+                its `embedding_dim`, `mlp_hidden_units`, `num_bins`,
+                `init_min`, `init_max`, `dropout_rate` and `use_batch_norm`
+                here; without them those arguments had no effect at all.
 
         Returns:
             A `NumericalEmbedding` layer built from this feature's settings.
         """
         from kdp.layers.numerical_embedding_layer import NumericalEmbedding
 
+        defaults = defaults or {}
+
+        def resolve(option: str, fallback: object) -> object:
+            """Feature setting wins, then the model-level one, then the default.
+
+            Args:
+                option: Name of the embedding option to resolve.
+                fallback: Value to use when nothing else supplies one.
+
+            Returns:
+                The resolved value for the option.
+            """
+            if option in self._explicit_embedding_options:
+                return getattr(self, option)
+            if option in self.kwargs:
+                return self.kwargs[option]
+            if option in defaults and defaults[option] is not None:
+                return defaults[option]
+            return fallback
+
+        embedding_dim = resolve("embedding_dim", self.embedding_dim)
         return NumericalEmbedding(
-            embedding_dim=self.embedding_dim,
-            mlp_hidden_units=max(16, self.embedding_dim * 2),
-            num_bins=self.num_bins,
-            init_min=self.kwargs.get("init_min", -3.0),
-            init_max=self.kwargs.get("init_max", 3.0),
-            dropout_rate=self.kwargs.get("dropout_rate", 0.1),
-            use_batch_norm=self.kwargs.get("use_batch_norm", True),
+            embedding_dim=embedding_dim,
+            mlp_hidden_units=resolve("mlp_hidden_units", max(16, embedding_dim * 2)),
+            num_bins=resolve("num_bins", self.num_bins),
+            init_min=resolve("init_min", -3.0),
+            init_max=resolve("init_max", 3.0),
+            dropout_rate=resolve("dropout_rate", 0.1),
+            use_batch_norm=resolve("use_batch_norm", True),
             name=f"{self.name}_embedding",
         )
 
@@ -214,11 +316,43 @@ class CategoricalFeature(Feature):
             **kwargs: Additional keyword arguments for the feature.
         """
         super().__init__(name, feature_type, **kwargs)
-        self.category_encoding = category_encoding
+        self.category_encoding = self._normalise_encoding(category_encoding)
         self.dtype = (
             tf.int32 if feature_type == FeatureType.INTEGER_CATEGORICAL else tf.string
         )
         self.kwargs = kwargs
+
+    @staticmethod
+    def _normalise_encoding(category_encoding) -> str:
+        """Accept any casing, reject anything that is not a real option.
+
+        The encoding is compared against `CategoryEncodingOptions` by string
+        equality further down the pipeline, so a value such as "hashing"
+        matched nothing and the feature silently degraded to a bare lookup
+        index -- no hashing, no embedding, no one-hot, and no error.
+
+        Args:
+            category_encoding: The requested encoding, in any casing.
+
+        Returns:
+            str: The canonical encoding name.
+
+        Raises:
+            ValueError: If the encoding is not one of the supported options.
+        """
+        valid = {
+            CategoryEncodingOptions.ONE_HOT_ENCODING,
+            CategoryEncodingOptions.EMBEDDING,
+            CategoryEncodingOptions.HASHING,
+        }
+        if isinstance(category_encoding, str):
+            canonical = category_encoding.upper()
+            if canonical in valid:
+                return canonical
+        raise ValueError(
+            f"Unsupported category_encoding {category_encoding!r}. "
+            f"Expected one of {sorted(valid)}.",
+        )
 
     def _embedding_size_rule(self, nr_categories: int) -> int:
         """Returns the embedding size for a given number of categories using the Embedding Size Rule of Thumb.
@@ -367,6 +501,34 @@ class TimeSeriesFeature(Feature):
         self.wavelet_transform_config = wavelet_transform_config
         self.tsfresh_feature_config = tsfresh_feature_config
         self.calendar_feature_config = calendar_feature_config
+
+        # Calendar features are read from date *strings*, so a feature that asks
+        # for them takes a string column. It used to be declared float like
+        # every other time series feature, and the cast in front of the pipeline
+        # failed with "Cast string to float is not supported" -- the option
+        # could not be used at all. The numeric configs read a number from the
+        # same column, so they cannot be combined with it.
+        if calendar_feature_config:
+            numeric_configs = {
+                "lag_config": lag_config,
+                "rolling_stats_config": rolling_stats_config,
+                "differencing_config": differencing_config,
+                "moving_average_config": moving_average_config,
+                "wavelet_transform_config": wavelet_transform_config,
+                "tsfresh_feature_config": tsfresh_feature_config,
+            }
+            conflicting = sorted(
+                name for name, value in numeric_configs.items() if value
+            )
+            if conflicting:
+                raise ValueError(
+                    f"{name}: calendar_feature_config reads dates from a string "
+                    f"column, so it cannot be combined with {conflicting}, which "
+                    "read numbers from the same column. Declare them as separate "
+                    "features.",
+                )
+            self.dtype = tf.string
+
         self.sequence_length = sequence_length
         self.sort_by = sort_by
         self.sort_ascending = sort_ascending
@@ -574,6 +736,15 @@ class TimeSeriesFeature(Feature):
                     name=f"{self.name}_wavelet",
                 ),
             )
+            if not flatten_output:
+                # `flatten_output=False` keeps the coefficients split by
+                # channel, which is a rank-3 tensor. Everything downstream of a
+                # feature -- the next transform, and the concatenation into the
+                # model output -- works on `(batch, columns)`, so the split is
+                # folded back here. The columns are identical either way.
+                layers.append(
+                    keras.layers.Flatten(name=f"{self.name}_wavelet_flatten"),
+                )
 
         # Add TSFresh feature layer if configured
         if self.tsfresh_feature_config:
@@ -600,6 +771,14 @@ class TimeSeriesFeature(Feature):
                     name=f"{self.name}_tsfresh",
                 ),
             )
+            if window_size is not None:
+                # With a window the layer returns one statistic block per
+                # window -- a rank-3 tensor. Everything downstream of a feature
+                # works on `(batch, columns)`, so the windows are folded into
+                # the columns here.
+                layers.append(
+                    keras.layers.Flatten(name=f"{self.name}_tsfresh_flatten"),
+                )
 
         # Add calendar feature layer if configured
         if self.calendar_feature_config:
@@ -607,17 +786,25 @@ class TimeSeriesFeature(Feature):
                 "features",
                 ["month", "day", "day_of_week", "is_weekend"],
             )
-            cyclic_encoding = self.calendar_feature_config.get("cyclic_encoding", True)
             input_format = self.calendar_feature_config.get("input_format", "%Y-%m-%d")
             normalize = self.calendar_feature_config.get("normalize", True)
+
+            # `cyclic_encoding` is deprecated and does nothing. It is forwarded
+            # only when the caller actually wrote it, so the layer can say so
+            # once, rather than warning about a default nobody chose.
+            calendar_kwargs = {}
+            if "cyclic_encoding" in self.calendar_feature_config:
+                calendar_kwargs["cyclic_encoding"] = self.calendar_feature_config[
+                    "cyclic_encoding"
+                ]
 
             layers.append(
                 CalendarFeatureLayer(
                     features=features,
-                    cyclic_encoding=cyclic_encoding,
                     input_format=input_format,
                     normalize=normalize,
                     name=f"{self.name}_calendar",
+                    **calendar_kwargs,
                 ),
             )
 
@@ -635,6 +822,14 @@ class TimeSeriesFeature(Feature):
         Returns:
             int: The number of columns the layer stack produces.
         """
+        from kdp.layers.time_series.calendar_feature_layer import (
+            CalendarFeatureLayer,
+        )
+        from kdp.layers.time_series.tsfresh_feature_layer import TSFreshFeatureLayer
+        from kdp.layers.time_series.wavelet_transform_layer import (
+            WaveletTransformLayer,
+        )
+
         dim = 1
 
         if self.lag_config and "lags" in self.lag_config:
@@ -659,49 +854,53 @@ class TimeSeriesFeature(Feature):
             keep_original = self.moving_average_config.get("keep_original", True)
             dim *= len(periods) + 1 if keep_original else len(periods)
 
-        # The remaining transforms append their columns to whatever came before.
+        # The three below replace what came before them rather than adding to
+        # it, so each asks its own layer how wide its output is.
         if self.wavelet_transform_config:
-            levels = self.wavelet_transform_config.get("levels", 3)
-            keep_levels = self.wavelet_transform_config.get("keep_levels", "all")
-            flatten_output = self.wavelet_transform_config.get("flatten_output", True)
-
-            if not flatten_output:
-                wavelet_dims = 1
-            elif keep_levels == "all":
-                wavelet_dims = levels
-            elif isinstance(keep_levels, list):
-                wavelet_dims = len(keep_levels)
-            else:
-                wavelet_dims = 1
-            dim += wavelet_dims
+            # The wavelet replaces the columns it is given with coefficients
+            # rather than appending to them, and how many coefficients it
+            # produces depends on how wide its input is. Asking the layer is
+            # the only way to get that right: counting `levels` -- what this
+            # did before -- matched the real width for no configuration at all.
+            dim = _columns(
+                WaveletTransformLayer(
+                    levels=self.wavelet_transform_config.get("levels", 3),
+                    window_sizes=self.wavelet_transform_config.get("window_sizes"),
+                    keep_levels=self.wavelet_transform_config.get(
+                        "keep_levels",
+                        "all",
+                    ),
+                ).compute_output_shape((None, dim)),
+            )
 
         if self.tsfresh_feature_config:
-            features = self.tsfresh_feature_config.get(
-                "features",
-                ["mean", "std", "min", "max", "median"],
+            # Also a replacement: the statistics stand in for the series they
+            # were computed from. Counting them as extra columns on top of it
+            # over-reported the width for every configuration.
+            dim = _columns(
+                TSFreshFeatureLayer(
+                    features=self.tsfresh_feature_config.get(
+                        "features",
+                        ["mean", "std", "min", "max", "median"],
+                    ),
+                    window_size=self.tsfresh_feature_config.get("window_size"),
+                    stride=self.tsfresh_feature_config.get("stride", 1),
+                ).compute_output_shape((None, dim)),
             )
-            dim += len(features)
 
         if self.calendar_feature_config:
-            features = self.calendar_feature_config.get(
-                "features",
-                ["month", "day", "day_of_week", "is_weekend"],
+            # The calendar columns replace the date column they are read from,
+            # one column per requested feature. `cyclic_encoding` does not
+            # widen the output: sin and cos components are requested by name,
+            # as `month_sin` and `month_cos`.
+            dim = _columns(
+                CalendarFeatureLayer(
+                    features=self.calendar_feature_config.get(
+                        "features",
+                        ["month", "day", "day_of_week", "is_weekend"],
+                    ),
+                ).compute_output_shape((None, dim)),
             )
-            cyclic_encoding = self.calendar_feature_config.get("cyclic_encoding", True)
-            # Cyclic components are encoded as a sin/cos pair.
-            cyclic_features = {
-                "month",
-                "day",
-                "day_of_week",
-                "quarter",
-                "hour",
-                "minute",
-            }
-            if cyclic_encoding:
-                for feature in features:
-                    dim += 2 if feature in cyclic_features else 1
-            else:
-                dim += len(features)
 
         return dim
 

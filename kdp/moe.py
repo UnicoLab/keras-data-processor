@@ -9,6 +9,162 @@ import keras
 
 
 @keras.saving.register_keras_serializable(package="kdp.moe")
+class PadFeatureLayer(keras.layers.Layer):
+    """Right-pad a feature with zeros so every feature stacks to one width.
+
+    `StackFeaturesLayer` needs `[batch, num_features, feature_dim]`, which means
+    every feature must be the same width. Real feature sets are not: a
+    normalised float is one column and a discretised one is ten. Padding keeps
+    each feature whole and identifiable, and costs no parameters -- a feature
+    already at the target width is returned untouched.
+    """
+
+    def __init__(self, width: int, **kwargs):
+        """Initialize the layer.
+
+        Args:
+            width: The width every feature is padded up to.
+            **kwargs: Passed to the parent layer.
+        """
+        super().__init__(**kwargs)
+        self.width = int(width)
+
+    def call(self, inputs) -> tf.Tensor:
+        """Pad the last axis up to `width`.
+
+        Args:
+            inputs: A tensor shaped `[batch, feature_dim]`.
+
+        Returns:
+            The tensor padded on the right to `[batch, width]`.
+        """
+        missing = self.width - int(inputs.shape[-1])
+        if missing <= 0:
+            return inputs
+        return tf.pad(inputs, [[0, 0], [0, missing]])
+
+    def compute_output_shape(self, input_shape) -> tuple:
+        """Report the padded shape.
+
+        Args:
+            input_shape: Shape of the input tensor.
+
+        Returns:
+            The same shape with the last axis set to `width`.
+        """
+        return (*tuple(input_shape[:-1]), self.width)
+
+    def get_config(self) -> dict:
+        """Return the configuration needed to rebuild this layer.
+
+        Returns:
+            The layer configuration.
+        """
+        config = super().get_config()
+        config.update({"width": self.width})
+        return config
+
+
+@keras.saving.register_keras_serializable(package="kdp.moe")
+class PerFeatureDense(keras.layers.Layer):
+    """Project every feature with its own weights, in a single layer.
+
+    Dict-mode Feature MoE used one `Dense` per feature. `.keras` stores a
+    layer's weights under a name derived from its class and the order it was
+    built -- `dense`, `dense_1`, `dense_2` -- rather than the name it was given,
+    and Keras reorders sibling layers when it rebuilds a functional graph from
+    config. Four sibling `Dense` layers therefore came back holding each other's
+    kernels: a reloaded model returned one feature's projection under another
+    feature's name, silently.
+
+    One layer holding a weight per feature is arithmetically the same and has no
+    sibling to be confused with.
+    """
+
+    def __init__(self, units: int, activation=None, **kwargs):
+        """Initialize the layer.
+
+        Args:
+            units: Width of each feature's projection.
+            activation: Activation applied to the result, by name or callable.
+            **kwargs: Passed to the parent layer.
+        """
+        super().__init__(**kwargs)
+        self.units = int(units)
+        self.activation = keras.activations.get(activation)
+
+    def build(self, input_shape) -> None:
+        """Create one kernel and bias per feature.
+
+        Args:
+            input_shape: `[batch, num_features, input_dim]`.
+
+        Raises:
+            ValueError: If the feature or input dimension is not known.
+        """
+        _, num_features, input_dim = tuple(input_shape)
+        if num_features is None or input_dim is None:
+            raise ValueError(
+                "PerFeatureDense needs a known number of features and input "
+                f"width, got {tuple(input_shape)}.",
+            )
+        self.kernel = self.add_weight(
+            name="kernel",
+            shape=(num_features, input_dim, self.units),
+            initializer="glorot_uniform",
+            trainable=True,
+        )
+        self.bias = self.add_weight(
+            name="bias",
+            shape=(num_features, self.units),
+            initializer="zeros",
+            trainable=True,
+        )
+        super().build(input_shape)
+
+    def call(self, inputs) -> tf.Tensor:
+        """Apply each feature's own projection.
+
+        Args:
+            inputs: `[batch, num_features, input_dim]`.
+
+        Returns:
+            `[batch, num_features, units]`.
+        """
+        projected = tf.einsum("bfi,fio->bfo", inputs, self.kernel) + self.bias
+        if self.activation is not None:
+            projected = self.activation(projected)
+        return projected
+
+    def compute_output_shape(self, input_shape) -> tuple:
+        """Report the projected shape.
+
+        Args:
+            input_shape: `[batch, num_features, input_dim]`.
+
+        Returns:
+            The same shape with the last axis set to `units`.
+        """
+        batch, num_features, _ = tuple(input_shape)
+        return (batch, num_features, self.units)
+
+    def get_config(self) -> dict:
+        """Return the configuration needed to rebuild this layer.
+
+        Returns:
+            The layer configuration.
+        """
+        config = super().get_config()
+        config.update(
+            {
+                "units": self.units,
+                "activation": keras.activations.serialize(self.activation),
+            },
+        )
+        return config
+
+
+@keras.saving.register_keras_serializable(package="kdp.moe")
 class StackFeaturesLayer(keras.layers.Layer):
     """Layer to stack individual features along a new axis (dim 1) for use with Feature MoE."""
 
@@ -45,6 +201,16 @@ class StackFeaturesLayer(keras.layers.Layer):
         """
         if not isinstance(input_shape, list):
             raise ValueError("Input must be a list of tensors")
+
+        # This reported the *first* feature's width whatever the others were,
+        # so Keras built a graph on a shape `tf.stack` cannot produce and the
+        # model failed on its first real batch instead of at build time.
+        widths = {shape[-1] for shape in input_shape if shape[-1] is not None}
+        if len(widths) > 1:
+            raise ValueError(
+                "Every feature must be the same width to stack. Got "
+                f"{sorted(widths)}; pad them to a common width first.",
+            )
 
         batch_size = input_shape[0][0]
         feature_dim = input_shape[0][-1]
@@ -183,6 +349,23 @@ class ExpertBlock(keras.layers.Layer):
             name="expert_output",
         )
 
+    def build(self, input_shape) -> None:
+        """Build the stacked layers so Keras does not mark the block falsely built.
+
+        The layers are created in `__init__`, so without this Keras 3 warns that
+        the block "does not have a `build()` method implemented and it looks
+        like it has unbuilt state", and marks it built anyway.
+
+        Args:
+            input_shape: Shape of the input to the expert.
+        """
+        shape = tuple(input_shape)
+        for layer in self.hidden_layers:
+            layer.build(shape)
+            shape = layer.compute_output_shape(shape)
+        self.output_layer.build(shape)
+        super().build(input_shape)
+
     def call(self, inputs, training=None) -> tf.Tensor:
         """Forward pass through the expert network.
 
@@ -256,7 +439,10 @@ class FeatureMoE(keras.layers.Layer):
             expert_hidden_dims: Hidden dimensions for each expert
             routing: Routing mechanism - "learned" or "predefined"
             sparsity: Number of experts to use per feature (for sparse routing)
-            routing_activation: Activation for routing weights ("softmax" or "sparsemax")
+            routing_activation: Accepted and not used. Routing weights are
+                always a softmax over the logits; "sparsemax" is not
+                implemented. To route each feature to fewer experts, set
+                `sparsity`, which masks all but its top-k logits.
             feature_names: Names of input features (required for predefined routing)
             predefined_assignments: Mapping from feature name to expert index
             freeze_experts: Whether to freeze the expert weights during training
@@ -272,7 +458,9 @@ class FeatureMoE(keras.layers.Layer):
         self.expert_dim = expert_dim
         self.expert_hidden_dims = expert_hidden_dims
         self.routing = routing
-        self.sparsity = min(sparsity, num_experts)
+        # `tf.nn.top_k` rejects a float `k`, and a saved config can bring
+        # this back as one, so it is pinned to an int here.
+        self.sparsity = int(min(sparsity, num_experts))
         self.routing_activation = routing_activation
         self.feature_names = feature_names
         self.predefined_assignments = predefined_assignments
@@ -281,11 +469,15 @@ class FeatureMoE(keras.layers.Layer):
         self.use_batch_norm = use_batch_norm
 
         # Validate parameters
-        if routing == "predefined" and (
-            not feature_names or not predefined_assignments
-        ):
-            raise ValueError(
-                "For predefined routing, feature_names and predefined_assignments must be provided",
+        if routing == "predefined":
+            if not feature_names or not predefined_assignments:
+                raise ValueError(
+                    "For predefined routing, feature_names and predefined_assignments must be provided",
+                )
+            self._validate_assignments(
+                feature_names=feature_names,
+                assignments=predefined_assignments,
+                num_experts=num_experts,
             )
 
         # Initialize experts
@@ -300,13 +492,108 @@ class FeatureMoE(keras.layers.Layer):
             for i in range(num_experts)
         ]
 
-        # Set up routing mechanism
-        if routing == "learned":
-            # Router network maps feature representations to expert weights
-            self.router = keras.layers.Dense(num_experts, use_bias=True, name="router")
-        else:
+        # `freeze_experts` only passed `training=False` to each expert, which
+        # controls dropout and batch-norm behaviour, not whether the weights
+        # receive gradients -- so the experts were still trained. Marking them
+        # untrainable is what the option is documented to do.
+        if freeze_experts:
+            for expert in self.experts:
+                expert.trainable = False
+
+        # Set up routing mechanism. Learned routing keeps its logits in a
+        # weight created in `build`, one row per feature; see
+        # `_compute_routing_weights` for why they cannot come from the input.
+        self.routing_logits = None
+        if routing != "learned":
             # Create a fixed assignment matrix for predefined routing
             self._create_assignment_matrix()
+
+    def build(self, input_shape) -> None:
+        """Create the learned routing logits, one row per feature.
+
+        Args:
+            input_shape: Shape of the stacked features,
+                `[batch, num_features, feature_dim]`.
+
+        Raises:
+            ValueError: If the number of features is not known statically, or
+                does not match the names given for predefined routing.
+        """
+        num_features = input_shape[1]
+        if num_features is None:
+            raise ValueError(
+                "FeatureMoE needs to know how many features it is routing. "
+                f"Got an unknown second dimension in {tuple(input_shape)}.",
+            )
+        if self.feature_names and len(self.feature_names) != num_features:
+            raise ValueError(
+                f"FeatureMoE was given {len(self.feature_names)} feature names "
+                f"but {num_features} features to route.",
+            )
+
+        if self.routing == "learned":
+            self.routing_logits = self.add_weight(
+                name="routing_logits",
+                shape=(num_features, self.num_experts),
+                initializer="glorot_uniform",
+                trainable=True,
+            )
+
+        for expert in self.experts:
+            if not expert.built:
+                expert.build(input_shape)
+        super().build(input_shape)
+
+    @staticmethod
+    def _validate_assignments(
+        feature_names: list[str],
+        assignments: dict[str, int | dict[int, float]],
+        num_experts: int,
+    ) -> None:
+        """Reject predefined assignments that would silently zero out a feature.
+
+        The assignment matrix doubles as the routing weights, so a feature with
+        no entry gets an all-zero row and its whole representation is multiplied
+        away. An out-of-range expert index is the same failure with a different
+        cause. Both are configuration mistakes, so they are reported rather than
+        absorbed.
+
+        Args:
+            feature_names: Features that will be routed through the mixture.
+            assignments: The caller's feature -> expert mapping.
+            num_experts: How many experts exist to route to.
+
+        Raises:
+            ValueError: If a feature is unassigned or an expert index is invalid.
+        """
+        missing = [name for name in feature_names if name not in assignments]
+        if missing:
+            raise ValueError(
+                "Predefined routing needs an expert for every feature. "
+                f"Missing assignments for: {sorted(missing)}. "
+                "Unassigned features would be zeroed out by the router.",
+            )
+
+        unknown = [name for name in assignments if name not in feature_names]
+        if unknown:
+            raise ValueError(
+                f"Predefined assignments name features the mixture never sees: {sorted(unknown)}. "
+                f"Known features: {sorted(feature_names)}.",
+            )
+
+        for name in feature_names:
+            target = assignments[name]
+            indices = target.keys() if isinstance(target, dict) else [target]
+            for index in indices:
+                if not isinstance(index, int) or isinstance(index, bool):
+                    raise ValueError(
+                        f"Expert index for {name!r} must be an int, got {index!r}.",
+                    )
+                if not 0 <= index < num_experts:
+                    raise ValueError(
+                        f"Expert index {index} for {name!r} is out of range "
+                        f"for a mixture of {num_experts} experts.",
+                    )
 
     def _create_assignment_matrix(self) -> None:
         """Create a fixed assignment matrix for predefined routing."""
@@ -352,21 +639,21 @@ class FeatureMoE(keras.layers.Layer):
             # Use fixed assignments; expand dims for broadcasting over the batch.
             return tf.expand_dims(self.assignment_matrix, 0)
         else:
-            # Compute routing weights using the router network
-            # Average the feature representations along the batch dimension
-            # to get feature-level routing rather than instance-level
-            feature_reprs = tf.reduce_mean(
-                inputs,
-                axis=0,
-            )  # [num_features, feature_dim]
+            # The logits used to come from a Dense layer fed the batch *mean* of
+            # the features. Routing therefore depended on which rows happened to
+            # share a batch: changing one row moved every row's output, and a
+            # record scored alone did not match the same record scored in a
+            # batch. Feature-level routing is a property of the feature, so it
+            # lives in a learned weight and is identical for every row.
+            routing_logits = self.routing_logits  # [num_features, num_experts]
 
-            # Get logits from router
-            routing_logits = self.router(feature_reprs)  # [num_features, num_experts]
-
-            # Apply activation
-            if self.routing_activation == "softmax":
-                weights = tf.nn.softmax(routing_logits, axis=-1)
-            else:  # Implement sparse routing
+            # `sparsity` names how many experts each feature may use, and the
+            # top-k mask below is what enforces it. It used to sit behind
+            # `routing_activation != "softmax"`, a knob `PreprocessingModel`
+            # never exposed, so the branch was unreachable and the documented
+            # "use only top k experts" never happened: every feature was routed
+            # densely to all of them.
+            if self.sparsity < self.num_experts:
                 # Sort logits and keep only top-k
                 top_logits, top_indices = tf.nn.top_k(
                     routing_logits,
@@ -375,11 +662,11 @@ class FeatureMoE(keras.layers.Layer):
                 )
 
                 # Create a mask for the top-k logits
-                batch_size = tf.shape(feature_reprs)[0]
+                num_features = tf.shape(routing_logits)[0]
                 mask = tf.scatter_nd(
                     indices=tf.stack(
                         [
-                            tf.repeat(tf.range(batch_size), self.sparsity),
+                            tf.repeat(tf.range(num_features), self.sparsity),
                             tf.reshape(top_indices, [-1]),
                         ],
                         axis=1,
@@ -391,6 +678,8 @@ class FeatureMoE(keras.layers.Layer):
                 # Apply mask and softmax
                 masked_logits = routing_logits * mask - 1e9 * (1.0 - mask)
                 weights = tf.nn.softmax(masked_logits, axis=-1)
+            else:
+                weights = tf.nn.softmax(routing_logits, axis=-1)
 
             # Expand dims for broadcasting
             return tf.expand_dims(weights, 0)  # [1, num_features, num_experts]
@@ -447,27 +736,58 @@ class FeatureMoE(keras.layers.Layer):
             axis=-2,
         )  # [batch_size, num_features, expert_dim]
 
-    def get_expert_assignments(self) -> dict:
-        """Get the current expert assignments for each feature.
+    def get_expert_assignments(self, inputs=None) -> dict:
+        """Report how much of each feature each expert handles.
 
-        For predefined routing, this returns the predefined_assignments dictionary.
-        For learned routing, this calculates the current assignments based on router weights.
+        Learned routing used to return an empty dictionary here, so the
+        documented way to see which expert handles which feature reported
+        nothing at all for the default routing mode. The router decides from
+        the feature representations rather than from its weights alone, so a
+        batch is needed to answer the question.
+
+        Args:
+            inputs: A batch shaped like the one `call` receives,
+                `[batch_size, num_features, feature_dim]`. Required for learned
+                routing; ignored for predefined routing, whose assignments are
+                fixed.
 
         Returns:
-            dict: Feature assignments to experts
+            dict: `{feature_name: {expert_index: weight}}`, keeping only the
+            experts with a non-zero share. Feature names fall back to
+            `feature_0`, `feature_1`, ... when the layer was built without them.
+
+        Raises:
+            ValueError: If learned routing is in use and no batch is given.
         """
         if self.routing == "predefined":
-            return self.predefined_assignments
-        elif self.routing == "learned":
-            # Extract feature to expert assignments from learned router
-            # Get the router weights and determine dominant expert(s) for each feature
-            # Commenting out unused variable
-            # router_weights = self.router.kernel  # [feature_dim, num_experts]
+            assignments = {}
+            for name, target in (self.predefined_assignments or {}).items():
+                if isinstance(target, dict):
+                    assignments[name] = {
+                        int(index): float(weight) for index, weight in target.items()
+                    }
+                else:
+                    assignments[name] = {int(target): 1.0}
+            return assignments
 
-            # For now, return empty dict - this is a placeholder for learned routing
-            return {}
-        else:
-            return {}
+        if inputs is None:
+            raise ValueError(
+                "Learned routing decides the assignments from the data, so a "
+                "batch of stacked features is needed to report them. Pass the "
+                "same tensor you would pass to the layer.",
+            )
+
+        weights = self._compute_routing_weights(inputs, training=False)[0]
+        rows = weights.numpy()
+        names = self.feature_names or [f"feature_{i}" for i in range(len(rows))]
+        return {
+            name: {
+                index: float(weight)
+                for index, weight in enumerate(row)
+                if float(weight) > 0
+            }
+            for name, row in zip(names, rows, strict=False)
+        }
 
     def get_config(self) -> dict:
         """Get layer configuration for serialization."""
@@ -532,8 +852,19 @@ def add_feature_moe_to_model(
         model.get_layer(f"preprocessed_{name}").output for name in feature_names
     ]
 
+    # Features rarely come out of preprocessing the same width, and stacking
+    # needs them equal. `PreprocessingModel` pads them for exactly this reason;
+    # doing it here too means this helper is not limited to the case where
+    # every feature happens to match. The widest is padded by zero columns, so
+    # nothing is added to it.
+    widest = max(int(output.shape[-1]) for output in feature_outputs)
+    padded_outputs = [
+        PadFeatureLayer(width=widest, name=f"{name}_moe_pad")(output)
+        for name, output in zip(feature_names, feature_outputs, strict=True)
+    ]
+
     # Stack feature representations
-    stacked_features = StackFeaturesLayer()(feature_outputs)
+    stacked_features = StackFeaturesLayer()(padded_outputs)
 
     # Apply Feature-wise MoE
     moe = FeatureMoE(

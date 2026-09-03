@@ -353,3 +353,188 @@ class TestMissingValueHandlerLayer(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestNaNAsTheMissingMarker(unittest.TestCase):
+    """NaN is the marker pandas and numpy use, and it never matched.
+
+    Missing values were found with `inputs == self.mask_value`, and NaN equals
+    nothing -- not even itself -- so a series carrying NaN passed through
+    untouched and the NaNs then poisoned every statistic computed downstream.
+    There was no value of `mask_value` that could select them.
+    """
+
+    def setUp(self):
+        """One series of twelve steps, with two holes punched in it."""
+        self.series = np.arange(1, 13, dtype="float32").reshape(1, -1)
+        self.gappy = self.series.copy()
+        self.gappy[0, 3] = np.nan
+        self.gappy[0, 7] = np.nan
+
+    def _impute(self, strategy):
+        """Run one strategy over the gappy series with NaN as the marker."""
+        layer = MissingValueHandlerLayer(
+            mask_value=float("nan"),
+            strategy=strategy,
+            add_indicators=False,
+        )
+        return layer(tf.constant(self.gappy)).numpy()
+
+    def test_no_strategy_leaves_a_nan_behind(self):
+        """Every strategy has to fill the holes it was given."""
+        for strategy in (
+            "forward_fill",
+            "backward_fill",
+            "linear_interpolation",
+            "mean",
+            "median",
+            "rolling_mean",
+            "seasonal",
+        ):
+            with self.subTest(strategy=strategy):
+                self.assertFalse(np.isnan(self._impute(strategy)).any())
+
+    def test_forward_fill_carries_the_previous_value(self):
+        """The value before the hole is what forward fill must use."""
+        filled = self._impute("forward_fill")
+        self.assertAlmostEqual(float(filled[0, 3]), 3.0, places=5)
+        self.assertAlmostEqual(float(filled[0, 7]), 7.0, places=5)
+
+    def test_backward_fill_carries_the_next_value(self):
+        """And backward fill must use the value after it."""
+        filled = self._impute("backward_fill")
+        self.assertAlmostEqual(float(filled[0, 3]), 5.0, places=5)
+        self.assertAlmostEqual(float(filled[0, 7]), 9.0, places=5)
+
+    def test_interpolation_sits_between_the_neighbours(self):
+        """A single gap interpolates to the midpoint of its neighbours."""
+        filled = self._impute("linear_interpolation")
+        self.assertAlmostEqual(float(filled[0, 3]), 4.0, places=5)
+        self.assertAlmostEqual(float(filled[0, 7]), 8.0, places=5)
+
+    def test_present_values_are_untouched(self):
+        """Imputation must not disturb the data that was already there."""
+        filled = self._impute("forward_fill")
+        present = [i for i in range(12) if i not in (3, 7)]
+        np.testing.assert_allclose(
+            filled[0, present],
+            self.series[0, present],
+            rtol=1e-6,
+        )
+
+    def test_indicators_mark_exactly_the_holes(self):
+        """The indicator column has to agree with where the NaNs were."""
+        layer = MissingValueHandlerLayer(
+            mask_value=float("nan"),
+            strategy="forward_fill",
+            add_indicators=True,
+        )
+        flags = layer(tf.constant(self.gappy)).numpy()[..., 1].ravel()
+        np.testing.assert_array_equal(np.flatnonzero(flags), [3, 7])
+
+    def test_the_default_marker_still_selects_zeros(self):
+        """Changing NaN detection must not change what `mask_value=0.0` means."""
+        zeroed = self.series.copy()
+        zeroed[0, 3] = 0.0
+        layer = MissingValueHandlerLayer(strategy="forward_fill", add_indicators=False)
+        filled = layer(tf.constant(zeroed)).numpy()
+        self.assertAlmostEqual(float(filled[0, 3]), 3.0, places=5)
+
+    def test_a_nan_free_series_is_unchanged(self):
+        """With nothing missing, the layer must be the identity."""
+        layer = MissingValueHandlerLayer(
+            mask_value=float("nan"),
+            strategy="mean",
+            add_indicators=False,
+        )
+        np.testing.assert_allclose(
+            layer(tf.constant(self.series)).numpy(),
+            self.series,
+            rtol=1e-6,
+        )
+
+
+class TestBoundaryGaps(unittest.TestCase):
+    """Gaps at the ends of a series, which no strategy can reach on its own.
+
+    A gap at the start has nothing before it to carry forward and a gap at the
+    end has nothing after it to carry back, so `forward_fill` -- the default --
+    returned a leading `NaN` exactly as it arrived and it went into the model.
+    `extrapolate` is documented to prevent that and was read nowhere.
+    """
+
+    STRATEGIES = (
+        "forward_fill",
+        "backward_fill",
+        "linear_interpolation",
+        "mean",
+        "median",
+        "rolling_mean",
+        "seasonal",
+    )
+
+    @staticmethod
+    def _series(with_gaps=True):
+        series = np.arange(1.0, 13.0, dtype="float32")
+        if with_gaps:
+            series[0] = np.nan
+            series[3] = np.nan
+            series[11] = np.nan
+        return series.reshape(1, -1)
+
+    @staticmethod
+    def _values(output):
+        array = np.asarray(output)
+        return array[0, :, 0] if array.ndim == 3 else array[0]
+
+    def test_no_strategy_leaves_a_missing_value_behind(self):
+        for strategy in self.STRATEGIES:
+            with self.subTest(strategy=strategy):
+                output = MissingValueHandlerLayer(
+                    mask_value=float("nan"),
+                    strategy=strategy,
+                )(tf.constant(self._series()))
+                self.assertFalse(np.isnan(self._values(output)).any())
+
+    def test_turning_it_off_leaves_the_ends_alone(self):
+        """`extrapolate=False` has to mean something, not merely be accepted."""
+        for strategy in ("forward_fill", "backward_fill", "linear_interpolation"):
+            with self.subTest(strategy=strategy):
+                output = MissingValueHandlerLayer(
+                    mask_value=float("nan"),
+                    strategy=strategy,
+                    extrapolate=False,
+                )(tf.constant(self._series()))
+                self.assertTrue(np.isnan(self._values(output)).any())
+
+    def test_a_gap_takes_the_nearest_value(self):
+        output = MissingValueHandlerLayer(
+            mask_value=float("nan"),
+            strategy="forward_fill",
+        )(tf.constant(self._series()))
+        values = self._values(output)
+        self.assertAlmostEqual(float(values[0]), 2.0, places=5)
+        self.assertAlmostEqual(float(values[11]), 11.0, places=5)
+
+    def test_a_series_missing_everywhere_has_nothing_to_reach_for(self):
+        output = MissingValueHandlerLayer(mask_value=float("nan"))(
+            tf.constant(np.full((1, 8), np.nan, dtype="float32")),
+        )
+        values = self._values(output)
+        self.assertFalse(np.isnan(values).any())
+        np.testing.assert_allclose(values, np.zeros(8, dtype="float32"))
+
+    def test_the_three_dimensional_path_too(self):
+        series = np.stack([self._series(False)[0], self._series(False)[0]], axis=-1)
+        batch = series[None, ...].copy()
+        batch[0, 0, 0] = np.nan
+        batch[0, 11, 1] = np.nan
+        output = np.asarray(
+            MissingValueHandlerLayer(mask_value=float("nan"))(tf.constant(batch)),
+        )
+        self.assertFalse(np.isnan(output).any())
+
+    def test_a_series_without_gaps_is_untouched(self):
+        clean = self._series(with_gaps=False)
+        output = MissingValueHandlerLayer(mask_value=0.0)(tf.constant(clean))
+        np.testing.assert_allclose(self._values(output), clean[0], rtol=1e-6)

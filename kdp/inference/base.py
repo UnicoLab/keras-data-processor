@@ -1,4 +1,6 @@
 import pandas as pd
+import datetime
+
 import numpy as np
 import tensorflow as tf
 
@@ -18,6 +20,28 @@ def _is_missing(value) -> bool:
         return bool(pd.isna(value))
     except (TypeError, ValueError):
         return False
+
+
+def _as_text(value) -> str:
+    """Render a value as the string the preprocessing graph expects.
+
+    `str()` on a pandas Timestamp yields "2023-03-01 00:00:00". `DateParsingLayer`
+    splits on the date separator and calls `tf.strings.to_number` on each part,
+    so the trailing time turned the day into "01 00:00:00" and the graph failed
+    with "Cast string to float is not supported". Dates are rendered in the
+    ISO form the layer parses, which is also how they appear in a CSV.
+
+    Args:
+        value: The value to render.
+
+    Returns:
+        str: The value as text.
+    """
+    if isinstance(value, pd.Timestamp | datetime.datetime | datetime.date):
+        return value.strftime("%Y-%m-%d")
+    if isinstance(value, np.datetime64):
+        return pd.Timestamp(value).strftime("%Y-%m-%d")
+    return str(value)
 
 
 class InferenceFormatter:
@@ -119,7 +143,7 @@ class InferenceFormatter:
                 # Missing categories become the empty string, which every
                 # vocabulary layer maps to its out-of-vocabulary slot.
                 tf_data[key] = tf.constant(
-                    ["" if _is_missing(item) else str(item) for item in values],
+                    ["" if _is_missing(item) else _as_text(item) for item in values],
                 )
 
         return tf_data

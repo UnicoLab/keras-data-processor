@@ -11,6 +11,7 @@ This module provides:
 
 import keras
 import gc
+from pathlib import Path
 import os
 import tempfile
 import shutil
@@ -367,7 +368,11 @@ def pytest_collection_modifyitems(config, items):
     slow_tests = []
 
     for item in items:
-        # Add markers based on file names and test names
+        # Exactly one group marker per test, and always one: CI selects tests by
+        # these markers, so a test that gets none never runs there. The speed
+        # markers below used to be assigned *instead of* `unit`, which quietly
+        # hid 26 tests from CI -- the whole save/load round-trip suite among
+        # them, because every one of its names contains "model".
         if "test_processor" in item.fspath.basename:
             item.add_marker(pytest.mark.processor)
         elif "test_time_series" in item.fspath.basename:
@@ -376,7 +381,11 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(pytest.mark.layers)
         elif "integration" in str(item.fspath):
             item.add_marker(pytest.mark.integration)
-        elif "inference" in item.fspath.basename:
+        else:
+            item.add_marker(pytest.mark.unit)
+
+        # Extra labels, never a substitute for the group marker above.
+        if "inference" in item.fspath.basename:
             item.add_marker(pytest.mark.inference)
 
         # Categorize by speed
@@ -389,7 +398,6 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(pytest.mark.slow)
             slow_tests.append(item)
         else:
-            item.add_marker(pytest.mark.unit)
             medium_tests.append(item)
 
     # Reorder items for optimal execution (fast tests first)
@@ -449,3 +457,38 @@ def pytest_sessionfinish(session, exitstatus):
     # Final cleanup
     keras.backend.clear_session()
     gc.collect()
+
+
+@pytest.fixture(autouse=True)
+def _no_stray_stats_file():
+    """Keep `./features_stats.json` from leaking between tests.
+
+    `PreprocessingModel` and `DatasetStatistics` default `features_stats_path`
+    to `features_stats.json` in the working directory. A test that omits the
+    argument therefore leaves a file behind, and a later test asserting that a
+    missing `path_data` raises instead finds those statistics and passes for
+    the wrong reason -- which is exactly how two such assertions went green
+    locally and failed in CI, where each job starts from a fresh checkout.
+    """
+    default_stats = Path("features_stats.json")
+    existed = default_stats.exists()
+    yield
+    if default_stats.exists() and not existed:
+        default_stats.unlink()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _clear_stray_stats_before_the_session():
+    """Remove a stats file left in the working directory before we start.
+
+    The per-test fixture above deliberately leaves alone a file that was
+    already there, so a stray one -- written by a script run from the
+    repository root, for instance -- survives the whole session and makes every
+    test that asserts "without data this must raise" find statistics instead.
+    The file is git-ignored and never part of a checkout, so removing it here
+    costs nothing and keeps a local run honest.
+    """
+    stray = Path("features_stats.json")
+    if stray.exists():
+        stray.unlink()
+    yield

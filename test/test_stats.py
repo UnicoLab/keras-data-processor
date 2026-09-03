@@ -286,6 +286,10 @@ class TestDatasetStatisticsPandasComparison(unittest.TestCase):
             features_specs=self.features_scope,
             numeric_features=self.numeric_features,
             categorical_features=self.categorical_features,
+            # Without this the stats land in ./features_stats.json, and a later
+            # test that asserts a missing-data error instead finds that file
+            # and passes silently.
+            features_stats_path=str(Path(self.temp_dir.name) / "features_stats.json"),
         )
         stats = _data_stats.main()
         print(f"{stats=}")

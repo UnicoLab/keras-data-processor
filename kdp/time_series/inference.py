@@ -267,6 +267,23 @@ class TimeSeriesInferenceFormatter(InferenceFormatter):
 
         # Convert to DataFrame for easier sorting
         df = pd.DataFrame(data)
+
+        # A caller may hand us a Timestamp for the new row while the history
+        # holds date strings. Sorting that column compares str to Timestamp,
+        # which does not order chronologically, so the new row could land
+        # first and callers reading the last row got a history row instead.
+        # Sort on a parsed copy and keep the original representation.
+        sort_keys: dict[str, str] = {}
+        for requirements in self.min_history_requirements.values():
+            column = requirements["sort_by"]
+            if not column or column not in df.columns or column in sort_keys:
+                continue
+            parsed = pd.to_datetime(df[column], errors="coerce")
+            if parsed.notna().all():
+                key = f"__{column}_sort_key__"
+                df[key] = parsed
+                sort_keys[column] = key
+
         sorted_dfs = []
 
         # Handle the case of multiple different sort and group requirements
@@ -280,10 +297,17 @@ class TimeSeriesInferenceFormatter(InferenceFormatter):
                 # Ensure all required columns exist
                 if all(col in df.columns for col in relevant_cols):
                     # Sort the data
-                    feature_df = df[relevant_cols].sort_values(
-                        by=[requirements["group_by"], requirements["sort_by"]]
+                    sort_column = sort_keys.get(
+                        requirements["sort_by"],
+                        requirements["sort_by"],
+                    )
+                    columns_to_take = [*relevant_cols, sort_column]
+                    feature_df = df[
+                        [c for c in dict.fromkeys(columns_to_take) if c in df.columns]
+                    ].sort_values(
+                        by=[requirements["group_by"], sort_column]
                         if requirements["group_by"]
-                        else requirements["sort_by"],
+                        else sort_column,
                         ascending=requirements["sort_ascending"],
                     )
                     sorted_dfs.append((feature_name, feature_df))
@@ -419,7 +443,10 @@ class TimeSeriesInferenceFormatter(InferenceFormatter):
 
         # The history has to satisfy the same lookback the preprocessor needs,
         # otherwise the frame built here cannot be fed back through it.
-        self._check_history_requirements(self._convert_to_dict(history))
+        # The method is `_check_inference_data_sufficiency`; the name used here
+        # never existed, so this public entry point raised AttributeError on
+        # every call.
+        self._check_inference_data_sufficiency(self._convert_to_dict(history))
 
         # Get the first time series feature to determine sort and group columns
         feature_name = next(iter(self.time_series_features))

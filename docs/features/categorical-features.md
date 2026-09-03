@@ -3,56 +3,50 @@
 <div class="feature-header">
   <div class="feature-title">
     <h2>Categorical Features in KDP</h2>
-    <p>Learn how to effectively represent categories, leverage embeddings, and handle high-cardinality data.</p>
+    <p>Turn labels and IDs into dense vectors, one-hot columns, or hashed buckets.</p>
   </div>
 </div>
 
 ## 📋 Overview
 
 <div class="overview-card">
-  <p>Categorical features represent data that belongs to a finite set of possible values or categories. KDP provides advanced techniques for handling categorical data, from simple encoding to neural embeddings that capture semantic relationships between categories.</p>
+  <p>KDP learns the vocabulary of a categorical column during the statistics pass, then encodes it one of three ways: a learned <strong>embedding</strong>, a <strong>one-hot</strong> vector, or a <strong>hash</strong> into a fixed number of buckets. Hashing is the only one that needs no vocabulary, so it is also the only one that works without a data pass.</p>
 </div>
 
-## 🚀 Types of Categorical Features
+## 🚀 The Two Categorical Feature Types
 
 <div class="table-container">
-  <table class="features-table">
+  <table>
     <thead>
       <tr>
-        <th>Feature Type</th>
-        <th>Best For</th>
-        <th>Example</th>
-        <th>When to Use</th>
+        <th>Feature type</th>
+        <th>Column dtype</th>
+        <th>Use for</th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td><code>STRING_CATEGORICAL</code></td>
-        <td>Text categories</td>
-        <td>product_type: "shirt", "pants", "shoes"</td>
-        <td>When categories are text strings</td>
+        <td><code>FeatureType.STRING_CATEGORICAL</code></td>
+        <td>string</td>
+        <td>City names, product codes, channels &mdash; anything written as text.</td>
       </tr>
       <tr>
-        <td><code>INTEGER_CATEGORICAL</code></td>
-        <td>Numeric categories</td>
-        <td>education_level: 1, 2, 3, 4</td>
-        <td>When categories are already represented as integers</td>
-      </tr>
-      <tr>
-        <td><code>STRING_HASHED</code></td>
-        <td>High-cardinality sets</td>
-        <td>user_id: "user_12345", "user_67890"</td>
-        <td>When there are too many unique categories (>10K)</td>
-      </tr>
-      <tr>
-        <td><code>MULTI_CATEGORICAL</code></td>
-        <td>Multiple categories per sample</td>
-        <td>interests: ["sports", "music", "travel"]</td>
-        <td>When each sample can belong to multiple categories</td>
+        <td><code>FeatureType.INTEGER_CATEGORICAL</code></td>
+        <td>integer</td>
+        <td>IDs and codes that are numbers but have no ordering.</td>
       </tr>
     </tbody>
   </table>
 </div>
+
+!!! warning "`MULTI_CATEGORICAL` and `STRING_HASHED` do not exist"
+    Earlier documentation listed these as feature types, along with a
+    multi-value workflow using `separator` and `multi_hot`. `FeatureType` has
+    exactly eleven members and neither of these is among them, so
+    `FeatureType.MULTI_CATEGORICAL` raises `AttributeError`. Hashing is not a
+    separate feature type either &mdash; it is the `category_encoding` option
+    below. To encode a multi-value column, split it into columns yourself or
+    use a [custom pipeline](../advanced/custom-preprocessing.md).
 
 ## 📝 Basic Usage
 
@@ -61,587 +55,261 @@
 ```python
 from kdp import PreprocessingModel, FeatureType
 
-# Simple categorical features
-features = {
-    "product_category": FeatureType.STRING_CATEGORICAL,
-    "store_id": FeatureType.INTEGER_CATEGORICAL,
-    "tags": FeatureType.MULTI_CATEGORICAL
-}
-
 preprocessor = PreprocessingModel(
-    path_data="product_data.csv",
-    features_specs=features
+    path_data="data.csv",
+    features_specs={
+        "city": FeatureType.STRING_CATEGORICAL,
+        "store_id": FeatureType.INTEGER_CATEGORICAL,
+    },
 )
+preprocessor.build_preprocessor()
 ```
 
 </div>
 
-## 🧠 Advanced Configuration
-
-<div class="advanced-section">
-  <p>For more control over categorical processing, use the detailed configuration:</p>
-
-  <div class="code-container">
-
-```python
-from kdp import PreprocessingModel, FeatureType, CategoricalFeature
-
-# Detailed configuration
-features = {
-    # Basic configuration
-    "product_type": FeatureType.STRING_CATEGORICAL,
-
-    # Full configuration with explicit CategoricalFeature
-    "store_location": CategoricalFeature(
-        name="store_location",
-        feature_type=FeatureType.STRING_CATEGORICAL,
-        embedding_dim=16,                  # Size of embedding vector
-        hash_bucket_size=1000,             # For hashed features
-        vocabulary_size=250,               # Limit vocabulary size
-        use_embedding=True,                # Use neural embeddings
-        unknown_token="<UNK>",             # Token for out-of-vocabulary values
-        oov_buckets=10,                    # Out-of-vocabulary buckets
-        multi_hot=False                    # For single category per sample
-    ),
-
-    # High-cardinality feature using hashing
-    "product_id": CategoricalFeature(
-        name="product_id",
-        feature_type=FeatureType.STRING_HASHED,
-        hash_bucket_size=5000
-    ),
-
-    # Multi-categorical feature with separator
-    "product_tags": CategoricalFeature(
-        name="product_tags",
-        feature_type=FeatureType.MULTI_CATEGORICAL,
-        separator=",",                     # How values are separated in data
-        multi_hot=True                     # Enable multi-hot encoding
-    )
-}
-
-preprocessor = PreprocessingModel(
-    path_data="product_data.csv",
-    features_specs=features
-)
-```
-
-  </div>
-</div>
-
-## ⚙️ Key Configuration Parameters
+## ⚙️ Configuration Parameters
 
 <div class="table-container">
-  <table class="config-table">
+  <table>
     <thead>
       <tr>
         <th>Parameter</th>
-        <th>Description</th>
+        <th>Type</th>
         <th>Default</th>
-        <th>Notes</th>
+        <th>Description</th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td><code>embedding_dim</code></td>
-        <td>Size of embedding vectors</td>
-        <td>8</td>
-        <td>Higher values capture more complex relationships (8-128)</td>
+        <td><code>category_encoding</code></td>
+        <td>str</td>
+        <td><code>"EMBEDDING"</code></td>
+        <td><code>"EMBEDDING"</code>, <code>"ONE_HOT_ENCODING"</code> or <code>"HASHING"</code>.</td>
+      </tr>
+      <tr>
+        <td><code>embedding_size</code></td>
+        <td>int</td>
+        <td>derived from vocabulary size</td>
+        <td>Width of the learned embedding. Also used when hashing with an embedding on top (default 8 there).</td>
       </tr>
       <tr>
         <td><code>hash_bucket_size</code></td>
-        <td>Number of hash buckets for hashed features</td>
-        <td>1000</td>
-        <td>Larger values reduce collisions but increase dimensionality</td>
+        <td>int</td>
+        <td>derived from vocabulary size</td>
+        <td>Number of hash buckets. <strong>Hashing only.</strong> Setting it explicitly removes the need for a statistics pass.</td>
       </tr>
       <tr>
         <td><code>salt</code></td>
-        <td>Salt value for hash function</td>
-        <td>None</td>
-        <td>Custom salt to make hash values unique across features</td>
+        <td>int</td>
+        <td><code>None</code></td>
+        <td>Seed for the hash, so two columns hash differently. <strong>Hashing only.</strong></td>
       </tr>
       <tr>
         <td><code>hash_with_embedding</code></td>
-        <td>Apply embedding after hashing</td>
-        <td>False</td>
-        <td>Combines hashing with embeddings for large vocabularies</td>
-      </tr>
-      <tr>
-        <td><code>vocabulary_size</code></td>
-        <td>Maximum number of categories to keep</td>
-        <td>None</td>
-        <td>None uses all categories, otherwise keeps top N by frequency</td>
-      </tr>
-      <tr>
-        <td><code>use_embedding</code></td>
-        <td>Enable neural embeddings vs. one-hot encoding</td>
-        <td>True</td>
-        <td>Neural embeddings improve performance for most models</td>
-      </tr>
-      <tr>
-        <td><code>separator</code></td>
-        <td>Character that separates values in multi-categorical features</td>
-        <td>","</td>
-        <td>Only used for <code>MULTI_CATEGORICAL</code> features</td>
-      </tr>
-      <tr>
-        <td><code>oov_buckets</code></td>
-        <td>Number of buckets for out-of-vocabulary values</td>
-        <td>1</td>
-        <td>Higher values help handle new categories in production</td>
+        <td>bool</td>
+        <td><code>False</code></td>
+        <td>Put a learned embedding on top of the hash instead of a multi-hot vector. <strong>Hashing only.</strong></td>
       </tr>
     </tbody>
   </table>
 </div>
 
-## 💡 Powerful Features
+!!! warning "Options that are silently ignored"
+    `embedding_dim` (the real name is `embedding_size`), `vocabulary_size`,
+    `max_vocabulary_size`, `use_embedding`, `unknown_token`, `oov_buckets`,
+    `multi_hot`, `separator`, `pretrained_embeddings`, `multi_hash` and
+    `num_hash_functions` are **not read by KDP**. `CategoricalFeature` accepts
+    any keyword argument, so passing them looks like it works and changes
+    nothing. Out-of-vocabulary values are always routed to a single reserved
+    slot; that is not configurable.
 
-<div class="power-features">
-  <div class="power-feature-card">
-    <h3>🧿 Embedding Visualizations</h3>
-    <p>KDP's categorical embeddings can be visualized to see relationships between categories:</p>
-    <div class="code-container">
+## 🎛️ The Three Encodings
 
-```python
-# Train the preprocessor
-preprocessor.fit()
-result = preprocessor.build_preprocessor()
+### Embedding (default)
 
-# Extract embeddings for visualization
-embeddings = preprocessor.get_feature_embeddings("product_category")
-
-# Visualize with t-SNE or UMAP
-from sklearn.manifold import TSNE
-import matplotlib.pyplot as plt
-
-tsne = TSNE(n_components=2)
-embeddings_2d = tsne.fit_transform(embeddings)
-
-plt.figure(figsize=(10, 8))
-plt.scatter(embeddings_2d[:, 0], embeddings_2d[:, 1])
-plt.title("Category Embedding Visualization")
-plt.show()
-```
-
-    </div>
-  </div>
-
-  <div class="power-feature-card">
-    <h3>🌍 Handling High-Cardinality</h3>
-    <p>KDP provides multiple strategies for dealing with features that have many unique values:</p>
-    <div class="code-container">
+<div class="code-container">
 
 ```python
-# Method 1: Limit vocabulary size (keeps most frequent)
-user_id_limited = CategoricalFeature(
-    name="user_id",
-    feature_type=FeatureType.STRING_CATEGORICAL,
-    vocabulary_size=10000  # Keep top 10K users
-)
+from kdp.features import CategoricalFeature, CategoryEncodingOptions, FeatureType
 
-# Method 2: Hash features to buckets (fast, fixed memory)
-user_id_hashed = CategoricalFeature(
-    name="user_id",
+CategoricalFeature(
+    name="city",
     feature_type=FeatureType.STRING_CATEGORICAL,
-    category_encoding=CategoryEncodingOptions.HASHING,
-    hash_bucket_size=5000  # Hash into 5K buckets
-)
-
-# Method 3: Hash with embeddings (best balance)
-user_id_hash_embed = CategoricalFeature(
-    name="user_id",
-    feature_type=FeatureType.STRING_CATEGORICAL,
-    category_encoding=CategoryEncodingOptions.HASHING,
-    hash_bucket_size=2048,
-    hash_with_embedding=True,
-    embedding_size=16
+    category_encoding=CategoryEncodingOptions.EMBEDDING,
+    embedding_size=16,
 )
 ```
 
-    </div>
-  </div>
-
-  <div class="power-feature-card">
-    <h3>🧮 Feature Hashing</h3>
-    <p>Feature hashing transforms categorical values into a fixed-size vector representation, ideal for very high-cardinality features. It's now fully integrated with the ModelAdvisor for automatic configuration:</p>
-    <div class="code-container">
-
-```python
-# Basic feature hashing
-product_id = CategoricalFeature(
-    name="product_id",
-    feature_type=FeatureType.STRING_CATEGORICAL,
-    category_encoding=CategoryEncodingOptions.HASHING,
-    hash_bucket_size=1024  # Number of hash buckets
-)
-
-# Advanced feature hashing with custom salt
-# The salt ensures different features use different hash spaces
-session_id = CategoricalFeature(
-    name="session_id",
-    feature_type=FeatureType.STRING_CATEGORICAL,
-    category_encoding=CategoryEncodingOptions.HASHING,
-    hash_bucket_size=2048,
-    salt=42  # Custom salt value
-)
-
-# Feature hashing followed by embedding
-user_id = CategoricalFeature(
-    name="user_id",
-    feature_type=FeatureType.STRING_CATEGORICAL,
-    category_encoding=CategoryEncodingOptions.HASHING,
-    hash_bucket_size=2048,
-    hash_with_embedding=True,
-    embedding_size=16  # Embedding dimension after hashing
-)
-```
-
-    </div>
-  </div>
-
-  <div class="power-feature-card">
-    <h3>🤖 Auto-configuration with ModelAdvisor</h3>
-    <p>KDP's ModelAdvisor now intelligently recommends hashing for high-cardinality features:</p>
-    <div class="code-container">
-
-```python
-from kdp.model_advisor import recommend_model_configuration
-from kdp.stats import DatasetStatistics
-
-# Analyze dataset statistics
-stats_calculator = DatasetStatistics("high_cardinality_data.csv")
-stats_calculator.compute_statistics()
-
-# Get recommendations from ModelAdvisor
-recommendations = recommend_model_configuration(stats_calculator.features_stats)
-
-# The recommendations will include HASHING for high-cardinality features
-# Example output:
-'''
-{
-  "features": {
-    "user_id": {
-      "feature_type": "CategoricalFeature",
-      "preprocessing": ["HASHING"],
-      "config": {
-        "category_encoding": "HASHING",
-        "hash_bucket_size": 2048,
-        "hash_with_embedding": true,
-        "embedding_size": 16
-      },
-      "notes": ["High cardinality feature (10K+ values)", "Using hashing for efficiency"]
-    },
-    ...
-  }
-}
-'''
-
-# Generate code from recommendations
-code_snippet = recommendations["code_snippet"]
-print(code_snippet)
-```
-
-    </div>
-  </div>
-
-  <div class="power-feature-card">
-    <h3>🔍 Choosing Between Encoding Options</h3>
-    <p>KDP offers multiple encoding options for categorical features. Here's how to choose:</p>
-
-    <table class="encoding-comparison">
-      <thead>
-        <tr>
-          <th>Encoding</th>
-          <th>Vocabulary Size</th>
-          <th>Memory Usage</th>
-          <th>New Categories</th>
-          <th>Semantic Information</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>One-Hot Encoding</td>
-          <td>Small (< 50)</td>
-          <td>High</td>
-          <td>❌ Requires retraining</td>
-          <td>❌ No relationship capture</td>
-        </tr>
-        <tr>
-          <td>Embeddings</td>
-          <td>Medium (50-10K)</td>
-          <td>Medium</td>
-          <td>⚠️ Limited by OOV handling</td>
-          <td>✅ Captures relationships</td>
-        </tr>
-        <tr>
-          <td>Hashing</td>
-          <td>Very Large (10K+)</td>
-          <td>Low (fixed)</td>
-          <td>✅ Handles new values</td>
-          <td>❌ No relationship capture</td>
-        </tr>
-        <tr>
-          <td>Hashing with Embeddings</td>
-          <td>Very Large (10K+)</td>
-          <td>Low-Medium</td>
-          <td>✅ Handles new values</td>
-          <td>✅ Some relationship capture</td>
-        </tr>
-      </tbody>
-    </table>
-
-    <p>The ModelAdvisor analyzes your data and automatically recommends the optimal encoding based on these criteria.</p>
-    <div class="code-container">
-
-```python
-# End-to-end example with automatic encoding selection
-from kdp.features import CategoricalFeature, FeatureType, CategoryEncodingOptions
-from kdp.processor import PreprocessingModel
-from kdp.stats import DatasetStatistics
-from kdp.model_advisor import recommend_model_configuration
-
-# 1. Analyze dataset
-stats = DatasetStatistics("product_dataset.csv")
-stats.compute_statistics()
-
-# 2. Get recommendations
-recommendations = recommend_model_configuration(stats.features_stats)
-
-# 3. Create preprocessing model using recommended config
-features = {}
-for name, feature_rec in recommendations["features"].items():
-    if feature_rec["feature_type"] == "CategoricalFeature":
-        # Extract configuration for this categorical feature
-        config = feature_rec["config"]
-        features[name] = CategoricalFeature(
-            name=name,
-            feature_type=getattr(FeatureType, config.get("feature_type", "STRING_CATEGORICAL")),
-            category_encoding=getattr(CategoryEncodingOptions, config.get("category_encoding", "EMBEDDING")),
-            hash_bucket_size=config.get("hash_bucket_size"),
-            hash_with_embedding=config.get("hash_with_embedding", False),
-            embedding_size=config.get("embedding_size"),
-            salt=config.get("salt")
-        )
-
-# 4. Create and build the preprocessing model
-model = PreprocessingModel(
-    path_data="product_dataset.csv",
-    features_specs=features
-)
-preprocessor = model.build_preprocessor()
-```
-
-    </div>
-  </div>
 </div>
 
-## 🔧 Real-World Examples
+Leave `embedding_size` unset and KDP derives it from the vocabulary size.
 
-<div class="examples-container">
-  <div class="example-card">
-    <h3>E-commerce Product Categorization</h3>
-    <div class="code-container">
+### One-hot
+
+<div class="code-container">
 
 ```python
-# E-commerce features with hierarchical categories
-preprocessor = PreprocessingModel(
-    path_data="products.csv",
-    features_specs={
-        # Main category, subcategory, and detailed category
-        "main_category": FeatureType.STRING_CATEGORICAL,
-        "subcategory": FeatureType.STRING_CATEGORICAL,
-        "detailed_category": FeatureType.STRING_CATEGORICAL,
-
-        # Product attributes as multi-categories
-        "product_features": CategoricalFeature(
-            name="product_features",
-            feature_type=FeatureType.MULTI_CATEGORICAL,
-            separator="|",
-            multi_hot=True
-        ),
-
-        # Brand as a high-cardinality feature
-        "brand": CategoricalFeature(
-            name="brand",
-            feature_type=FeatureType.STRING_CATEGORICAL,
-            embedding_dim=16,
-            vocabulary_size=1000  # Top 1000 brands
-        )
-    }
+CategoricalFeature(
+    name="status",
+    feature_type=FeatureType.STRING_CATEGORICAL,
+    category_encoding=CategoryEncodingOptions.ONE_HOT_ENCODING,
 )
 ```
 
-    </div>
-  </div>
+</div>
 
-  <div class="example-card">
-    <h3>Content Recommendation System</h3>
-    <div class="code-container">
+Output width is the vocabulary size. Good for a handful of categories, wasteful
+beyond a few dozen.
+
+### Hashing
+
+<div class="code-container">
 
 ```python
-# Content recommendation with user and item features
+CategoricalFeature(
+    name="user_id",
+    feature_type=FeatureType.STRING_CATEGORICAL,
+    category_encoding=CategoryEncodingOptions.HASHING,
+    hash_bucket_size=1024,
+    salt=42,                    # optional, decorrelates two hashed columns
+    hash_with_embedding=True,   # embedding instead of multi-hot
+    embedding_size=16,          # width of that embedding
+)
+```
+
+</div>
+
+Hashing maps values into a fixed bucket count, so it handles unbounded
+cardinality and unseen values without growing. Collisions are the trade-off.
+
+!!! tip "Hashing can skip the statistics pass entirely"
+    When **every** feature is a hashing categorical with an explicit
+    `hash_bucket_size`, nothing has to be learned from your data, so
+    `path_data` is not required and `build_preprocessor()` runs immediately.
+    Omit `hash_bucket_size` and the bucket count is derived from the
+    vocabulary, which does require a data pass.
+
+<div class="code-container">
+
+```python
+from kdp import CategoricalFeature, CategoryEncodingOptions, FeatureType, PreprocessingModel
+
+# Builds with no dataset at all
 preprocessor = PreprocessingModel(
-    path_data="interaction_data.csv",
     features_specs={
-        # User features
         "user_id": CategoricalFeature(
             name="user_id",
-            feature_type=FeatureType.STRING_HASHED,
-            hash_bucket_size=10000
+            feature_type=FeatureType.STRING_CATEGORICAL,
+            category_encoding=CategoryEncodingOptions.HASHING,
+            hash_bucket_size=32,
         ),
-        "user_interests": CategoricalFeature(
-            name="user_interests",
-            feature_type=FeatureType.MULTI_CATEGORICAL,
-            embedding_dim=32,
-            separator=","
-        ),
+    },
+)
+preprocessor.build_preprocessor()
+```
 
-        # Content features
-        "content_id": CategoricalFeature(
-            name="content_id",
-            feature_type=FeatureType.STRING_HASHED,
-            hash_bucket_size=5000
-        ),
-        "content_tags": CategoricalFeature(
-            name="content_tags",
-            feature_type=FeatureType.MULTI_CATEGORICAL,
-            embedding_dim=24,
-            separator="|"
-        ),
-        "content_type": FeatureType.STRING_CATEGORICAL
-    }
+</div>
+
+## 📐 Output Widths
+
+<div class="table-container">
+  <table>
+    <thead>
+      <tr>
+        <th>Encoding</th>
+        <th>Output width</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Embedding</td>
+        <td><code>embedding_size</code> (derived if unset)</td>
+      </tr>
+      <tr>
+        <td>One-hot</td>
+        <td>vocabulary size</td>
+      </tr>
+      <tr>
+        <td>Hashing, multi-hot (default)</td>
+        <td><code>hash_bucket_size</code></td>
+      </tr>
+      <tr>
+        <td>Hashing with embedding</td>
+        <td><code>embedding_size</code> (default 8)</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+## 🔗 Combining With Other Features
+
+### Crossing two categoricals
+
+<div class="code-container">
+
+```python
+from kdp import FeatureType, PreprocessingModel
+
+preprocessor = PreprocessingModel(
+    path_data="data.csv",
+    features_specs={
+        "city": FeatureType.STRING_CATEGORICAL,
+        "channel": FeatureType.STRING_CATEGORICAL,
+    },
+    feature_crosses=[("city", "channel", 10)],
 )
 ```
 
-    </div>
-  </div>
 </div>
 
-## 💎 Pro Tips
+### Feature selection and attention
+
+<div class="code-container">
+
+```python
+from kdp import FeatureType, PreprocessingModel
+
+preprocessor = PreprocessingModel(
+    path_data="data.csv",
+    features_specs={"city": FeatureType.STRING_CATEGORICAL},
+    feature_selection_placement="categorical",   # or "all_features"
+    tabular_attention=True,
+    tabular_attention_placement="categorical",
+    transfo_nr_blocks=2,                         # transformer over categoricals
+    transfo_placement="categorical",
+)
+```
+
+</div>
+
+## 💎 Practical Notes
 
 <div class="pro-tips-grid">
   <div class="pro-tip-card">
-    <h3>🔍 Choose Embedding Dimensions Wisely</h3>
-    <p>For simple categories with few values (2-10), use 4-8 dimensions. For complex categories with many values (100+), use 16-64 dimensions. The more complex the relationships between categories, the higher dimensions you need.</p>
+    <h4>Reach for hashing on high cardinality</h4>
+    <p>User and session IDs blow up a vocabulary. A fixed bucket count keeps the model the same size no matter how many values appear.</p>
   </div>
-
   <div class="pro-tip-card">
-    <h3>⚡ Pre-train Embeddings</h3>
-    <p>KDP allows you to initialize embeddings with pre-trained vectors for faster convergence:</p>
-    <div class="code-container">
-
-```python
-# Create initial embeddings dictionary
-pretrained = {
-    "sports": [0.1, 0.2, 0.3, 0.4],
-    "music": [0.5, 0.6, 0.7, 0.8]
-}
-
-# Use pre-trained embeddings
-category_feature = CategoricalFeature(
-    name="interest",
-    feature_type=FeatureType.STRING_CATEGORICAL,
-    embedding_dim=4,
-    pretrained_embeddings=pretrained
-)
-```
-
-    </div>
+    <h4>One-hot only for small vocabularies</h4>
+    <p>Width equals vocabulary size, so it grows linearly with the number of categories.</p>
   </div>
-
   <div class="pro-tip-card">
-    <h3>🌀 Combine Multiple Encoding Strategies</h3>
-    <p>For critical features, consider using both embeddings and one-hot encoding in parallel:</p>
-    <div class="code-container">
-
-```python
-# Main feature with embedding
-features["product_type"] = CategoricalFeature(
-    name="product_type",
-    feature_type=FeatureType.STRING_CATEGORICAL,
-    use_embedding=True
-)
-
-# Same feature with one-hot encoding
-features["product_type_onehot"] = CategoricalFeature(
-    name="product_type",
-    feature_type=FeatureType.STRING_CATEGORICAL,
-    use_embedding=False
-)
-```
-
-    </div>
+    <h4>Salt when you hash two columns</h4>
+    <p>Without different salts, the same value in two columns lands in the same bucket and the model cannot tell them apart.</p>
   </div>
-
   <div class="pro-tip-card">
-    <h3>🔄 Handling Unknown Categories</h3>
-    <p>Configure how KDP handles previously unseen categories in production:</p>
-    <div class="code-container">
-
-```python
-feature = CategoricalFeature(
-    name="store_type",
-    feature_type=FeatureType.STRING_CATEGORICAL,
-    unknown_token="<NEW_STORE>",  # Custom token
-    oov_buckets=5                 # Use 5 different embeddings
-)
-```
-
-    </div>
-  </div>
-</div>
-
-## 📊 Understanding Categorical Embeddings
-
-<div class="architecture-diagram">
-  <div class="mermaid">
-    graph TD
-      A[Raw Category Data] -->|Vocabulary Creation| B[Category Vocabulary]
-      B -->|Lookup| C[Integer Indices]
-      C -->|Embedding Layer| D[Dense Vectors]
-
-      style A fill:#f9f9f9,stroke:#ccc,stroke-width:2px
-      style B fill:#e1f5fe,stroke:#4fc3f7,stroke-width:2px
-      style C fill:#e8f5e9,stroke:#66bb6a,stroke-width:2px
-      style D fill:#f3e5f5,stroke:#ce93d8,stroke-width:2px
-  </div>
-  <div class="diagram-caption">
-    <p>Categorical embeddings transform categorical values into dense vector representations that capture semantic relationships between categories.</p>
+    <h4>Integer IDs are not numbers</h4>
+    <p>Use <code>INTEGER_CATEGORICAL</code>, not a float type &mdash; otherwise the model reads store 7 as greater than store 3.</p>
   </div>
 </div>
 
 ## 🔗 Related Topics
 
 <div class="related-topics">
-  <a href="numerical-features.md" class="topic-link">
-    <span class="topic-icon">🔢</span>
-    <span class="topic-text">Numerical Features</span>
-  </a>
-  <a href="text-features.md" class="topic-link">
-    <span class="topic-icon">📝</span>
-    <span class="topic-text">Text Features</span>
-  </a>
-  <a href="../advanced/embedding-techniques.md" class="topic-link">
-    <span class="topic-icon">🧠</span>
-    <span class="topic-text">Advanced Embedding Techniques</span>
-  </a>
-  <a href="../examples/categorical-encoding.md" class="topic-link">
-    <span class="topic-icon">📊</span>
-    <span class="topic-text">Categorical Encoding Examples</span>
-  </a>
-</div>
-
----
-
-<div class="nav-container">
-  <a href="numerical-features.md" class="nav-button prev">
-    <span class="nav-icon">←</span>
-    <span class="nav-text">Numerical Features</span>
-  </a>
-  <a href="text-features.md" class="nav-button next">
-    <span class="nav-text">Text Features</span>
-    <span class="nav-icon">→</span>
-  </a>
+  <a href="../examples/categorical-hashing-example.md" class="topic-link">🧮 Categorical Hashing</a>
+  <a href="cross-features.md" class="topic-link">➕ Cross Features</a>
+  <a href="text-features.md" class="topic-link">📝 Text Features</a>
+  <a href="overview.md" class="topic-link">🛠️ Features Overview</a>
 </div>
 
 <style>

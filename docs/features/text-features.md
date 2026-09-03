@@ -3,42 +3,14 @@
 <div class="feature-header">
   <div class="feature-title">
     <h2>Text Features in KDP</h2>
-    <p>Transform textual data into meaningful features with advanced text processing techniques.</p>
+    <p>Vocabulary-based text vectorization, learned from your own data.</p>
   </div>
 </div>
 
 ## 📋 Overview
 
 <div class="overview-card">
-  <p>Text features represent natural language data like product descriptions, user reviews, comments, and other forms of unstructured text. KDP provides powerful tools to convert raw text into compact, meaningful representations that capture semantic meaning and context.</p>
-</div>
-
-## 🚀 Text Processing Approaches
-
-<div class="approaches-container">
-  <div class="approach-card">
-    <span class="approach-icon">🔤</span>
-    <h3>Tokenization</h3>
-    <p>Breaking text into words, subwords, or characters</p>
-  </div>
-
-  <div class="approach-card">
-    <span class="approach-icon">🧮</span>
-    <h3>Vectorization</h3>
-    <p>Converting tokens into numerical representations</p>
-  </div>
-
-  <div class="approach-card">
-    <span class="approach-icon">🔍</span>
-    <h3>Embeddings</h3>
-    <p>Mapping tokens to dense vector spaces that capture semantics</p>
-  </div>
-
-  <div class="approach-card">
-    <span class="approach-icon">📏</span>
-    <h3>Sequence Handling</h3>
-    <p>Managing variable-length text with padding, truncation</p>
-  </div>
+  <p>KDP builds a vocabulary from the text column during the statistics pass, then encodes each row with Keras <code>TextVectorization</code> against that vocabulary. Everything is learned from <em>your</em> corpus &mdash; there are no downloaded embeddings and no external model weights.</p>
 </div>
 
 ## 📝 Basic Usage
@@ -48,443 +20,228 @@
 ```python
 from kdp import PreprocessingModel, FeatureType
 
-# Define text features with simple configuration
-features = {
-    "product_description": FeatureType.TEXT,
-    "user_review": FeatureType.TEXT,
-    "comment": FeatureType.TEXT
-}
-
-# Create preprocessor
 preprocessor = PreprocessingModel(
-    path_data="text_data.csv",
-    features_specs=features
+    path_data="reviews.csv",
+    features_specs={
+        "review_text": FeatureType.TEXT,
+    },
 )
+preprocessor.build_preprocessor()
 ```
 
 </div>
 
-## 🧠 Advanced Configuration
+By default a text column becomes a **35-token integer sequence**, padded with
+zeros.
 
-<div class="advanced-section">
-  <p>For more control over text processing, use the <code>TextFeature</code> class:</p>
+## ⚙️ Configuration Parameters
 
-  <div class="code-container">
-
-```python
-from kdp import PreprocessingModel, FeatureType, TextFeature
-
-# Detailed text feature configuration
-features = {
-    # Basic text feature
-    "short_comment": FeatureType.TEXT,
-
-    # Full configuration with TextFeature
-    "product_description": TextFeature(
-        name="product_description",
-        max_tokens=10000,               # Vocabulary size
-        embedding_dim=64,               # Embedding dimensionality
-        sequence_length=128,            # Max sequence length
-        tokenizer="word",               # Tokenization strategy
-        ngrams=2,                       # Include bigrams
-        output_mode="embedding"         # Return embeddings
-    ),
-
-    # Text feature with pre-trained embeddings
-    "user_query": TextFeature(
-        name="user_query",
-        use_pretrained=True,            # Use pre-trained embeddings
-        pretrained_name="glove.6B.100d",# GloVe embeddings
-        trainable=False                 # Freeze embeddings during training
-    ),
-
-    # Multilingual text processing
-    "multilingual_text": TextFeature(
-        name="multilingual_text",
-        use_pretrained=True,
-        pretrained_name="multilingual", # Multilingual embeddings
-        max_sequence_length=256
-    )
-}
-
-preprocessor = PreprocessingModel(
-    path_data="text_data.csv",
-    features_specs=features
-)
-```
-
-  </div>
-</div>
-
-## ⚙️ Key Configuration Parameters
+`TextFeature` forwards its keyword arguments to Keras `TextVectorization`,
+apart from `stop_words`, which KDP applies itself beforehand.
 
 <div class="table-container">
-  <table class="config-table">
+  <table>
     <thead>
       <tr>
         <th>Parameter</th>
-        <th>Description</th>
+        <th>Type</th>
         <th>Default</th>
-        <th>Options</th>
+        <th>Description</th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td><code>max_tokens</code></td>
-        <td>Maximum vocabulary size</td>
-        <td>10000</td>
-        <td>Typically 5K-50K for most applications</td>
+        <td><code>stop_words</code></td>
+        <td>list[str]</td>
+        <td><code>[]</code></td>
+        <td>Words stripped before vectorization, by KDP's own text preprocessing layer.</td>
       </tr>
       <tr>
-        <td><code>sequence_length</code></td>
-        <td>Maximum sequence length</td>
-        <td>64</td>
-        <td>Shorter for queries (32-64), longer for documents (128-512)</td>
-      </tr>
-      <tr>
-        <td><code>embedding_dim</code></td>
-        <td>Size of embedding vectors</td>
-        <td>32</td>
-        <td>16-300 depending on complexity of text</td>
-      </tr>
-      <tr>
-        <td><code>tokenizer</code></td>
-        <td>Tokenization strategy</td>
-        <td>"word"</td>
-        <td>"word", "char", "subword"</td>
+        <td><code>output_sequence_length</code></td>
+        <td>int</td>
+        <td><code>35</code></td>
+        <td>Token count per row, and therefore the output width. Applies to <code>output_mode="int"</code> only.</td>
       </tr>
       <tr>
         <td><code>output_mode</code></td>
-        <td>Text representation format</td>
-        <td>"embedding"</td>
-        <td>"embedding", "int", "binary", "tfidf"</td>
+        <td>str</td>
+        <td><code>"int"</code></td>
+        <td><code>"int"</code>, <code>"multi_hot"</code> or <code>"count"</code>. See the table below.</td>
+      </tr>
+      <tr>
+        <td><code>max_tokens</code></td>
+        <td>int</td>
+        <td>&mdash;</td>
+        <td>Caps the vocabulary. Must be at least as large as the vocabulary found in your data, or Keras raises.</td>
       </tr>
       <tr>
         <td><code>ngrams</code></td>
-        <td>Include n-grams in tokenization</td>
-        <td>1</td>
-        <td>1 (unigrams only), 2 (uni+bigrams), 3 (uni+bi+trigrams)</td>
+        <td>int | tuple</td>
+        <td><code>None</code></td>
+        <td>Generate n-grams in addition to single tokens.</td>
+      </tr>
+      <tr>
+        <td><code>split</code>, <code>standardize</code></td>
+        <td>str | callable</td>
+        <td>Keras defaults</td>
+        <td>Passed straight through to <code>TextVectorization</code>.</td>
       </tr>
     </tbody>
   </table>
 </div>
 
-## 💡 Powerful Features
+!!! warning "Pretrained embeddings and attention are not implemented"
+    Earlier documentation advertised `use_pretrained`, `pretrained_name`
+    (GloVe, word2vec, BERT), `tokenizer`, `use_attention`, `attention_heads`,
+    `attention_dropout`, `max_sequence_length`, `embedding_dim` and
+    `sequence_length`. **None of these exist.** `TextFeature` accepts any
+    keyword without complaint, so they appear to work while changing nothing
+    &mdash; verified by comparing model output with and without each one.
+    KDP learns its vocabulary from your data; it does not download or load
+    pretrained language models. To use one, wrap it yourself with
+    [custom preprocessing](../advanced/custom-preprocessing.md).
 
-<div class="power-features">
-  <div class="power-feature-card">
-    <h3>🌐 Pre-trained Embeddings</h3>
-    <p>KDP supports several pre-trained embeddings to jump-start your text processing:</p>
-    <div class="code-container">
+## 🔤 Output Modes
 
-```python
-# Using GloVe embeddings
-text_feature = TextFeature(
-    name="article_text",
-    use_pretrained=True,
-    pretrained_name="glove.6B.100d",
-    trainable=False  # Freeze embeddings
-)
-
-# Using Word2Vec embeddings
-text_feature = TextFeature(
-    name="article_text",
-    use_pretrained=True,
-    pretrained_name="word2vec.google.300d",
-    trainable=True  # Fine-tune embeddings
-)
-
-# Using BERT embeddings for contextual representations
-text_feature = TextFeature(
-    name="article_text",
-    use_pretrained=True,
-    pretrained_name="bert-base-uncased",
-    use_attention=True  # Enable attention mechanism
-)
-```
-
-    </div>
-  </div>
-
-  <div class="power-feature-card">
-    <h3>🔄 Attention Mechanisms</h3>
-    <p>Enable attention to better capture the context and important parts of text:</p>
-    <div class="code-container">
-
-```python
-# Text feature with self-attention
-text_feature = TextFeature(
-    name="long_document",
-    sequence_length=512,
-    use_attention=True,            # Enable attention
-    attention_heads=8,             # Multi-head attention
-    attention_dropout=0.1          # Regularization
-)
-
-# Create a preprocessor with text attention
-preprocessor = PreprocessingModel(
-    path_data="documents.csv",
-    features_specs={"document": text_feature},
-    text_attention_mode="self"     # Self-attention mode
-)
-```
-
-    </div>
-  </div>
+<div class="table-container">
+  <table>
+    <thead>
+      <tr>
+        <th>Mode</th>
+        <th>Output width</th>
+        <th>What each value means</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>"int"</code> (default)</td>
+        <td><code>output_sequence_length</code></td>
+        <td>Token index at that position; order is preserved.</td>
+      </tr>
+      <tr>
+        <td><code>"multi_hot"</code></td>
+        <td>vocabulary size</td>
+        <td>1 if the token appears anywhere in the row, else 0. Order is discarded.</td>
+      </tr>
+      <tr>
+        <td><code>"count"</code></td>
+        <td>vocabulary size</td>
+        <td>How many times the token appears in the row.</td>
+      </tr>
+    </tbody>
+  </table>
 </div>
 
-## 🔧 Real-World Examples
-
-<div class="examples-container">
-  <div class="example-card">
-    <h3>Sentiment Analysis from Product Reviews</h3>
-    <div class="code-container">
+<div class="code-container">
 
 ```python
-# Text preprocessing for sentiment analysis
+from kdp import PreprocessingModel
+from kdp.features import FeatureType, TextFeature
+
+# Bag-of-words instead of a padded sequence
 preprocessor = PreprocessingModel(
     path_data="reviews.csv",
     features_specs={
-        # Review text with attention for key sentiment phrases
         "review_text": TextFeature(
             name="review_text",
-            max_tokens=15000,
-            embedding_dim=64,
-            use_attention=True,
-            attention_heads=4
+            feature_type=FeatureType.TEXT,
+            output_mode="multi_hot",
         ),
-
-        # Additional metadata features
-        "product_category": FeatureType.STRING_CATEGORICAL,
-        "star_rating": FeatureType.FLOAT_NORMALIZED,
-        "verified_purchase": FeatureType.BOOLEAN
     },
-    tabular_attention=True  # Enable attention across all features
 )
+preprocessor.build_preprocessor()
 ```
 
-    </div>
-  </div>
-
-  <div class="example-card">
-    <h3>Document Classification System</h3>
-    <div class="code-container">
-
-```python
-# Document classification preprocessor
-preprocessor = PreprocessingModel(
-    path_data="documents.csv",
-    features_specs={
-        # Main document text
-        "document_text": TextFeature(
-            name="document_text",
-            max_tokens=20000,
-            sequence_length=256,
-            embedding_dim=128,
-            tokenizer="subword",  # Better for rare words
-            ngrams=3              # Include n-grams
-        ),
-
-        # Document metadata
-        "document_title": TextFeature(
-            name="document_title",
-            max_tokens=5000,
-            sequence_length=32
-        ),
-        "author": FeatureType.STRING_CATEGORICAL,
-        "publication_date": FeatureType.DATE
-    }
-)
-```
-
-    </div>
-  </div>
 </div>
 
-## 💎 Pro Tips
+!!! note "tf_idf needs weights KDP does not compute"
+    `output_mode="tf_idf"` requires an IDF weight array alongside the
+    vocabulary. KDP's statistics pass records the vocabulary only, so this mode
+    raises a clear Keras error rather than working. Use `"count"` and apply
+    your own weighting downstream if you need it.
+
+## 🧹 Stop Words
+
+<div class="code-container">
+
+```python
+TextFeature(
+    name="review_text",
+    feature_type=FeatureType.TEXT,
+    stop_words=["the", "a", "an", "and", "or"],
+    output_sequence_length=64,
+)
+```
+
+</div>
+
+Stop words are removed **before** vectorization, so they never enter the
+vocabulary and never occupy a token slot.
+
+## 🔗 Combining With Other Features
+
+### N-grams for short text
+
+<div class="code-container">
+
+```python
+TextFeature(
+    name="product_title",
+    feature_type=FeatureType.TEXT,
+    ngrams=2,                       # unigrams and bigrams
+    output_sequence_length=24,
+)
+```
+
+</div>
+
+### Feature selection over text
+
+<div class="code-container">
+
+```python
+from kdp import FeatureType, PreprocessingModel
+
+preprocessor = PreprocessingModel(
+    path_data="reviews.csv",
+    features_specs={
+        "review_text": FeatureType.TEXT,
+        "rating": FeatureType.FLOAT_NORMALIZED,
+    },
+    feature_selection_placement="text",   # or "all_features"
+)
+```
+
+</div>
+
+## 💎 Practical Notes
 
 <div class="pro-tips-grid">
   <div class="pro-tip-card">
-    <h3>🧹 Text Cleaning</h3>
-    <p>Clean your text data before feeding it to KDP for better results:</p>
-    <div class="code-container">
-
-```python
-import re
-import pandas as pd
-
-# Clean text data before preprocessing
-def clean_text(text):
-    text = text.lower()  # Lowercase
-    text = re.sub(r'[^\w\s]', '', text)  # Remove punctuation
-    text = re.sub(r'\s+', ' ', text)  # Remove extra spaces
-    return text.strip()
-
-# Apply cleaning to your data
-data = pd.read_csv("raw_reviews.csv")
-data["cleaned_review"] = data["review"].apply(clean_text)
-
-# Use cleaned text in KDP
-preprocessor = PreprocessingModel(
-    path_data=data,
-    features_specs={"cleaned_review": FeatureType.TEXT}
-)
-```
-
-    </div>
+    <h4>Sequence length drives width</h4>
+    <p>In <code>"int"</code> mode the output is exactly <code>output_sequence_length</code> columns wide. Long default sequences on short text are mostly padding.</p>
   </div>
-
   <div class="pro-tip-card">
-    <h3>📏 Choose the Right Sequence Length</h3>
-    <p>Set sequence length based on your text distribution to avoid truncating important information:</p>
-    <div class="code-container">
-
-```python
-import pandas as pd
-import numpy as np
-
-# Analyze text length distribution
-data = pd.read_csv("reviews.csv")
-lengths = data["review"].apply(lambda x: len(x.split()))
-
-# Get statistics
-print(f"Mean length: {np.mean(lengths)}")
-print(f"Median length: {np.median(lengths)}")
-print(f"95th percentile: {np.percentile(lengths, 95)}")
-
-# Choose sequence length based on distribution
-# A common approach is to use the 95th percentile
-sequence_length = int(np.percentile(lengths, 95))
-
-# Configure with appropriate length
-text_feature = TextFeature(
-    name="review",
-    sequence_length=sequence_length
-)
-```
-
-    </div>
+    <h4>Text needs a statistics pass</h4>
+    <p>The vocabulary comes from your data, so <code>path_data</code> is required and the column is read end to end.</p>
   </div>
-
   <div class="pro-tip-card">
-    <h3>🔍 Combine Multiple Representations</h3>
-    <p>Use different text representations for the same field to capture different aspects:</p>
-    <div class="code-container">
-
-```python
-# Use multiple representations of the same text
-preprocessor = PreprocessingModel(
-    path_data="reviews.csv",
-    features_specs={
-        # Semantic embedding representation
-        "review_embedding": TextFeature(
-            name="review",
-            output_mode="embedding",
-            embedding_dim=64
-        ),
-
-        # Bag-of-words representation (good for keywords)
-        "review_bow": TextFeature(
-            name="review",
-            output_mode="binary",  # Binary bag-of-words
-            max_tokens=5000
-        )
-    }
-)
-```
-
-    </div>
+    <h4>multi_hot for keyword signals</h4>
+    <p>When only presence matters &mdash; tags, short titles &mdash; <code>"multi_hot"</code> is smaller and easier to learn from than a padded sequence.</p>
   </div>
-
   <div class="pro-tip-card">
-    <h3>📊 Visualize Embeddings</h3>
-    <p>Visualize your text embeddings to understand the semantic space:</p>
-    <div class="code-container">
-
-```python
-from sklearn.manifold import TSNE
-import matplotlib.pyplot as plt
-
-# Get embeddings from preprocessor
-preprocessor.fit()
-result = preprocessor.build_preprocessor()
-
-# Extract embeddings for visualization
-embeddings = preprocessor.get_text_embeddings("review_text")
-words = preprocessor.get_text_vocabulary("review_text")
-
-# Visualize with t-SNE
-tsne = TSNE(n_components=2, random_state=42)
-embeddings_2d = tsne.fit_transform(embeddings)
-
-# Plot most common words
-plt.figure(figsize=(12, 10))
-plt.scatter(embeddings_2d[:100, 0], embeddings_2d[:100, 1])
-
-for i, word in enumerate(words[:100]):
-    plt.annotate(word, xy=(embeddings_2d[i, 0], embeddings_2d[i, 1]))
-
-plt.title("Text Embedding Visualization")
-plt.show()
-```
-
-    </div>
-  </div>
-</div>
-
-## 📊 Understanding Text Processing
-
-<div class="architecture-diagram">
-  <div class="mermaid">
-    graph TD
-      A[Raw Text Data] -->|Tokenization| B[Tokens]
-      B -->|Vocabulary Lookup| C[Token Indices]
-      C -->|Embedding Layer| D[Token Embeddings]
-      D -->|Pooling/Attention| E[Text Representation]
-
-      style A fill:#f9f9f9,stroke:#ccc,stroke-width:2px
-      style B fill:#e1f5fe,stroke:#4fc3f7,stroke-width:2px
-      style C fill:#e8f5e9,stroke:#66bb6a,stroke-width:2px
-      style D fill:#fff8e1,stroke:#ffd54f,stroke-width:2px
-      style E fill:#f3e5f5,stroke:#ce93d8,stroke-width:2px
-  </div>
-  <div class="diagram-caption">
-    <p>KDP converts raw text into meaningful vector representations through a series of transformations, from tokenization to final pooling or attention mechanisms.</p>
+    <h4>max_tokens must fit the data</h4>
+    <p>Keras raises if the cap is below the vocabulary actually found. Set it generously or leave it unset.</p>
   </div>
 </div>
 
 ## 🔗 Related Topics
 
 <div class="related-topics">
-  <a href="numerical-features.md" class="topic-link">
-    <span class="topic-icon">🔢</span>
-    <span class="topic-text">Numerical Features</span>
-  </a>
-  <a href="categorical-features.md" class="topic-link">
-    <span class="topic-icon">🏷️</span>
-    <span class="topic-text">Categorical Features</span>
-  </a>
-  <a href="../advanced/embedding-techniques.md" class="topic-link">
-    <span class="topic-icon">🧠</span>
-    <span class="topic-text">Advanced Embedding Techniques</span>
-  </a>
-  <a href="../examples/text-processing.md" class="topic-link">
-    <span class="topic-icon">📚</span>
-    <span class="topic-text">Text Processing Examples</span>
-  </a>
-</div>
-
----
-
-<div class="nav-container">
-  <a href="categorical-features.md" class="nav-button prev">
-    <span class="nav-icon">←</span>
-    <span class="nav-text">Categorical Features</span>
-  </a>
-  <a href="date-features.md" class="nav-button next">
-    <span class="nav-text">Date Features</span>
-    <span class="nav-icon">→</span>
-  </a>
+  <a href="categorical-features.md" class="topic-link">🏷️ Categorical Features</a>
+  <a href="../advanced/custom-preprocessing.md" class="topic-link">🛠️ Custom Preprocessing</a>
+  <a href="../optimization/feature-selection.md" class="topic-link">🎯 Feature Selection</a>
+  <a href="overview.md" class="topic-link">🛠️ Features Overview</a>
 </div>
 
 <style>

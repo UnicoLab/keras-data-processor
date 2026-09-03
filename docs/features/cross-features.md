@@ -156,6 +156,8 @@ preprocessor = PreprocessingModel(
     <div class="code-container">
 
 ```python
+from kdp import FeatureType, PreprocessingModel
+
 # Creating categorical crosses
 preprocessor = PreprocessingModel(
     features_specs={
@@ -177,6 +179,8 @@ preprocessor = PreprocessingModel(
     <div class="code-container">
 
 ```python
+from kdp import FeatureType, PreprocessingModel
+
 # Creating categorical × numerical crosses
 preprocessor = PreprocessingModel(
     features_specs={
@@ -204,9 +208,7 @@ from kdp.features import DateFeature
 preprocessor = PreprocessingModel(
     features_specs={
         "transaction_time": DateFeature(
-            name="transaction_time",
-            add_day_of_week=True,
-            add_hour=True
+            name="transaction_time"
         )
     },
     # Cross day of week with hour of day
@@ -225,6 +227,8 @@ preprocessor = PreprocessingModel(
     <div class="code-container">
 
 ```python
+from kdp import FeatureType, PreprocessingModel
+
 # Creating multiple crosses
 preprocessor = PreprocessingModel(
     features_specs={
@@ -250,30 +254,24 @@ preprocessor = PreprocessingModel(
 
 <div class="power-features">
   <div class="power-feature-card">
-    <h3>🔍 Attention-Enhanced Crosses</h3>
-    <p>Apply attention mechanisms to learn which interactions matter most:</p>
+    <h3>🔍 Attention Over Crosses</h3>
+    <p>Crossed columns join the feature set, so tabular attention weighs them alongside everything else:</p>
     <div class="code-container">
 
 ```python
-# Creating cross features with attention
+# Attention runs over the whole feature set, crosses included
 from kdp import PreprocessingModel, FeatureType
-from kdp.features import CrossFeature
 
 preprocessor = PreprocessingModel(
+    path_data="data.csv",
     features_specs={
         "product_id": FeatureType.STRING_CATEGORICAL,
-        "user_id": FeatureType.STRING_CATEGORICAL
+        "user_id": FeatureType.STRING_CATEGORICAL,
     },
-    feature_crosses=[
-        # Define cross with attention
-        CrossFeature(
-            feature1="product_id",
-            feature2="user_id",
-            embedding_dim=32,
-            use_attention=True,
-            attention_heads=4
-        )
-    ]
+    feature_crosses=[("product_id", "user_id", 32)],
+    tabular_attention=True,
+    tabular_attention_heads=4,
+    tabular_attention_placement="all_features"
 )
 ```
 
@@ -281,34 +279,26 @@ preprocessor = PreprocessingModel(
   </div>
 
   <div class="power-feature-card">
-    <h3>🧠 Multi-way Crosses</h3>
-    <p>Create complex interactions between three or more features:</p>
+    <h3>🧠 Three-Way Interactions</h3>
+    <p><code>feature_crosses</code> takes pairs. Cover a three-way interaction with its pairs:</p>
     <div class="code-container">
 
 ```python
-# Creating multi-way crosses (3+ features)
-from kdp.features import CompoundFeature, CrossFeature
+from kdp import FeatureType, PreprocessingModel
 
-# First create a cross of two features
-product_location_cross = CrossFeature(
-    name="product_location_cross",
-    feature1="product_category",
-    feature2="user_location",
-    embedding_dim=32
-)
-
-# Then cross the result with a third feature
+# Each cross is a pair. For three-way interactions, cross every pair and let
+# the model combine them -- a cross cannot be crossed again.
 preprocessor = PreprocessingModel(
+    path_data="data.csv",
     features_specs={
         "product_category": FeatureType.STRING_CATEGORICAL,
         "user_location": FeatureType.STRING_CATEGORICAL,
         "time_of_day": FeatureType.STRING_CATEGORICAL,
-        # Add the intermediate cross
-        "product_location_cross": product_location_cross
     },
-    # Cross the intermediate with a third feature
     feature_crosses=[
-        ("product_location_cross", "time_of_day", 48)
+        ("product_category", "user_location", 32),
+        ("product_category", "time_of_day", 32),
+        ("user_location", "time_of_day", 32),
     ]
 )
 ```
@@ -340,16 +330,13 @@ preprocessor = PreprocessingModel(
         "product_category": CategoricalFeature(
             name="product_category",
             feature_type=FeatureType.STRING_CATEGORICAL,
-            embedding_dim=32
+            embedding_size=32
         ),
         "product_price_range": FeatureType.STRING_CATEGORICAL,
 
         # Temporal features
         "browse_time": DateFeature(
-            name="browse_time",
-            add_day_of_week=True,
-            add_hour=True,
-            add_is_weekend=True
+            name="browse_time"
         )
     },
 
@@ -400,10 +387,7 @@ preprocessor = PreprocessingModel(
 
         # Time features
         "transaction_time": DateFeature(
-            name="transaction_time",
-            add_hour=True,
-            add_day_of_week=True,
-            add_is_weekend=True
+            name="transaction_time"
         )
     },
 
@@ -556,7 +540,7 @@ preprocessor = PreprocessingModel(
     <span class="topic-icon">👁️</span>
     <span class="topic-text">Tabular Attention</span>
   </a>
-  <a href="../examples/feature-crosses.md" class="topic-link">
+  <a href="../examples/complex-examples.md" class="topic-link">
     <span class="topic-icon">📚</span>
     <span class="topic-text">Feature Cross Examples</span>
   </a>

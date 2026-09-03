@@ -55,10 +55,9 @@ features_specs = {
 preprocessor = PreprocessingModel(
     path_data="data/my_data.csv",
     features_specs=features_specs,
-    use_transformer_blocks=True,         # Enable transformer blocks
-    transformer_num_blocks=3,            # Number of transformer blocks
-    transformer_num_heads=4,             # Number of attention heads
-    transformer_dim=64                   # Hidden dimension
+    transfo_nr_blocks=3,            # Number of transformer blocks
+    transfo_nr_heads=4,             # Number of attention heads
+    transfo_ff_units=64,            # Feed-forward hidden dimension
 )
 ```
 
@@ -87,31 +86,25 @@ preprocessor = PreprocessingModel(
     </thead>
     <tbody>
       <tr>
-        <td><code>use_transformer_blocks</code></td>
-        <td>bool</td>
-        <td>False</td>
-        <td>Enable transformer blocks</td>
+        <td><code>transfo_nr_blocks</code></td>
+        <td>int | None</td>
+        <td>None</td>
+        <td>Number of transformer blocks. <strong>Setting this is what enables them</strong> &mdash; leave it <code>None</code> and no blocks are added.</td>
       </tr>
       <tr>
-        <td><code>transformer_num_blocks</code></td>
-        <td>int</td>
-        <td>3</td>
-        <td>Number of transformer blocks</td>
-      </tr>
-      <tr>
-        <td><code>transformer_num_heads</code></td>
+        <td><code>transfo_nr_heads</code></td>
         <td>int</td>
         <td>4</td>
         <td>Number of attention heads</td>
       </tr>
       <tr>
-        <td><code>transformer_dim</code></td>
+        <td><code>transfo_ff_units</code></td>
         <td>int</td>
         <td>64</td>
         <td>Hidden dimension</td>
       </tr>
       <tr>
-        <td><code>transformer_dropout</code></td>
+        <td><code>transfo_dropout_rate</code></td>
         <td>float</td>
         <td>0.1</td>
         <td>Dropout rate</td>
@@ -147,6 +140,8 @@ preprocessor = PreprocessingModel(
     <div class="code-container">
 
 ```python
+from kdp import FeatureType, PreprocessingModel
+
 features_specs = {
     "age": FeatureType.FLOAT_NORMALIZED,
     "income": FeatureType.FLOAT_RESCALED,
@@ -159,11 +154,10 @@ features_specs = {
 preprocessor = PreprocessingModel(
     path_data="data/customer_data.csv",
     features_specs=features_specs,
-    use_transformer_blocks=True,
-    transformer_num_blocks=4,            # More blocks for complex customer patterns
-    transformer_num_heads=8,             # More heads for diverse relationships
-    transformer_dim=128,                 # Larger dimension for rich representations
-    transformer_dropout=0.2              # Higher dropout for regularization
+    transfo_nr_blocks=4,            # More blocks for complex customer patterns
+    transfo_nr_heads=8,             # More heads for diverse relationships
+    transfo_ff_units=128,                 # Larger dimension for rich representations
+    transfo_dropout_rate=0.2              # Higher dropout for regularization
 )
 ```
 
@@ -175,6 +169,8 @@ preprocessor = PreprocessingModel(
     <div class="code-container">
 
 ```python
+from kdp import FeatureType, PreprocessingModel
+
 features_specs = {
     "user_id": FeatureType.INTEGER_CATEGORICAL,
     "item_id": FeatureType.INTEGER_CATEGORICAL,
@@ -187,11 +183,10 @@ features_specs = {
 preprocessor = PreprocessingModel(
     path_data="data/recommendation_data.csv",
     features_specs=features_specs,
-    use_transformer_blocks=True,
-    transformer_num_blocks=3,            # Standard configuration
-    transformer_num_heads=4,             # Balanced number of heads
-    transformer_dim=64,                  # Moderate dimension
-    transformer_dropout=0.1              # Standard dropout
+    transfo_nr_blocks=3,            # Standard configuration
+    transfo_nr_heads=4,             # Balanced number of heads
+    transfo_ff_units=64,                  # Moderate dimension
+    transfo_dropout_rate=0.1              # Standard dropout
 )
 ```
 

@@ -17,6 +17,24 @@ from kdp.layers.time_series import (
     TSFreshFeatureLayer,
     LagFeatureLayer,
 )
+from pathlib import Path
+
+
+def _output_path(filename: str) -> str:
+    """Where an example writes its images.
+
+    Running an example used to drop PNGs into the repository root, so anyone
+    who tried one came back to a dirty working tree.
+
+    Args:
+        filename: Name of the image to write.
+
+    Returns:
+        The full path, inside a gitignored directory beside this script.
+    """
+    directory = Path(__file__).resolve().parent / "outputs"
+    directory.mkdir(exist_ok=True)
+    return str(directory / filename)
 
 
 def generate_sample_data(n_samples=1000, n_features=1):
@@ -156,7 +174,7 @@ def main():
     plt.legend(["Train", "Validation"], loc="upper right")
 
     plt.tight_layout()
-    plt.savefig("time_series_features_training.png")
+    plt.savefig(_output_path("time_series_features_training.png"))
     print("Training plot saved as 'time_series_features_training.png'")
 
     # Evaluate on test set
@@ -174,7 +192,7 @@ def main():
     plt.xlabel("Time Step")
     plt.ylabel("Value")
     plt.legend()
-    plt.savefig("time_series_features_prediction.png")
+    plt.savefig(_output_path("time_series_features_prediction.png"))
     print("Prediction plot saved as 'time_series_features_prediction.png'")
 
 

@@ -253,9 +253,61 @@ class TestFeatureMoE(unittest.TestCase):
         # Check output shape
         self.assertEqual(outputs.shape, (batch_size, num_features, expert_dim))
 
-        # Get router weights - should distribute across all experts
-        router_weights = moe.router.kernel  # [feature_dim, num_experts]
-        self.assertEqual(router_weights.shape, (feature_dim, num_experts))
+        # The routing logits are one row per feature. They used to come from a
+        # Dense layer fed the batch mean of the features, which made every
+        # row's output depend on the other rows in its batch.
+        self.assertEqual(
+            tuple(moe.routing_logits.shape),
+            (num_features, num_experts),
+        )
+        self.assertIn(
+            "routing_logits",
+            [weight.name for weight in moe.trainable_weights],
+        )
+
+    def test_routing_does_not_depend_on_the_batch(self):
+        """A record scored alone must match the same record scored in a batch.
+
+        Routing averaged the features over the batch axis, so it changed with
+        the batch: one row's values moved every other row's output, and
+        training batches did not match single-record serving.
+        """
+        inputs = tf.random.normal(shape=(12, 3, 8))
+        moe = FeatureMoE(num_experts=3, expert_dim=16, routing="learned")
+        batched = moe(inputs, training=False).numpy()
+
+        alone = moe(inputs[3:4], training=False).numpy()
+        np.testing.assert_allclose(alone[0], batched[3], atol=1e-6)
+
+    def test_one_row_does_not_move_another(self):
+        """Changing row 5 used to change all twelve rows."""
+        inputs = tf.random.normal(shape=(12, 3, 8)).numpy()
+        moe = FeatureMoE(num_experts=3, expert_dim=16, routing="learned")
+        before = moe(tf.constant(inputs), training=False).numpy()
+
+        changed = inputs.copy()
+        changed[5] += 7.0
+        after = moe(tf.constant(changed), training=False).numpy()
+
+        moved = [
+            i for i in range(12) if not np.allclose(after[i], before[i], atol=1e-6)
+        ]
+        self.assertEqual(moved, [5])
+
+    def test_assignments_are_the_same_whatever_the_batch(self):
+        """Feature-level routing is a property of the feature, not the data."""
+        inputs = tf.random.normal(shape=(12, 3, 8))
+        moe = FeatureMoE(
+            num_experts=3,
+            expert_dim=16,
+            routing="learned",
+            feature_names=["a", "b", "c"],
+        )
+        moe(inputs)
+        self.assertEqual(
+            moe.get_expert_assignments(inputs),
+            moe.get_expert_assignments(inputs[:2]),
+        )
 
     def test_predefined_routing(self):
         """Test predefined routing in FeatureMoE."""
@@ -300,7 +352,13 @@ class TestFeatureMoE(unittest.TestCase):
             self.assertEqual(np.sum(assignment_matrix[i]), 1.0)
 
     def test_sparse_routing(self):
-        """Test sparse routing in FeatureMoE."""
+        """Each feature must reach exactly `sparsity` experts.
+
+        This test used to assert only the output shape, which is the same
+        whether routing is sparse or dense -- and it was dense: the top-k mask
+        sat behind `routing_activation != "softmax"`, a knob nothing exposes,
+        so `sparsity` had no effect at all.
+        """
         batch_size = 16
         num_features = 5
         feature_dim = 8
@@ -308,23 +366,45 @@ class TestFeatureMoE(unittest.TestCase):
         expert_dim = 32
         sparsity = 2  # Only use top 2 experts per feature
 
-        # Create inputs
         inputs = tf.random.normal(shape=(batch_size, num_features, feature_dim))
 
-        # Create MoE with sparse routing
         moe = FeatureMoE(
             num_experts=num_experts,
             expert_dim=expert_dim,
             routing="learned",
             sparsity=sparsity,
-            routing_activation="sparse",  # This should trigger sparse routing
+            feature_names=[f"feat{i}" for i in range(num_features)],
         )
 
-        # Forward pass
         outputs = moe(inputs, training=True)
-
-        # Check output shape
         self.assertEqual(outputs.shape, (batch_size, num_features, expert_dim))
+
+        for name, experts in moe.get_expert_assignments(inputs).items():
+            self.assertEqual(len(experts), sparsity, f"{name} used {experts}")
+            self.assertAlmostEqual(sum(experts.values()), 1.0, places=4)
+
+    def test_dense_routing_when_sparsity_covers_every_expert(self):
+        """`sparsity >= num_experts` means no expert is masked out."""
+        inputs = tf.random.normal(shape=(8, 3, 8))
+        moe = FeatureMoE(
+            num_experts=3,
+            expert_dim=16,
+            routing="learned",
+            sparsity=3,
+            feature_names=["a", "b", "c"],
+        )
+        moe(inputs)
+        for experts in moe.get_expert_assignments(inputs).values():
+            self.assertEqual(len(experts), 3)
+
+    def test_sparsity_changes_the_output(self):
+        """Routing to fewer experts has to produce a different tensor."""
+        inputs = tf.random.normal(shape=(8, 3, 8))
+        keras.utils.set_random_seed(0)
+        sparse = FeatureMoE(num_experts=4, expert_dim=16, sparsity=1)(inputs)
+        keras.utils.set_random_seed(0)
+        dense = FeatureMoE(num_experts=4, expert_dim=16, sparsity=4)(inputs)
+        self.assertFalse(np.allclose(sparse.numpy(), dense.numpy()))
 
     def test_expert_freeze(self):
         """Test freezing experts in FeatureMoE."""
@@ -350,8 +430,7 @@ class TestFeatureMoE(unittest.TestCase):
         self.assertEqual(outputs.shape, (batch_size, num_features, expert_dim))
 
     def test_get_expert_assignments(self):
-        """Test getting expert assignments from FeatureMoE."""
-        # For predefined routing
+        """Predefined assignments come back as per-expert weights."""
         feature_names = ["feat1", "feat2", "feat3"]
         assignments = {"feat1": 0, "feat2": 1, "feat3": 2}
 
@@ -363,8 +442,57 @@ class TestFeatureMoE(unittest.TestCase):
             predefined_assignments=assignments,
         )
 
-        retrieved_assignments = moe.get_expert_assignments()
-        self.assertEqual(retrieved_assignments, assignments)
+        self.assertEqual(
+            moe.get_expert_assignments(),
+            {"feat1": {0: 1.0}, "feat2": {1: 1.0}, "feat3": {2: 1.0}},
+        )
+
+    def test_get_expert_assignments_keeps_explicit_weights(self):
+        """A feature split across experts keeps the split it was given."""
+        moe = FeatureMoE(
+            num_experts=2,
+            expert_dim=16,
+            routing="predefined",
+            feature_names=["feat1", "feat2"],
+            predefined_assignments={"feat1": {0: 0.7, 1: 0.3}, "feat2": 1},
+        )
+        self.assertEqual(
+            moe.get_expert_assignments(),
+            {"feat1": {0: 0.7, 1: 0.3}, "feat2": {1: 1.0}},
+        )
+
+    def test_learned_assignments_need_a_batch(self):
+        """This returned an empty dict, so the documented plot had no data."""
+        moe = FeatureMoE(num_experts=3, expert_dim=16, routing="learned")
+        with self.assertRaises(ValueError) as caught:
+            moe.get_expert_assignments()
+        self.assertIn("batch", str(caught.exception))
+
+    def test_learned_assignments_are_reported_for_every_feature(self):
+        """The router decides from the data, so a batch answers the question."""
+        inputs = tf.random.normal(shape=(8, 3, 8))
+        moe = FeatureMoE(
+            num_experts=3,
+            expert_dim=16,
+            routing="learned",
+            sparsity=3,
+            feature_names=["age", "income", "city"],
+        )
+        moe(inputs)
+        reported = moe.get_expert_assignments(inputs)
+        self.assertEqual(sorted(reported), ["age", "city", "income"])
+        for experts in reported.values():
+            self.assertAlmostEqual(sum(experts.values()), 1.0, places=4)
+
+    def test_unnamed_features_get_positional_names(self):
+        """The layer can be built without names; the report still works."""
+        inputs = tf.random.normal(shape=(4, 2, 8))
+        moe = FeatureMoE(num_experts=2, expert_dim=16, routing="learned", sparsity=2)
+        moe(inputs)
+        self.assertEqual(
+            sorted(moe.get_expert_assignments(inputs)),
+            ["feature_0", "feature_1"],
+        )
 
     def test_moe_config(self):
         """Test FeatureMoE configuration and serialization."""
@@ -566,3 +694,140 @@ class TestMoEIntegration(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestPadFeatureLayer(unittest.TestCase):
+    """Padding is what lets features of different widths stack."""
+
+    def test_a_narrower_feature_is_right_padded_with_zeros(self):
+        """The values must survive; only zeros are added."""
+        from kdp.moe import PadFeatureLayer
+
+        values = tf.constant([[1.0, 2.0], [3.0, 4.0]])
+        padded = PadFeatureLayer(5)(values).numpy()
+        self.assertEqual(padded.shape, (2, 5))
+        np.testing.assert_array_equal(padded[:, :2], values.numpy())
+        np.testing.assert_array_equal(padded[:, 2:], np.zeros((2, 3)))
+
+    def test_a_feature_already_at_the_width_is_untouched(self):
+        """A uniform-width model must be bit-identical to before."""
+        from kdp.moe import PadFeatureLayer
+
+        values = tf.constant([[1.0, 2.0, 3.0]])
+        np.testing.assert_array_equal(
+            PadFeatureLayer(3)(values).numpy(), values.numpy()
+        )
+
+    def test_output_shape_agrees_with_the_call(self):
+        """Keras builds the graph from this."""
+        from kdp.moe import PadFeatureLayer
+
+        layer = PadFeatureLayer(6)
+        self.assertEqual(layer.compute_output_shape((None, 2)), (None, 6))
+        self.assertEqual(tuple(layer(tf.zeros((4, 2))).shape), (4, 6))
+
+    def test_config_round_trip(self):
+        """The width has to survive saving."""
+        from kdp.moe import PadFeatureLayer
+
+        layer = PadFeatureLayer(7, name="pad")
+        restored = PadFeatureLayer.from_config(layer.get_config())
+        self.assertEqual(restored.width, 7)
+        self.assertEqual(restored.name, "pad")
+
+
+class TestStackFeaturesLayerRejectsRaggedWidths(unittest.TestCase):
+    """The stack used to report a shape it could not produce."""
+
+    def test_mismatched_widths_are_reported_at_build_time(self):
+        """`compute_output_shape` returned the first feature's width, so the
+        graph built and `tf.stack` raised on the first real batch instead."""
+        layer = StackFeaturesLayer()
+        with self.assertRaises(ValueError) as caught:
+            layer.compute_output_shape([(None, 1), (None, 10)])
+        self.assertIn("same width", str(caught.exception))
+
+    def test_matching_widths_are_accepted(self):
+        """The ordinary case still reports the stacked shape."""
+        layer = StackFeaturesLayer()
+        self.assertEqual(
+            layer.compute_output_shape([(None, 4), (None, 4), (None, 4)]),
+            (None, 3, 4),
+        )
+
+
+class TestPerFeatureDense(unittest.TestCase):
+    """One layer holding a projection per feature.
+
+    Dict-mode routing used one `Dense` per feature. `.keras` stores a layer's
+    weights under a name derived from its class and build order, not the name
+    it was given, and Keras reorders sibling layers when it rebuilds a graph
+    from config -- so two features came back holding each other's kernels.
+    """
+
+    def _layer(self, **kwargs):
+        """A projection over three features of width four."""
+        from kdp.moe import PerFeatureDense
+
+        return PerFeatureDense(**kwargs)
+
+    def test_each_feature_has_its_own_weights(self):
+        """One shared kernel would make this a plain Dense."""
+        layer = self._layer(units=5)
+        layer.build((None, 3, 4))
+        self.assertEqual(tuple(layer.kernel.shape), (3, 4, 5))
+        self.assertEqual(tuple(layer.bias.shape), (3, 5))
+
+    def test_it_matches_a_dense_per_feature(self):
+        """The arithmetic has to be identical to what it replaced."""
+        inputs = np.random.default_rng(0).normal(size=(6, 3, 4)).astype("float32")
+        layer = self._layer(units=5)
+        output = layer(tf.constant(inputs)).numpy()
+
+        kernel = layer.kernel.numpy()
+        bias = layer.bias.numpy()
+        for feature in range(3):
+            expected = inputs[:, feature, :] @ kernel[feature] + bias[feature]
+            np.testing.assert_allclose(output[:, feature, :], expected, atol=1e-5)
+
+    def test_activation_is_applied(self):
+        """The projection it replaced used relu."""
+        inputs = np.full((2, 3, 4), -1.0, dtype="float32")
+        output = self._layer(units=5, activation="relu")(tf.constant(inputs)).numpy()
+        self.assertTrue((output >= 0).all())
+
+    def test_one_feature_does_not_affect_another(self):
+        """Per-feature weights mean per-feature outputs."""
+        rng = np.random.default_rng(1)
+        inputs = rng.normal(size=(4, 3, 4)).astype("float32")
+        layer = self._layer(units=5)
+        before = layer(tf.constant(inputs)).numpy()
+
+        changed = inputs.copy()
+        changed[:, 1, :] += 3.0
+        after = layer(tf.constant(changed)).numpy()
+
+        np.testing.assert_allclose(after[:, 0, :], before[:, 0, :], atol=1e-6)
+        np.testing.assert_allclose(after[:, 2, :], before[:, 2, :], atol=1e-6)
+        self.assertFalse(np.allclose(after[:, 1, :], before[:, 1, :]))
+
+    def test_an_unknown_feature_count_is_rejected(self):
+        """The weight shape depends on it, so it cannot be deferred."""
+        with self.assertRaises(ValueError):
+            self._layer(units=5).build((None, None, 4))
+
+    def test_output_shape_agrees_with_the_call(self):
+        """Keras builds the graph from this."""
+        layer = self._layer(units=7)
+        self.assertEqual(layer.compute_output_shape((None, 3, 4)), (None, 3, 7))
+        self.assertEqual(tuple(layer(tf.zeros((2, 3, 4))).shape), (2, 3, 7))
+
+    def test_config_round_trip(self):
+        """Units and activation have to survive saving."""
+        from kdp.moe import PerFeatureDense
+
+        layer = self._layer(units=9, activation="relu", name="proj")
+        restored = PerFeatureDense.from_config(layer.get_config())
+        self.assertEqual(restored.units, 9)
+        self.assertEqual(restored.name, "proj")
+        self.assertIs(restored.activation, layer.activation)

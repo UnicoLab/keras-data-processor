@@ -1,3 +1,6 @@
+import tempfile
+from pathlib import Path
+
 import keras
 import tensorflow as tf
 import numpy as np
@@ -9,7 +12,14 @@ np.random.seed(42)
 
 
 def generate_distributions():
-    """Generate data with different distributions for testing."""
+    """Generate data with different distributions for testing.
+
+    The seed matters: detection is a heuristic over the sample, so an unseeded
+    draw made the outcome vary between runs -- a heavy-tailed sample was read
+    as `heavy_tailed` or as `cauchy` depending on the draw, and any assertion
+    about it was flaky.
+    """
+    np.random.seed(20240517)
     n_samples = 1000
 
     # Normal distribution
@@ -70,8 +80,8 @@ def generate_distributions():
 def test_automatic_detection():
     """Test if the encoder correctly detects different distributions."""
     data = generate_distributions()
+    detected = {}
 
-    print("Testing automatic distribution detection:")
     for dist_name, dist_data in data.items():
         # Create encoder with auto-detection
         encoder = DistributionAwareEncoder(auto_detect=True)
@@ -90,11 +100,40 @@ def test_automatic_detection():
         # Get the detected distribution type
         dist_idx = int(encoder.detected_distribution.numpy()[0])
         detected_type = encoder._valid_distributions[dist_idx]
+        detected[dist_name] = detected_type
 
-        print(f"  {dist_name:12} -> detected as: {detected_type}")
+    # Every input must resolve to a real distribution type rather than an
+    # out-of-range index or a crash. The test printed this and asserted
+    # nothing, so a detector returning garbage would still have passed.
+    assert set(detected) == set(data)
+    for name, found in detected.items():
+        assert found in encoder._valid_distributions, f"{name} -> {found}"
 
-        # You can add assertions here to verify correct detection
-        # For example: assert detected_type == dist_name, f"Expected {dist_name}, got {detected_type}"
+    # What detection actually does today, measured across six seeds and stable
+    # for every one of them. Six of the ten shapes are identified correctly;
+    # the other four are consistently confused with a neighbouring shape, and
+    # are asserted here as they are so that a change in either direction --
+    # a fix or a regression -- shows up rather than passing unnoticed.
+    expected = {
+        # Correct.
+        "heavy_tailed": "heavy_tailed",
+        "log_normal": "log_normal",
+        "discrete": "discrete",
+        "periodic": "periodic",
+        "sparse": "sparse",
+        "beta": "beta",
+        # Known misclassifications. Each is a plausible neighbour: a symmetric
+        # unimodal sample reads as multimodal, and an exponential tail is hard
+        # to tell from a log-normal one.
+        "normal": "multimodal",
+        "uniform": "multimodal",
+        "multimodal": "periodic",
+        "exponential": "log_normal",
+    }
+    assert detected == expected, f"detection changed: {detected}"
+
+    # You can add assertions here to verify correct detection
+    # For example: assert detected_type == dist_name, f"Expected {dist_name}, got {detected_type}"
 
 
 def test_various_configurations():
@@ -206,10 +245,13 @@ def test_in_model():
     print("\nTesting encoder in a model:")
     model.fit(x_train, y_train, batch_size=32, epochs=2, verbose=1)
 
-    # Verify we can save and load the model
-    model_path = "test_model.keras"
-    print("  Testing model saving and loading...")
-    try:
+    # Verify we can save and load the model. A private temporary directory,
+    # not "test_model.keras" in the working directory: this test and
+    # test_distribution_aware.py used that same name, and under
+    # `pytest -n auto` whichever finished first deleted the other's file.
+    with tempfile.TemporaryDirectory() as directory:
+        model_path = Path(directory) / "test_model.keras"
+        print("  Testing model saving and loading...")
         model.save(model_path)
         loaded_model = keras.saving.load_model(model_path)
         print("  Model saved and loaded successfully")
@@ -220,15 +262,6 @@ def test_in_model():
 
         # Use higher tolerance for floating-point differences
         np.testing.assert_allclose(preds, loaded_preds, rtol=1e-1, atol=1e-1)
-
-        # Clean up
-        import os
-
-        if os.path.exists(model_path):
-            os.remove(model_path)
-    except Exception as e:
-        print(f"  Error in model saving/loading: {e}")
-        # This might need fixing if it fails
 
 
 if __name__ == "__main__":
