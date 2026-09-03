@@ -112,3 +112,37 @@ class TestDateEncodingLayer:
         print("ANGLE DEGREES:", angle_deg)
 
         assert abs(angle_deg) <= 60  # ensure that the angle is less than 60 degrees
+
+    def test_a_plain_date_still_gives_eight_columns(self):
+        """The four date components encode to eight cyclic ones, as before."""
+        layer = DateEncodingLayer()
+        dates = tf.constant([[2023, 1, 15, 0], [2023, 7, 15, 6]], dtype=tf.int32)
+        output = layer(dates)
+        assert tuple(output.shape) == (2, 8)
+        assert tuple(layer.compute_output_shape((2, 4))) == (2, 8)
+
+    def test_columns_appended_by_an_earlier_layer_are_carried_through(self):
+        """`SeasonLayer` runs before this one and its answer has to survive.
+
+        The encoding returned exactly eight columns and dropped everything
+        else, so the pipeline ran the season layer afterwards instead -- where
+        it read column 1 of this output, the cosine of the year, as the month.
+        """
+        layer = DateEncodingLayer()
+        with_extra = tf.constant(
+            [[2023, 1, 15, 0, 1, 0, 0, 0], [2023, 7, 15, 6, 0, 0, 1, 0]],
+            dtype=tf.int32,
+        )
+        output = layer(with_extra)
+        assert tuple(output.shape) == (2, 12)
+        assert tuple(layer.compute_output_shape((2, 8))) == (2, 12)
+
+        # The carried columns arrive unchanged, after the eight encoded ones.
+        carried = output.numpy()[:, 8:]
+        assert carried.tolist() == [[1, 0, 0, 0], [0, 0, 1, 0]]
+
+        # And the encoding itself is unaffected by their presence.
+        plain = DateEncodingLayer()(
+            tf.constant([[2023, 1, 15, 0], [2023, 7, 15, 6]], dtype=tf.int32),
+        )
+        assert output.numpy()[:, :8].tolist() == plain.numpy().tolist()

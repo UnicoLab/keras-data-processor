@@ -112,11 +112,13 @@ compute_output_shape(self, input_shape: tensorflow.python.framework.tensor_shape
 
 Compute the output shape after cyclic encoding.
 
-### Parameters- **input_shape**: Shape of the input tensor [batch, 4]
+### Parameters- **input_shape**: Shape of the input tensor, `[batch, 4]` or wider when an
+        earlier layer appended columns.
 
 ### Returns
 
-    tf.TensorShape: Shape of output tensor [batch, 8] for the 8 cyclic components
+    tf.TensorShape: `[batch, 8]` for the eight cyclic components, plus
+    any columns beyond the four date ones, which are carried through.
 
 
 ---

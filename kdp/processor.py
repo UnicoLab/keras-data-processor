@@ -1458,19 +1458,23 @@ class PreprocessingModel:
                     name=f"date_parsing_{feature_name}",
                 )
 
-                logger.debug("Adding Date Encoding layer")
-                preprocessor.add_processing_step(
-                    layer_creator=PreprocessorLayerFactory.date_encoding_layer,
-                    name=f"date_encoding_{feature_name}",
-                )
-
-                # Optionally, add SeasonLayer
+                # The season is read from the month as a number, so it has to
+                # come before the cyclic encoding replaces it. Running it after
+                # meant `SeasonLayer` read column 1 of the encoding -- the
+                # cosine of the year, which is 1.0 for every row -- and called
+                # every date winter: four constant columns, added silently.
                 if _feature.kwargs.get("add_season", False):
                     logger.debug("Adding Season layer")
                     preprocessor.add_processing_step(
                         layer_creator=PreprocessorLayerFactory.date_season_layer,
                         name=f"date_season_{feature_name}",
                     )
+
+                logger.debug("Adding Date Encoding layer")
+                preprocessor.add_processing_step(
+                    layer_creator=PreprocessorLayerFactory.date_encoding_layer,
+                    name=f"date_encoding_{feature_name}",
+                )
 
                 # Add cast to float32 for concatenation compatibility
                 preprocessor.add_processing_step(

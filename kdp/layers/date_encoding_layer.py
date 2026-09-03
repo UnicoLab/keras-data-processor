@@ -79,30 +79,41 @@ class DateEncodingLayer(keras.layers.Layer):
             period=7.0,
         )
 
-        return tf.stack(
+        encoded = tf.stack(
             [
                 year_sin,
                 year_cos,
                 month_sin,
                 month_cos,
-                day_of_month_sin,  # New
-                day_of_month_cos,  # New
+                day_of_month_sin,
+                day_of_month_cos,
                 day_of_week_sin,
                 day_of_week_cos,
             ],
             axis=-1,
         )
 
+        # Anything past the four date components belongs to a layer that ran
+        # before this one and is carried through. `SeasonLayer` needs the month
+        # as a number, which only exists before this encoding, so it runs first
+        # and appends its one-hot here -- dropping the extra columns would throw
+        # its answer away.
+        return tf.concat([encoded, tf.cast(inputs[:, 4:], tf.float32)], axis=-1)
+
     def compute_output_shape(self, input_shape: tf.TensorShape) -> tf.TensorShape:
         """Compute the output shape after cyclic encoding.
 
         Args:
-            input_shape: Shape of the input tensor [batch, 4]
+            input_shape: Shape of the input tensor, `[batch, 4]` or wider when an
+                earlier layer appended columns.
 
         Returns:
-            tf.TensorShape: Shape of output tensor [batch, 8] for the 8 cyclic components
+            tf.TensorShape: `[batch, 8]` for the eight cyclic components, plus
+            any columns beyond the four date ones, which are carried through.
         """
-        return tf.TensorShape([input_shape[0], 8])
+        width = input_shape[-1]
+        carried = 0 if width is None else max(int(width) - 4, 0)
+        return tf.TensorShape([input_shape[0], 8 + carried])
 
     def get_config(self) -> dict:
         """Returns the configuration of the layer as a dictionary."""

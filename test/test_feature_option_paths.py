@@ -19,7 +19,12 @@ import pytest
 import tensorflow as tf
 
 from kdp import FeatureType, PreprocessingModel
-from kdp.features import NumericalFeature, TextFeature, TimeSeriesFeature
+from kdp.features import (
+    DateFeature,
+    NumericalFeature,
+    TextFeature,
+    TimeSeriesFeature,
+)
 
 ROWS = 300
 
@@ -218,3 +223,61 @@ class TestWaveletFeatures(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@pytest.mark.unit
+class TestDateSeason(unittest.TestCase):
+    """`add_season=True` labelled every date winter."""
+
+    @staticmethod
+    def _season_columns(add_season):
+        """The last four columns of a date-only model, one row per season."""
+        with tempfile.TemporaryDirectory() as directory:
+            keras.backend.clear_session()
+            csv_path = Path(directory) / "dates.csv"
+            pd.DataFrame(
+                {"d": [f"2023-{month:02d}-15" for month in range(1, 13)] * 8},
+            ).to_csv(csv_path, index=False)
+            preprocessor = PreprocessingModel(
+                path_data=str(csv_path),
+                features_specs={
+                    "d": DateFeature(
+                        name="d",
+                        feature_type=FeatureType.DATE,
+                        add_season=add_season,
+                    ),
+                },
+                features_stats_path=str(Path(directory) / "stats.json"),
+                overwrite_stats=True,
+            )
+            preprocessor.build_preprocessor()
+            probe = tf.constant([[f"2023-{month:02d}-15"] for month in (1, 4, 7, 10)])
+            return np.asarray(preprocessor.model({"d": probe}, training=False))
+
+    def test_each_season_gets_its_own_encoding(self):
+        """January, April, July and October are four different seasons.
+
+        The season layer ran after the cyclic encoding, so it read column 1 of
+        that output -- the cosine of the year, 1.0 for every row -- as the
+        month. Every date came out winter: four constant columns, added without
+        a word.
+        """
+        output = self._season_columns(add_season=True)
+        seasons = [tuple(row) for row in output[:, -4:].tolist()]
+        self.assertEqual(len(set(seasons)), 4)
+        self.assertEqual(
+            seasons,
+            [
+                (1.0, 0.0, 0.0, 0.0),
+                (0.0, 1.0, 0.0, 0.0),
+                (0.0, 0.0, 1.0, 0.0),
+                (0.0, 0.0, 0.0, 1.0),
+            ],
+        )
+
+    def test_the_season_columns_are_added_to_the_encoding(self):
+        """Four columns wider than the same feature without a season."""
+        self.assertEqual(
+            self._season_columns(add_season=True).shape[-1],
+            self._season_columns(add_season=False).shape[-1] + 4,
+        )
