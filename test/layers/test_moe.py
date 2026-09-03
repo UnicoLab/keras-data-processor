@@ -754,3 +754,81 @@ class TestStackFeaturesLayerRejectsRaggedWidths(unittest.TestCase):
             layer.compute_output_shape([(None, 4), (None, 4), (None, 4)]),
             (None, 3, 4),
         )
+
+
+class TestPerFeatureDense(unittest.TestCase):
+    """One layer holding a projection per feature.
+
+    Dict-mode routing used one `Dense` per feature. `.keras` stores a layer's
+    weights under a name derived from its class and build order, not the name
+    it was given, and Keras reorders sibling layers when it rebuilds a graph
+    from config -- so two features came back holding each other's kernels.
+    """
+
+    def _layer(self, **kwargs):
+        """A projection over three features of width four."""
+        from kdp.moe import PerFeatureDense
+
+        return PerFeatureDense(**kwargs)
+
+    def test_each_feature_has_its_own_weights(self):
+        """One shared kernel would make this a plain Dense."""
+        layer = self._layer(units=5)
+        layer.build((None, 3, 4))
+        self.assertEqual(tuple(layer.kernel.shape), (3, 4, 5))
+        self.assertEqual(tuple(layer.bias.shape), (3, 5))
+
+    def test_it_matches_a_dense_per_feature(self):
+        """The arithmetic has to be identical to what it replaced."""
+        inputs = np.random.default_rng(0).normal(size=(6, 3, 4)).astype("float32")
+        layer = self._layer(units=5)
+        output = layer(tf.constant(inputs)).numpy()
+
+        kernel = layer.kernel.numpy()
+        bias = layer.bias.numpy()
+        for feature in range(3):
+            expected = inputs[:, feature, :] @ kernel[feature] + bias[feature]
+            np.testing.assert_allclose(output[:, feature, :], expected, atol=1e-5)
+
+    def test_activation_is_applied(self):
+        """The projection it replaced used relu."""
+        inputs = np.full((2, 3, 4), -1.0, dtype="float32")
+        output = self._layer(units=5, activation="relu")(tf.constant(inputs)).numpy()
+        self.assertTrue((output >= 0).all())
+
+    def test_one_feature_does_not_affect_another(self):
+        """Per-feature weights mean per-feature outputs."""
+        rng = np.random.default_rng(1)
+        inputs = rng.normal(size=(4, 3, 4)).astype("float32")
+        layer = self._layer(units=5)
+        before = layer(tf.constant(inputs)).numpy()
+
+        changed = inputs.copy()
+        changed[:, 1, :] += 3.0
+        after = layer(tf.constant(changed)).numpy()
+
+        np.testing.assert_allclose(after[:, 0, :], before[:, 0, :], atol=1e-6)
+        np.testing.assert_allclose(after[:, 2, :], before[:, 2, :], atol=1e-6)
+        self.assertFalse(np.allclose(after[:, 1, :], before[:, 1, :]))
+
+    def test_an_unknown_feature_count_is_rejected(self):
+        """The weight shape depends on it, so it cannot be deferred."""
+        with self.assertRaises(ValueError):
+            self._layer(units=5).build((None, None, 4))
+
+    def test_output_shape_agrees_with_the_call(self):
+        """Keras builds the graph from this."""
+        layer = self._layer(units=7)
+        self.assertEqual(layer.compute_output_shape((None, 3, 4)), (None, 3, 7))
+        self.assertEqual(tuple(layer(tf.zeros((2, 3, 4))).shape), (2, 3, 7))
+
+    def test_config_round_trip(self):
+        """Units and activation have to survive saving."""
+        from kdp.moe import PerFeatureDense
+
+        layer = self._layer(units=9, activation="relu", name="proj")
+        restored = PerFeatureDense.from_config(layer.get_config())
+        self.assertEqual(restored.units, 9)
+        self.assertEqual(restored.name, "proj")
+        self.assertIs(restored.activation, layer.activation)
+

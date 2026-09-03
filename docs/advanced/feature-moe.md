@@ -261,14 +261,6 @@ With learned routing, pass the stacked features the layer sees. Each row keeps
 only the experts with a non-zero share, so a run with `feature_moe_sparsity=2`
 lists two experts per feature and their weights sum to one.
 
-!!! warning "Save and reload with `output_mode="concat"`"
-    A Feature MoE model built with `output_mode="dict"` does not survive a
-    save/load round trip: the per-feature projection layers are written in one
-    order and read back in another, so two features come back holding each
-    other's weights. The model is correct in memory, and `concat` mode round
-    trips exactly -- use it if the model has to be saved and reloaded. KDP logs
-    a warning when you build the affected combination.
-
 ## 💡 Pro Tips for Feature MoE
 
 <div class="pro-tips-grid">

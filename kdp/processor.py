@@ -37,7 +37,13 @@ from kdp.features import (
 from kdp.layers_factory import PreprocessorLayerFactory
 from kdp.pipeline import FeaturePreprocessor
 from kdp.stats import DatasetStatistics
-from kdp.moe import FeatureMoE, PadFeatureLayer, StackFeaturesLayer, UnstackLayer
+from kdp.moe import (
+    FeatureMoE,
+    PadFeatureLayer,
+    PerFeatureDense,
+    StackFeaturesLayer,
+    UnstackLayer,
+)
 
 
 def _to_tensor_mapping(data: dict) -> dict:
@@ -2248,7 +2254,15 @@ class PreprocessingModel:
         feature_names = []
         individual_features = []
 
-        for feature_name in self.inputs:
+        # Sorted, and that is load-bearing. `.keras` stores a layer's weights
+        # under a name derived from its class and the order it was created --
+        # `dense`, `dense_1`, `dense_2` -- not under the name we gave it. On
+        # load the layers are rebuilt in the config's order, and Keras lists a
+        # dict input's layers alphabetically, so building these in
+        # `self.inputs` order made the two sequences disagree: two features
+        # came back holding each other's projection weights. Building in the
+        # same order Keras rebuilds in keeps them lined up.
+        for feature_name in sorted(self.inputs):
             if feature_name in self.processed_features:
                 feature_names.append(feature_name)
                 individual_features.append(self.processed_features[feature_name])
@@ -2302,18 +2316,22 @@ class PreprocessingModel:
         # Apply the MoE layer
         moe_outputs = moe(stacked_features)
 
-        # Unstack the outputs back to individual features
-        unstacked_outputs = UnstackLayer(name="unstack_moe_features_dict")(moe_outputs)
+        # One projection per feature, in a single layer. This used to be one
+        # `Dense` per feature, and `.keras` stores a layer's weights under a
+        # name derived from its class and build order rather than the name it
+        # was given -- so when Keras reordered those sibling layers rebuilding
+        # the graph, two features came back holding each other's kernels.
+        projected = PerFeatureDense(
+            self.feature_moe_expert_dim,
+            activation="relu",
+            name="moe_projection_dict",
+        )(moe_outputs)
 
-        # Create a projection layer for each feature to maintain its original meaning
+        # Unstack the outputs back to individual features
+        unstacked_outputs = UnstackLayer(name="unstack_moe_features_dict")(projected)
+
         for i, feature_name in enumerate(feature_names):
-            feature_output = unstacked_outputs[i]
-            # Add a projection layer for this feature
-            projection = keras.layers.Dense(
-                self.feature_moe_expert_dim,
-                activation="relu",
-                name=f"{feature_name}_moe_projection_dict",
-            )(feature_output)
+            projection = unstacked_outputs[i]
 
             # Same residual as the concat branch, where the widths allow it.
             if self.feature_moe_use_residual:
@@ -2326,13 +2344,6 @@ class PreprocessingModel:
             # Update the processed features with the MoE-enhanced version
             self.processed_features[feature_name] = projection
 
-        logger.warning(
-            "Feature MoE in dict output mode does not survive a save/load "
-            "round trip: the per-feature projection layers are written in one "
-            "order and read back in another, so two features can come back "
-            "holding each other's weights. The model is correct in memory. Use "
-            "output_mode='concat' if you need to save and reload it.",
-        )
         logger.info("Feature MoE applied successfully in dict mode")
 
     def _apply_feature_moe(self) -> None:

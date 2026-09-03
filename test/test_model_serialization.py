@@ -84,24 +84,13 @@ ROUND_TRIP_CONFIGS = [
         },
     ),
     ("dict_output", {"output_mode": "dict"}),
-    pytest.param(
+    (
         "moe_dict_output",
         {
             "use_feature_moe": True,
             "feature_moe_num_experts": 2,
             "output_mode": "dict",
         },
-        marks=pytest.mark.xfail(
-            reason=(
-                "Feature MoE in dict output mode does not survive the round "
-                "trip: the per-feature projection layers are written in one "
-                "order and read back in another, so two features come back "
-                "holding each other's kernels. Reproduced down to a four-"
-                "feature model of mixed widths; concat mode round-trips "
-                "correctly, and the model is correct in memory."
-            ),
-            strict=True,
-        ),
     ),
 ]
 

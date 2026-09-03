@@ -66,6 +66,105 @@ class PadFeatureLayer(keras.layers.Layer):
 
 
 @keras.saving.register_keras_serializable(package="kdp.moe")
+class PerFeatureDense(keras.layers.Layer):
+    """Project every feature with its own weights, in a single layer.
+
+    Dict-mode Feature MoE used one `Dense` per feature. `.keras` stores a
+    layer's weights under a name derived from its class and the order it was
+    built -- `dense`, `dense_1`, `dense_2` -- rather than the name it was given,
+    and Keras reorders sibling layers when it rebuilds a functional graph from
+    config. Four sibling `Dense` layers therefore came back holding each other's
+    kernels: a reloaded model returned one feature's projection under another
+    feature's name, silently.
+
+    One layer holding a weight per feature is arithmetically the same and has no
+    sibling to be confused with.
+    """
+
+    def __init__(self, units: int, activation=None, **kwargs):
+        """Initialize the layer.
+
+        Args:
+            units: Width of each feature's projection.
+            activation: Activation applied to the result, by name or callable.
+            **kwargs: Passed to the parent layer.
+        """
+        super().__init__(**kwargs)
+        self.units = int(units)
+        self.activation = keras.activations.get(activation)
+
+    def build(self, input_shape) -> None:
+        """Create one kernel and bias per feature.
+
+        Args:
+            input_shape: `[batch, num_features, input_dim]`.
+
+        Raises:
+            ValueError: If the feature or input dimension is not known.
+        """
+        _, num_features, input_dim = tuple(input_shape)
+        if num_features is None or input_dim is None:
+            raise ValueError(
+                "PerFeatureDense needs a known number of features and input "
+                f"width, got {tuple(input_shape)}.",
+            )
+        self.kernel = self.add_weight(
+            name="kernel",
+            shape=(num_features, input_dim, self.units),
+            initializer="glorot_uniform",
+            trainable=True,
+        )
+        self.bias = self.add_weight(
+            name="bias",
+            shape=(num_features, self.units),
+            initializer="zeros",
+            trainable=True,
+        )
+        super().build(input_shape)
+
+    def call(self, inputs) -> tf.Tensor:
+        """Apply each feature's own projection.
+
+        Args:
+            inputs: `[batch, num_features, input_dim]`.
+
+        Returns:
+            `[batch, num_features, units]`.
+        """
+        projected = tf.einsum("bfi,fio->bfo", inputs, self.kernel) + self.bias
+        if self.activation is not None:
+            projected = self.activation(projected)
+        return projected
+
+    def compute_output_shape(self, input_shape) -> tuple:
+        """Report the projected shape.
+
+        Args:
+            input_shape: `[batch, num_features, input_dim]`.
+
+        Returns:
+            The same shape with the last axis set to `units`.
+        """
+        batch, num_features, _ = tuple(input_shape)
+        return (batch, num_features, self.units)
+
+    def get_config(self) -> dict:
+        """Return the configuration needed to rebuild this layer.
+
+        Returns:
+            The layer configuration.
+        """
+        config = super().get_config()
+        config.update(
+            {
+                "units": self.units,
+                "activation": keras.activations.serialize(self.activation),
+            },
+        )
+        return config
+
+
+@keras.saving.register_keras_serializable(package="kdp.moe")
 class StackFeaturesLayer(keras.layers.Layer):
     """Layer to stack individual features along a new axis (dim 1) for use with Feature MoE."""
 

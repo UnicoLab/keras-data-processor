@@ -105,12 +105,18 @@ embedding output is flattened now, so every numeric feature is rank 2:
 a discretised feature with `embedding_dim=8` contributes 80 columns rather
 than a `(10, 8)` block.
 
-!!! bug "Known limitation: dict output mode plus Feature MoE"
-    That combination now builds and runs correctly, but it does not survive a
-    save/load round trip -- two features come back holding each other's
-    projection weights. `concat` mode round trips exactly. KDP logs a warning
-    when you build the affected combination, and the case is kept as a failing
-    test rather than quietly skipped.
+### Dict output mode plus Feature MoE round-trips again
+
+That combination used to come back from a save/load with two features holding
+each other's projection weights. `.keras` stores a layer's weights under a name
+derived from its class and the order it was built -- `dense`, `dense_1` -- not
+the name you gave it, and Keras reorders sibling layers when it rebuilds a
+functional graph from config. Dict mode used one `Dense` per feature, so four
+siblings were enough to cross them.
+
+The per-feature projections are one `PerFeatureDense` layer now, holding a
+kernel and bias per feature. The arithmetic is identical and there is no
+sibling to be confused with, so the round trip is exact.
 
 ## 🔤 `output_mode="tf_idf"` works
 
