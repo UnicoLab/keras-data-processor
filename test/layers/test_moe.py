@@ -831,4 +831,3 @@ class TestPerFeatureDense(unittest.TestCase):
         self.assertEqual(restored.units, 9)
         self.assertEqual(restored.name, "proj")
         self.assertIs(restored.activation, layer.activation)
-
