@@ -116,6 +116,43 @@ def _subclass_self_reads() -> dict[str, set[str]]:
     return inherited
 
 
+def _layer_classes() -> set[str]:
+    """Class names that derive from a Keras `Layer`, however far up.
+
+    A layer is self-contained: it reads its own options in `__init__`, `build`
+    or `call`, and nothing else in the package reaches in for them. So a name
+    read on some unrelated object elsewhere must not be allowed to vouch for a
+    layer's argument -- that is how a dead option would hide behind a matching
+    attribute somewhere else. Feature and config classes are the opposite: the
+    processor reads what they store, so for those the wider evidence counts.
+    """
+    bases: dict[str, list[str]] = {}
+    for path in KDP.rglob("*.py"):
+        tree = ast.parse(path.read_text())
+        for cls in [n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)]:
+            names = []
+            for base in cls.bases:
+                if isinstance(base, ast.Name):
+                    names.append(base.id)
+                elif isinstance(base, ast.Attribute):
+                    names.append(base.attr)
+            bases.setdefault(cls.name, []).extend(names)
+
+    layers = set()
+    for name in bases:
+        stack, seen = list(bases[name]), set()
+        while stack:
+            parent = stack.pop()
+            if parent in seen:
+                continue
+            seen.add(parent)
+            if parent == "Layer":
+                layers.add(name)
+                break
+            stack.extend(bases.get(parent, []))
+    return layers
+
+
 def _attributes_read(cls: ast.ClassDef) -> set[str]:
     """Every `self.x` read in the class, except inside `get_config`."""
     read = set()
@@ -176,6 +213,7 @@ def _unread_arguments() -> list[tuple[str, str, str]]:
     findings = []
     elsewhere = _package_attribute_reads()
     from_subclasses = _subclass_self_reads()
+    layers = _layer_classes()
     for path in sorted(KDP.rglob("*.py")):
         if path.name == "__init__.py":
             continue
@@ -206,7 +244,7 @@ def _unread_arguments() -> list[tuple[str, str, str]]:
             for attribute, argument in sorted(stored.items()):
                 if attribute in read or argument in consumed:
                     continue
-                if attribute in elsewhere:
+                if cls.name not in layers and attribute in elsewhere:
                     continue
                 if _is_disclaimed(docstring, argument):
                     continue
