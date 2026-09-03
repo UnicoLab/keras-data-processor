@@ -60,6 +60,32 @@ class WelfordAccumulator:
             dtype=tf.float64,
             trainable=False,
         )
+        # Third and fourth central moments, pooled the same way as M2, and the
+        # running extremes. The advisor reads skewness, kurtosis, min and max;
+        # none of them were ever collected, so every column arrived at it with
+        # the neutral defaults -- skew 0, kurtosis 3 -- and was reported as
+        # "Normal distribution detected" whatever shape it had, while the
+        # rescaling factor derived from min and max always came out as 1.
+        self.M3 = tf.Variable(
+            0.0,
+            dtype=tf.float64,
+            trainable=False,
+        )
+        self.M4 = tf.Variable(
+            0.0,
+            dtype=tf.float64,
+            trainable=False,
+        )
+        self.minimum = tf.Variable(
+            float("inf"),
+            dtype=tf.float64,
+            trainable=False,
+        )
+        self.maximum = tf.Variable(
+            float("-inf"),
+            dtype=tf.float64,
+            trainable=False,
+        )
         self.var = tf.Variable(
             0.0,
             dtype=tf.float64,
@@ -82,16 +108,86 @@ class WelfordAccumulator:
         # batch contributes nothing either way.
         safe_batch_count = tf.maximum(batch_count, 1.0)
         batch_mean = tf.reduce_sum(values) / safe_batch_count
-        batch_m2 = tf.reduce_sum(tf.square(values - batch_mean))
+        centered = values - batch_mean
+        batch_m2 = tf.reduce_sum(tf.square(centered))
+        batch_m3 = tf.reduce_sum(centered * tf.square(centered))
+        batch_m4 = tf.reduce_sum(tf.square(tf.square(centered)))
 
-        total = self.n + batch_count
-        safe_total = tf.maximum(total, 1.0)
-        delta = batch_mean - self.mean
+        # The identity element rather than a branch: an empty batch reduces to
+        # the infinity that leaves the running extreme alone.
+        infinity = tf.constant([float("inf")], dtype=tf.float64)
+        batch_min = tf.reduce_min(tf.concat([values, infinity], axis=0))
+        batch_max = tf.reduce_max(tf.concat([values, -infinity], axis=0))
 
-        self.mean.assign(self.mean + delta * batch_count / safe_total)
-        self.M2.assign(
-            self.M2 + batch_m2 + delta * delta * self.n * batch_count / safe_total,
+        self._pool(
+            count=batch_count,
+            mean=batch_mean,
+            m2=batch_m2,
+            m3=batch_m3,
+            m4=batch_m4,
+            minimum=batch_min,
+            maximum=batch_max,
         )
+
+    def _pool(
+        self,
+        count: tf.Tensor,
+        mean: tf.Tensor,
+        m2: tf.Tensor,
+        m3: tf.Tensor,
+        m4: tf.Tensor,
+        minimum: tf.Tensor,
+        maximum: tf.Tensor,
+    ) -> None:
+        """Fold a summarized group of values into the running accumulators.
+
+        The pooled forms of the Chan-Golub-LeVeque update, carried up to the
+        fourth moment. Both `update` and `merge` reduce to the same arithmetic.
+
+        Args:
+            count: How many values the group holds.
+            mean: Their mean.
+            m2: The sum of their squared deviations from that mean.
+            m3: The sum of their cubed deviations.
+            m4: The sum of their fourth-power deviations.
+            minimum: The smallest of them, or +inf for an empty group.
+            maximum: The largest of them, or -inf for an empty group.
+        """
+        total = self.n + count
+        safe_total = tf.maximum(total, 1.0)
+        delta = mean - self.mean
+        held = self.n
+
+        self.M4.assign(
+            self.M4
+            + m4
+            + tf.square(tf.square(delta))
+            * held
+            * count
+            * (held * held - held * count + count * count)
+            / (safe_total * tf.square(safe_total))
+            + 6.0
+            * delta
+            * delta
+            * (held * held * m2 + count * count * self.M2)
+            / tf.square(safe_total)
+            + 4.0 * delta * (held * m3 - count * self.M3) / safe_total,
+        )
+        self.M3.assign(
+            self.M3
+            + m3
+            + delta
+            * tf.square(delta)
+            * held
+            * count
+            * (held - count)
+            / tf.square(safe_total)
+            + 3.0 * delta * (held * m2 - count * self.M2) / safe_total,
+        )
+        self.M2.assign(self.M2 + m2 + delta * delta * held * count / safe_total)
+        self.mean.assign(self.mean + delta * count / safe_total)
+        self.minimum.assign(tf.minimum(self.minimum, minimum))
+        self.maximum.assign(tf.maximum(self.maximum, maximum))
         self.n.assign(total)
 
     def merge(self, other: "WelfordAccumulator") -> None:
@@ -100,23 +196,58 @@ class WelfordAccumulator:
         Args:
             other: The accumulator whose values are being folded in.
         """
-        other_n = tf.cast(other.n, tf.float64)
-        total = self.n + other_n
-        safe_total = tf.maximum(total, 1.0)
-        delta = tf.cast(other.mean, tf.float64) - self.mean
-
-        self.mean.assign(self.mean + delta * other_n / safe_total)
-        self.M2.assign(
-            self.M2
-            + tf.cast(other.M2, tf.float64)
-            + delta * delta * self.n * other_n / safe_total,
+        self._pool(
+            count=tf.cast(other.n, tf.float64),
+            mean=tf.cast(other.mean, tf.float64),
+            m2=tf.cast(other.M2, tf.float64),
+            m3=tf.cast(other.M3, tf.float64),
+            m4=tf.cast(other.M4, tf.float64),
+            minimum=tf.cast(other.minimum, tf.float64),
+            maximum=tf.cast(other.maximum, tf.float64),
         )
-        self.n.assign(total)
 
     @property
     def variance(self) -> float:
         """Returns the variance of the accumulated values."""
         return self.M2 / (self.n - 1) if self.n > 1 else self.var
+
+    @property
+    def skewness(self) -> float:
+        """How lopsided the values are: 0 when symmetric, positive to the right.
+
+        Returns:
+            The population (Fisher-Pearson) skewness, or 0.0 when there are too
+            few values, or no spread, to have one.
+        """
+        if self.n < 3 or self.M2 <= 0:
+            return tf.constant(0.0, dtype=tf.float64)
+        return tf.sqrt(self.n) * self.M3 / tf.pow(self.M2, 1.5)
+
+    @property
+    def kurtosis(self) -> float:
+        """How heavy the tails are, on the scale where a normal curve is 3.
+
+        Returns:
+            The population kurtosis, or 3.0 when there are too few values, or
+            no spread, to have one.
+        """
+        if self.n < 4 or self.M2 <= 0:
+            return tf.constant(3.0, dtype=tf.float64)
+        return self.n * self.M4 / tf.square(self.M2)
+
+    @property
+    def smallest(self) -> float:
+        """The smallest value seen, or 0.0 before any has been."""
+        if self.n < 1:
+            return tf.constant(0.0, dtype=tf.float64)
+        return self.minimum.value()
+
+    @property
+    def largest(self) -> float:
+        """The largest value seen, or 0.0 before any has been."""
+        if self.n < 1:
+            return tf.constant(0.0, dtype=tf.float64)
+        return self.maximum.value()
 
     @property
     def count(self) -> int:
@@ -170,6 +301,12 @@ class CategoricalAccumulator:
         return tf.unique(all_values)[0].numpy().tolist()
 
 
+# The punctuation `TextVectorization` removes under its default
+# `standardize="lower_and_strip_punctuation"`, copied from that layer so the
+# vocabulary collected here is spelled the way the layer will look it up.
+_KERAS_PUNCTUATION = r'[!"#$%&()\*\+,-\./:;<=>?@\[\\\]^_`{|}~\']'
+
+
 class TextAccumulator:
     def __init__(self) -> None:
         """Initializes the accumulator for text values, where each entry is a list of words separated by spaces.
@@ -201,10 +338,18 @@ class TextAccumulator:
                 f"Unsupported data type for text features: {new_texts.dtype}",
             )
 
-        # Split each string into words and flatten the list
-        new_texts = tf.strings.regex_replace(new_texts, r"\s+", " ")
+        # Tokenize exactly the way `TextVectorization` will, because this
+        # vocabulary is handed to that layer verbatim. Its default
+        # standardization lowercases and then strips punctuation before
+        # splitting on whitespace; this accumulator lowercased but kept the
+        # punctuation, so a column of ordinary prose produced a vocabulary of
+        # "product," and "it!" while the layer looked up "product" and "it".
+        # The width was right and the counts were right; the words simply were
+        # not there, and a large share of every sentence fell into the
+        # out-of-vocabulary slot.
+        new_texts = tf.strings.lower(new_texts)
+        new_texts = tf.strings.regex_replace(new_texts, _KERAS_PUNCTUATION, "")
         split_words = tf.strings.split(new_texts).flat_values
-        split_words = tf.strings.lower(split_words)
 
         # Concatenate new words with existing words and update unique words
         updated_words = tf.unique(tf.concat([self.words, split_words], axis=0))[0]
@@ -296,6 +441,53 @@ class DateAccumulator:
             "day_of_week_sin": self.day_of_week_sin_accumulator.variance.numpy(),
             "day_of_week_cos": self.day_of_week_cos_accumulator.variance.numpy(),
         }
+
+
+def _warn_if_float32_flattens_the_column(
+    feature: str,
+    mean: float,
+    variance: float,
+) -> None:
+    """Say so when a column's spread is too fine for float32 to hold.
+
+    Everything downstream -- the CSV reader, the model's inputs, the
+    normalization layer -- is float32, which carries about seven significant
+    digits. A column whose values sit far from zero but vary only slightly
+    loses that variation on the way in, before any statistic is computed and
+    before any layer sees it. Unix timestamps in seconds are the usual case:
+    values near 1.6e9 are 128 apart in float32, so a column spread over a
+    minute arrives as two or three distinct numbers. Normalization then works
+    perfectly on what is left, and the feature reaching the model is a
+    constant.
+
+    Nothing raises, because the numbers are the ones the file actually
+    contains. This only makes the loss visible.
+
+    Args:
+        feature: The column's name, for the message.
+        mean: The column's mean.
+        variance: The column's variance.
+    """
+    mean = float(mean)
+    variance = float(variance)
+    if not math.isfinite(mean) or not math.isfinite(variance) or variance <= 0.0:
+        return
+
+    # The gap between neighbouring float32 values at this magnitude.
+    resolution = float(np.spacing(np.float32(abs(mean))))
+    spread = math.sqrt(variance)
+    if resolution <= 0.0 or spread >= 16.0 * resolution:
+        return
+
+    levels = max(int(6.0 * spread / resolution), 1)
+    logger.warning(
+        f"Feature '{feature}' has values around {mean:.6g} varying by only "
+        f"{spread:.6g}, which float32 cannot hold: neighbouring values at that "
+        f"magnitude are {resolution:.6g} apart, so the column arrives as about "
+        f"{levels} distinct value(s) and carries almost no information. "
+        f"Subtract a reference point before training (for a Unix timestamp, "
+        f"the start of your data), or declare the column as a DATE feature.",
+    )
 
 
 class DatasetStatistics:
@@ -599,6 +791,10 @@ class DatasetStatistics:
                     stats = {
                         "mean": float(combined_accumulator.mean.numpy()),
                         "var": float(combined_accumulator.variance.numpy()),
+                        "min": float(combined_accumulator.smallest.numpy()),
+                        "max": float(combined_accumulator.largest.numpy()),
+                        "skewness": float(combined_accumulator.skewness.numpy()),
+                        "kurtosis": float(combined_accumulator.kurtosis.numpy()),
                         "count": int(
                             sum(
                                 acc.count.numpy() for acc in group_accumulators.values()
@@ -673,6 +869,10 @@ class DatasetStatistics:
                 stats = {
                     "mean": float(accumulator.mean.numpy()),
                     "var": float(accumulator.variance.numpy()),
+                    "min": float(accumulator.smallest.numpy()),
+                    "max": float(accumulator.largest.numpy()),
+                    "skewness": float(accumulator.skewness.numpy()),
+                    "kurtosis": float(accumulator.kurtosis.numpy()),
                     "count": int(accumulator.count.numpy()),
                     "dtype": feature.dtype.name
                     if hasattr(feature.dtype, "name")
@@ -765,10 +965,22 @@ class DatasetStatistics:
                 - date: mean and variance for each date component
             """
             if feature_type == "numeric":
+                accumulator = self.numeric_stats[feature]
+                mean = accumulator.mean.numpy()
+                variance = accumulator.variance.numpy()
+                _warn_if_float32_flattens_the_column(feature, mean, variance)
                 return feature, {
-                    "mean": self.numeric_stats[feature].mean.numpy(),
-                    "count": self.numeric_stats[feature].count.numpy(),
-                    "var": self.numeric_stats[feature].variance.numpy(),
+                    "mean": mean,
+                    "count": accumulator.count.numpy(),
+                    "var": variance,
+                    # The advisor reads these four to tell one distribution
+                    # from another and to size a rescaling factor. None of them
+                    # were collected, so it read the neutral defaults and
+                    # called every column normal.
+                    "min": float(accumulator.smallest.numpy()),
+                    "max": float(accumulator.largest.numpy()),
+                    "skewness": float(accumulator.skewness.numpy()),
+                    "kurtosis": float(accumulator.kurtosis.numpy()),
                     "dtype": self.features_specs[feature].dtype,
                 }
             elif feature_type == "categorical":

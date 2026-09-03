@@ -17,10 +17,12 @@ from typing import Any
 from pathlib import Path
 import json
 import numpy as np
+import pandas as pd
 
 from loguru import logger
 
 from kdp.layers.global_numerical_embedding_layer import GlobalNumericalEmbedding
+from kdp.inference.base import InferenceFormatter
 from kdp.features import (
     CategoricalFeature,
     FeatureSpaceConverter,
@@ -63,13 +65,33 @@ def _to_tensor_mapping(data: dict) -> dict:
     converted = {}
     for key, value in data.items():
         if isinstance(value, tf.Tensor) or tf.is_tensor(value):
-            converted[key] = value
+            converted[key] = _as_column(value)
             continue
         try:
-            converted[key] = tf.convert_to_tensor(value)
+            converted[key] = _as_column(tf.convert_to_tensor(value))
         except (ValueError, TypeError, tf.errors.OpError):
             converted[key] = value
     return converted
+
+
+def _as_column(tensor: tf.Tensor) -> tf.Tensor:
+    """Give a per-row value list the (rows, 1) shape every input is declared with.
+
+    Every feature is a `keras.Input(shape=(1,))`, so a column of N values has to
+    arrive as (N, 1). A flat list -- `{"age": [35.0, 41.0]}`, and everything
+    `InferenceFormatter` produces -- converts to shape (N,), which `predict()`
+    rejected with "as_list() is not defined on an unknown TensorShape". The
+    values were never wrong, only the axis they were missing.
+
+    Args:
+        tensor: A converted feature column.
+
+    Returns:
+        The same values with a trailing axis when they arrived without one.
+    """
+    if len(tensor.shape) == 1:
+        return tf.expand_dims(tensor, axis=-1)
+    return tensor
 
 
 class CallableDict(dict):
@@ -313,6 +335,9 @@ class PreprocessingModel:
         self.features_specs = features_specs or {}
         self.features_stats_path = features_stats_path or "features_stats.json"
         self.feature_crosses = feature_crosses or []
+        # Filled in by `_add_pipeline_cross`: the names the crossed tensors
+        # are stored under in `processed_features`.
+        self._cross_feature_names: list[str] = []
         self.output_mode = output_mode
         self.overwrite_stats = overwrite_stats
         self.use_caching = use_caching
@@ -1300,8 +1325,14 @@ class PreprocessingModel:
         """
         if not self.path_data:
             raise ValueError(
-                f"{feature_name}: output_mode='tf_idf' needs the data to compute "
-                "IDF weights from, so `path_data` is required.",
+                f"{feature_name}: this configuration "
+                f"(output_mode={kwargs.get('output_mode')!r}, "
+                f"max_tokens={kwargs.get('max_tokens')!r}, "
+                f"ngrams={kwargs.get('ngrams')!r}, "
+                f"standardize={kwargs.get('standardize')!r}, "
+                f"split={kwargs.get('split')!r}) needs its vocabulary built from "
+                f"the column itself -- the collected statistics cannot describe "
+                f"it -- so `path_data` is required.",
             )
 
         vectorizer = keras.layers.TextVectorization(**kwargs)
@@ -1368,13 +1399,62 @@ class PreprocessingModel:
             ):
                 _feature.kwargs["output_sequence_length"] = 35
 
+            # `max_tokens` says how large a vocabulary to keep, and the
+            # statistics pass collects every distinct word it sees. Handing a
+            # larger vocabulary to a capped layer is refused by Keras --
+            # "Attempted to set a vocabulary larger than the maximum vocab
+            # size" -- so asking for a smaller vocabulary than the data holds,
+            # which is the only reason to set the option, could not build.
+            # `int` reserves two slots (padding and out-of-vocabulary), the
+            # other modes one. Adapting on the column keeps the most frequent
+            # `max_tokens` words, which is what the cap means; the statistics
+            # carry no counts to pick them with.
+            _max_tokens = _feature.kwargs.get("max_tokens")
+            _reserved = (
+                2
+                if _feature.kwargs.get("output_mode", TextVectorizerOutputOptions.INT)
+                == TextVectorizerOutputOptions.INT
+                else 1
+            )
+            _vocab_too_large = (
+                _max_tokens is not None and len(_vocab) + _reserved > _max_tokens
+            )
+
+            # The statistics collect single words, standardized the way
+            # `TextVectorization` standardizes by default. Any option that
+            # changes what a token is puts the two out of step: `ngrams` asks
+            # for word pairs the statistics never recorded, and a custom
+            # `standardize` or `split` spells them differently. The vocabulary
+            # was handed over regardless, so every n-gram and every differently
+            # spelled token landed in the one out-of-vocabulary slot -- the
+            # widths and the counts all looked right. Read the column instead
+            # when that happens, and let the layer build the vocabulary it will
+            # actually use.
+            _tokenizes_differently = any(
+                _feature.kwargs.get(option) is not None
+                for option in ("ngrams", "standardize", "split")
+            )
+            _needs_its_own_vocabulary = _vocab_too_large or _tokenizes_differently
+            if _needs_its_own_vocabulary:
+                logger.info(
+                    f"{feature_name}: the statistics vocabulary cannot describe "
+                    f"this vectorizer (max_tokens={_max_tokens}, "
+                    f"ngrams={_feature.kwargs.get('ngrams')}, "
+                    f"standardize={_feature.kwargs.get('standardize')}, "
+                    f"split={_feature.kwargs.get('split')}); adapting it on the "
+                    f"column instead.",
+                )
+
             # `tf_idf` weights every token by how rare it is across documents,
             # and Keras refuses a vocabulary in that mode without the matching
             # `idf_weights`, which KDP's statistics do not collect -- so the
             # documented, exported `TF_IDF` output mode could not build at all.
             # Letting the layer adapt on the column computes both the vocabulary
             # and the weights, from the same data the statistics came from.
-            if _feature.kwargs.get("output_mode") == TextVectorizerOutputOptions.TF_IDF:
+            if (
+                _feature.kwargs.get("output_mode") == TextVectorizerOutputOptions.TF_IDF
+                or _needs_its_own_vocabulary
+            ):
                 vectorizer = self._adapted_text_vectorizer(
                     feature_name=feature_name,
                     name=f"text_vactorizer_{feature_name}",
@@ -1696,11 +1776,23 @@ class PreprocessingModel:
         3. Converting output to float32 for compatibility
         4. Adding the result to appropriate output collection based on output mode
         """
+        self._cross_feature_names = []
         for feature_a, feature_b, nr_bins in self.feature_crosses:
             preprocessor = FeaturePreprocessor(name=f"{feature_a}_x_{feature_b}")
 
             # checking inputs existance for feature A
             for _feature_name in [feature_a, feature_b]:
+                # A name that is not a declared feature used to surface as a
+                # bare `KeyError: 'name'` from the line below, with nothing to
+                # say where it came from.
+                if _feature_name not in self.features_specs:
+                    raise ValueError(
+                        f"feature_crosses asks to cross '{feature_a}' with "
+                        f"'{feature_b}', but '{_feature_name}' is not in "
+                        f"features_specs. A cross combines two declared "
+                        f"features: add it to features_specs, or drop the "
+                        f"cross.",
+                    )
                 # getting feature object
                 _feature = self.features_specs[_feature_name]
                 _input = self.inputs.get(_feature_name)
@@ -1708,6 +1800,23 @@ class PreprocessingModel:
                     logger.info(f"Creating: {_feature} inputs and signature")
                     _col_dtype = _feature.dtype
                     self._add_input_column(feature_name=_feature, dtype=_col_dtype)
+
+            # `HashedCrossing` hashes the raw values, so it only accepts
+            # integer or string columns. Crossing a float feature used to build
+            # a model that looked fine -- summary, output shape, everything --
+            # and then raise on the first batch it was given. Refuse it here,
+            # where the configuration that caused it is still in view.
+            for _feature_name in (feature_a, feature_b):
+                _dtype = str(self.inputs[_feature_name].dtype)
+                if _dtype != "string" and not _dtype.startswith(("int", "uint")):
+                    raise ValueError(
+                        f"feature_crosses asks to cross '{feature_a}' with "
+                        f"'{feature_b}', but '{_feature_name}' is a "
+                        f"{_dtype} column and a hashed cross can only combine "
+                        f"integer or string columns. Cross categorical "
+                        f"features, or bucket the numeric one into a "
+                        f"categorical feature first.",
+                    )
 
             feature_name = f"{feature_a}_x_{feature_b}"
             preprocessor.add_processing_step(
@@ -1726,6 +1835,7 @@ class PreprocessingModel:
 
             # Process the feature
             self.processed_features[feature_name] = _output_pipeline
+            self._cross_feature_names.append(feature_name)
 
     @_monitor_performance
     def _score_features_against_each_other(self) -> None:
@@ -1913,6 +2023,18 @@ class PreprocessingModel:
         for feature_name, feature in self.processed_features.items():
             # Skip feature weights
             if feature_name.endswith("_weights"):
+                continue
+
+            # A cross is configured with `feature_crosses`, not by declaring a
+            # column, so it has no entry in `features_specs`. The lookup below
+            # therefore found nothing and skipped it: `_add_pipeline_cross`
+            # built every cross and concatenation then threw them all away, so
+            # in the default output mode the option did nothing at all. A
+            # hashed cross is a categorical index, so it joins that block.
+            if feature_name in self._cross_feature_names:
+                logger.debug(f"Adding cross {feature_name} to categorical features")
+                categorical_features.append(feature)
+                categorical_names.append(feature_name)
                 continue
 
             # Add to appropriate list based on feature type
@@ -2309,6 +2431,16 @@ class PreprocessingModel:
                 dropout_rate=self.transfo_dropout_rate,
                 name=f"transformer_block_{block_idx}_{self.transfo_nr_heads}heads",
             )(self.concat_all)
+
+        # A transformer block adds a sequence axis to a 2-D input and hands it
+        # back, so this placement was the one configuration whose model came out
+        # as (rows, 1, width) instead of (rows, width) -- enough to break a Dense
+        # head bolted on after it. The categorical placement already flattened
+        # the same way, one method above.
+        self.concat_all = keras.layers.Reshape(
+            target_shape=(-1,),
+            name="reshape_transformer_output",
+        )(self.concat_all)
 
     def _prepare_dict_mode_outputs(self) -> None:
         """Prepare outputs for dictionary mode."""
@@ -3255,6 +3387,19 @@ class PreprocessingModel:
         """
         # Validate time series inference data
         self._validate_time_series_inference_data(data)
+
+        # A DataFrame is the first thing the docstring offers, and it went
+        # straight to Keras, which tried to read every column as a float and
+        # raised "could not convert string to float" on the first categorical
+        # one. `InferenceFormatter` already takes a frame apart column by
+        # column, and it also decides each column's type from the values that
+        # are really there -- so a row with a gap in it survives instead of
+        # raising "Invalid dtype: object" on the mixed column it produces.
+        if isinstance(data, pd.DataFrame):
+            data = InferenceFormatter(self).prepare_inference_data(
+                data,
+                to_tensors=True,
+            )
 
         # Keras cannot consume NumPy string arrays, which every categorical,
         # text or date feature produces when the caller passes a plain dict.

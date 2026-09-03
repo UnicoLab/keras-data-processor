@@ -291,3 +291,114 @@ class TestWelfordAccumulator(unittest.TestCase):
             ),
             before,
         )
+
+
+@pytest.mark.unit
+class TestTheHigherMomentsAndExtremes(unittest.TestCase):
+    """Skewness, kurtosis, min and max, against the same data in one pass.
+
+    The advisor reads all four; none were collected, so it saw skew 0 and
+    kurtosis 3 for every column and called them all normal. They are pooled the
+    same way as the mean and variance, so batching must not move them.
+    """
+
+    CASES = {
+        "normal": lambda rng: rng.normal(0.0, 1.0, 4000),
+        "right_skewed": lambda rng: rng.exponential(3.0, 4000),
+        "left_skewed": lambda rng: -rng.exponential(3.0, 4000),
+        "heavy_tailed": lambda rng: rng.standard_t(3, 4000),
+        "far_from_zero": lambda rng: rng.normal(1e6, 50.0, 4000),
+    }
+
+    @staticmethod
+    def _reference(column: np.ndarray) -> dict:
+        centered = column - column.mean()
+        second = (centered**2).mean()
+        return {
+            "skewness": (centered**3).mean() / second**1.5,
+            "kurtosis": (centered**4).mean() / second**2,
+            "min": column.min(),
+            "max": column.max(),
+        }
+
+    @staticmethod
+    def _accumulate(column: np.ndarray, batches: int) -> dict:
+        accumulator = WelfordAccumulator()
+        for chunk in np.array_split(column, batches):
+            accumulator.update(tf.constant(chunk))
+        return {
+            "skewness": float(accumulator.skewness.numpy()),
+            "kurtosis": float(accumulator.kurtosis.numpy()),
+            "min": float(accumulator.smallest.numpy()),
+            "max": float(accumulator.largest.numpy()),
+        }
+
+    def test_they_match_the_data_whatever_the_batch_size(self) -> None:
+        generator = np.random.default_rng(21)
+        for name, make in self.CASES.items():
+            column = make(generator)
+            reference = self._reference(column)
+            for batches in (1, 37, 500):
+                with self.subTest(case=name, batches=batches):
+                    got = self._accumulate(column, batches)
+                    for key, expected in reference.items():
+                        self.assertAlmostEqual(
+                            got[key] / max(abs(expected), 1e-9),
+                            expected / max(abs(expected), 1e-9),
+                            places=6,
+                            msg=f"{name}/{key} at {batches} batches",
+                        )
+
+    def test_the_shapes_are_told_apart(self) -> None:
+        """The numbers have to be different, not merely present."""
+        generator = np.random.default_rng(21)
+        normal = self._accumulate(generator.normal(0.0, 1.0, 4000), 7)
+        skewed = self._accumulate(generator.exponential(3.0, 4000), 7)
+        self.assertLess(abs(normal["skewness"]), 0.2)
+        self.assertGreater(skewed["skewness"], 1.5)
+        self.assertLess(abs(normal["kurtosis"] - 3.0), 0.4)
+        self.assertGreater(skewed["kurtosis"], 6.0)
+
+    def test_merging_gives_the_same_answer_as_one_pass(self) -> None:
+        column = np.random.default_rng(29).exponential(2.0, 3000)
+        whole = WelfordAccumulator()
+        whole.update(tf.constant(column))
+
+        head = WelfordAccumulator()
+        head.update(tf.constant(column[:1100]))
+        tail = WelfordAccumulator()
+        tail.update(tf.constant(column[1100:]))
+        head.merge(tail)
+
+        for name in ("skewness", "kurtosis", "smallest", "largest"):
+            with self.subTest(statistic=name):
+                self.assertAlmostEqual(
+                    float(getattr(head, name).numpy()),
+                    float(getattr(whole, name).numpy()),
+                    places=6,
+                )
+
+    def test_too_few_values_answer_with_the_neutral_defaults(self) -> None:
+        empty = WelfordAccumulator()
+        self.assertEqual(float(empty.skewness.numpy()), 0.0)
+        self.assertEqual(float(empty.kurtosis.numpy()), 3.0)
+        self.assertEqual(float(empty.smallest.numpy()), 0.0)
+        self.assertEqual(float(empty.largest.numpy()), 0.0)
+
+        empty.update(tf.constant([], dtype=tf.float32))
+        self.assertEqual(float(empty.n.numpy()), 0.0)
+        self.assertEqual(float(empty.smallest.numpy()), 0.0)
+
+        one = WelfordAccumulator()
+        one.update(tf.constant([5.0]))
+        self.assertEqual(float(one.smallest.numpy()), 5.0)
+        self.assertEqual(float(one.largest.numpy()), 5.0)
+        self.assertEqual(float(one.skewness.numpy()), 0.0)
+
+    def test_a_constant_column_has_no_shape_to_report(self) -> None:
+        constant = WelfordAccumulator()
+        constant.update(tf.constant(np.full(100, 42.0)))
+        self.assertEqual(float(constant.skewness.numpy()), 0.0)
+        self.assertEqual(float(constant.kurtosis.numpy()), 3.0)
+        self.assertEqual(float(constant.smallest.numpy()), 42.0)
+        self.assertEqual(float(constant.largest.numpy()), 42.0)

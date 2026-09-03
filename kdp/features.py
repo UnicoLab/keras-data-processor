@@ -387,6 +387,64 @@ class TextFeature(Feature):
         self.kwargs = kwargs
 
 
+# Where each calendar component appears in a format string, in both the
+# strftime spelling and the plain one.
+_YEAR_TOKENS = ("%Y", "%y", "YYYY", "YY")
+_MONTH_TOKENS = ("%m", "%b", "%B", "MM")
+_DAY_TOKENS = ("%d", "DD")
+
+# Options a `DateFeature` is given that nothing reads. The date encoding is
+# fixed -- year, month and day, each as a sine and cosine pair -- so there is no
+# component to select.
+_UNREAD_DATE_OPTIONS = ("output_format", "extract")
+
+
+def _first_index(text: str, tokens: tuple[str, ...]) -> int | None:
+    """Where the earliest of `tokens` appears in `text`, if any.
+
+    Args:
+        text: The format string to search.
+        tokens: The spellings of one calendar component.
+
+    Returns:
+        The index of the earliest match, or None when none appears.
+    """
+    found = [text.index(token) for token in tokens if token in text]
+    return min(found) if found else None
+
+
+def _check_date_format(name: str, date_format: str) -> None:
+    """Refuse a format the parser cannot read, while the caller can still fix it.
+
+    The parser reads year, then month, then day, with `-` or `/` between them
+    and an optional time after. It does not read the format string, so a
+    day-first format was accepted here, ignored, and then met at the first batch
+    as an assertion failure inside a graph error -- long after the line that
+    caused it.
+
+    Args:
+        name: The feature's name, for the message.
+        date_format: The format the caller gave.
+
+    Raises:
+        ValueError: If the format does not put year, then month, then day.
+    """
+    year = _first_index(date_format, _YEAR_TOKENS)
+    month = _first_index(date_format, _MONTH_TOKENS)
+    day = _first_index(date_format, _DAY_TOKENS)
+
+    if None not in (year, month, day) and year < month < day:
+        return
+
+    raise ValueError(
+        f"{name}: format={date_format!r} is not a format this library reads. "
+        f"Dates are parsed as year, then month, then day, separated by '-' or "
+        f"'/', optionally followed by a time -- '%Y-%m-%d', '%Y/%m/%d' and "
+        f"'%Y-%m-%d %H:%M:%S' among them. Convert the column to one of those "
+        f"before passing it in.",
+    )
+
+
 class DateFeature(Feature):
     """TextFeature with dynamic kwargs passing."""
 
@@ -405,6 +463,25 @@ class DateFeature(Feature):
         """
         super().__init__(name, feature_type, **kwargs)
         self.dtype = tf.string
+
+        # `date_format` is the spelling most callers reach for, and the one the
+        # layer's own argument is called; the pipeline reads `format`. It was
+        # accepted under either name and honoured under neither.
+        if "date_format" in kwargs and "format" not in kwargs:
+            kwargs["format"] = kwargs["date_format"]
+
+        if kwargs.get("format"):
+            _check_date_format(name, kwargs["format"])
+
+        for option in _UNREAD_DATE_OPTIONS:
+            if option in kwargs:
+                logger.warning(
+                    f"{name}: {option}={kwargs[option]!r} is accepted and not "
+                    f"used. A date feature always produces the same eight "
+                    f"columns -- year, month and day, each as a sine and a "
+                    f"cosine -- plus four more when add_season=True.",
+                )
+
         self.kwargs = kwargs
 
 

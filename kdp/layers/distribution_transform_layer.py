@@ -7,7 +7,12 @@ import keras
 from typing import Any
 from loguru import logger
 from keras import ops, KerasTensor
+import numpy as np
 import tensorflow as tf
+
+# The gap between 1.0 and the next float32 below it. A clipping margin narrower
+# than this rounds away, leaving the bound it was meant to hold open.
+_FLOAT32_STEP = float(np.finfo(np.float32).eps)
 
 
 @keras.saving.register_keras_serializable(package="kdp.layers")
@@ -459,8 +464,14 @@ class DistributionTransformLayer(keras.layers.Layer):
             return x
 
         def apply_log() -> tf.Tensor:
-            # Add epsilon to avoid log(0)
-            return tf.math.log(x + self.epsilon)
+            # `log` is defined for positive values only. Every neighbouring
+            # transform handles its own domain -- `sqrt` clamps at zero,
+            # `box-cox` at epsilon -- but this one handed negatives straight to
+            # `log` and returned NaN, which then spreads through the rest of the
+            # model and every gradient taken from it, silently. Clamp the same
+            # way `box-cox` does, so a negative value lands on the floor of the
+            # transform rather than outside it.
+            return tf.math.log(tf.maximum(x, 0.0) + self.epsilon)
 
         def apply_sqrt() -> tf.Tensor:
             # Ensure non-negative values
@@ -511,9 +522,16 @@ class DistributionTransformLayer(keras.layers.Layer):
             )
 
         def apply_arcsinh() -> tf.Tensor:
-            # Inverse hyperbolic sine transformation
-            # Works well for both positive and negative values with heavy tails
-            return tf.math.log(x + tf.sqrt(tf.square(x) + 1.0))
+            # Inverse hyperbolic sine transformation.
+            # Works well for both positive and negative values with heavy tails.
+            #
+            # Spelled out as `log(x + sqrt(x**2 + 1))` this loses the whole
+            # negative tail: for x = -1e6 the square is 1e12, where float32
+            # cannot hold the +1, its root is exactly 1e6, the sum is exactly
+            # zero and the logarithm is -inf. `x**2` also overflows to infinity
+            # well before x does. `asinh` computes the same function without
+            # either step.
+            return tf.math.asinh(x)
 
         def apply_cube_root() -> tf.Tensor:
             # Cube root transformation
@@ -535,9 +553,20 @@ class DistributionTransformLayer(keras.layers.Layer):
             )
 
         def apply_logit() -> tf.Tensor:
-            # Logit transformation: log(x / (1 - x))
-            # Clip values to the valid range with a small epsilon
-            x_clipped = tf.clip_by_value(x, self.epsilon, 1.0 - self.epsilon)
+            # Logit transformation: log(x / (1 - x)), which needs x strictly
+            # inside (0, 1).
+            #
+            # The margin has to survive the arithmetic that follows. The default
+            # epsilon of 1e-10 is far below the float32 gap at 1.0, so
+            # `1 - epsilon` rounded straight back to 1.0: the upper clip did
+            # nothing, `1 - x_clipped` was exactly zero, and every value at or
+            # above 1 came out as +inf. Keep the margin at least one float32
+            # step wide.
+            margin = tf.maximum(
+                tf.cast(self.epsilon, x.dtype),
+                tf.cast(_FLOAT32_STEP, x.dtype),
+            )
+            x_clipped = tf.clip_by_value(x, margin, 1.0 - margin)
             return tf.math.log(x_clipped / (1.0 - x_clipped))
 
         def apply_min_max() -> tf.Tensor:

@@ -9,6 +9,7 @@ back, drawn from the wrong rows.
 """
 
 import json
+import zlib
 import tempfile
 import unittest
 from pathlib import Path
@@ -27,8 +28,16 @@ ROWS = 400
 
 def _write(directory, name, mean):
     """A CSV whose column sits at a known, distinctive mean."""
+    # `hash()` on a string is salted per process, so seeding from it drew
+    # different numbers in every pytest-xdist worker.
     frame = pd.DataFrame(
-        {"x": np.random.default_rng(abs(hash(name)) % 2**32).normal(mean, 1.0, ROWS)},
+        {
+            "x": np.random.default_rng(zlib.crc32(name.encode())).normal(
+                mean,
+                1.0,
+                ROWS,
+            ),
+        },
     )
     path = Path(directory) / name
     frame.to_csv(path, index=False)
@@ -62,8 +71,8 @@ class TestPathDataSelectsOneFile(unittest.TestCase):
 
     def test_naming_a_directory_reads_every_csv_in_it(self):
         with tempfile.TemporaryDirectory() as directory:
-            _write(directory, "a.csv", mean=10.0)
-            _write(directory, "b.csv", mean=20.0)
+            _, mean_a = _write(directory, "a.csv", mean=10.0)
+            _, mean_b = _write(directory, "b.csv", mean=20.0)
 
             stats_path = Path(directory) / "stats.json"
             keras.backend.clear_session()
@@ -77,7 +86,14 @@ class TestPathDataSelectsOneFile(unittest.TestCase):
             stats = json.loads(stats_path.read_text())["numeric_stats"]["x"]
 
         self.assertEqual(int(stats["count"]), 2 * ROWS)
-        self.assertAlmostEqual(float(stats["mean"]), 15.0, places=1)
+        # Against the mean the two files actually hold, not the 15.0 they were
+        # drawn around: with 400 rows each the sample mean wanders by about
+        # 0.035, which is wider than the tolerance this once asserted.
+        self.assertAlmostEqual(
+            float(stats["mean"]),
+            (mean_a + mean_b) / 2.0,
+            places=3,
+        )
 
     def test_the_three_shapes_a_path_can_take(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -28,6 +28,10 @@ configuration changes, but the numbers coming out of the preprocessor do.
 | `path_data` pointing at a file | The filename was discarded and every `*.csv` in that directory was read, so `path_data="data/train.csv"` computed its statistics over `test.csv` as well | The named file is the only one read. A directory still reads every CSV in it, and a glob is passed through |
 | Grouped time series statistics | Each group was replaced by copies of its own mean before combining, leaving only the variance *between* the group means — 0.73 against a true 643 for two groups of spread 25 | The groups are pooled whole, so the reported variance is the variance of the data |
 | `DistributionTransformLayer` — `min-max` | `min_value` and `max_value` were read as the range the data was assumed to be *in* rather than the range to scale it *onto*, so with their defaults of 0 and 1 the transform returned its input untouched. `clip_values` chose between that and the data's own range instead of clipping anything | Each feature's own range is scaled onto `[min_value, max_value]`, and `clip_values` clips the result into it. `min-max` is also one of the candidates `transform_type="auto"` can pick, so an auto-selected column may change too |
+| `DistributionTransformLayer` — `log` | `log(x + epsilon)` with no guard on the domain, so any negative value returned **NaN**, which then travelled through every layer and every gradient downstream without a message | Clamped at zero first, the way the neighbouring `sqrt` and `box-cox` already were, so a negative value lands on the floor of the transform rather than outside it |
+| `DistributionTransformLayer` — `logit` | Clipped into `[epsilon, 1 - epsilon]`, but the default epsilon of `1e-10` is far below the float32 gap at 1.0, so the upper bound rounded back to exactly 1.0 and every value at or above 1 came out as **+inf** | The margin is at least one float32 step wide, so both ends of the clip bite |
+| `DistributionTransformLayer` — `arcsinh` | Spelled out as `log(x + sqrt(x*x + 1))`, which loses the whole negative tail: at `x = -1e6` the square is `1e12`, float32 cannot hold the `+1`, the root is exactly `1e6`, the sum is exactly zero and the logarithm is **-inf** | Computed with `asinh`, which is the same function without the cancellation |
+| Text vocabularies | The statistics lowercased and split on whitespace but kept punctuation, while `TextVectorization` strips punctuation before splitting. The vocabulary held `product,` and `it!` while the layer looked up `product` and `it`, so on ordinary prose roughly **half of every sentence fell into the out-of-vocabulary slot** — with the right output width and correct-looking counts | The statistics standardize exactly as the layer does, so the vocabulary collected is the one that gets looked up |
 | `DistributionTransformLayer` — `robust-scale` | Median and IQR were taken across the whole tensor | Computed per feature, as the transform is defined |
 | `DistributionTransformLayer` — `quantile` | Ranking was global | Ranked per feature |
 | Distribution-aware encoding | `preferred_distribution` was accepted and then ignored, so the layer always auto-detected | The requested distribution is honoured |
@@ -54,6 +58,29 @@ configuration changes, but the numbers coming out of the preprocessor do.
     If you trained a model on top of KDP output from 1.11.x and any of the
     rows above apply to your feature set, the preprocessor now feeds it
     different numbers. Re-fit before you compare metrics.
+
+## ➕ `feature_crosses` reaches the output
+
+Every cross was built and then dropped. `_group_features_by_type` looks each
+processed feature up in `features_specs`, and a cross is configured with
+`feature_crosses` rather than by declaring a column, so the lookup found
+nothing and skipped it. In the default `concat` output mode the option did
+nothing at all: the model built, ran, and had exactly the width it would have
+had with no crosses.
+
+Each cross now appends one column — the bin the `(feature_a, feature_b)` pair
+hashes into — alongside the categorical features. **A model that set
+`feature_crosses` is wider than it was**, so re-train anything fitted on the
+old output.
+
+Two configurations that used to fail later now fail where you wrote them:
+
+- Crossing a float column. `HashedCrossing` hashes raw values and accepts only
+  integers and strings; a float built a model that looked complete and raised
+  on the first batch it was given. Bucket the column into a categorical one
+  first.
+- Naming a feature that is not in `features_specs`, which surfaced as a bare
+  `KeyError`.
 
 ## 🧩 Feature MoE routed slices, not features
 
@@ -215,6 +242,57 @@ importances = preprocessor.get_feature_importances(batch)
     Each selected feature is scaled by its score, where before it was
     multiplied by `1.0`. A model trained on the old output should be retrained.
 
+## 📐 The output is always a table
+
+A transformer block adds a sequence axis to a 2-D input and hands it back. The
+`categorical` placement removed it again; `transfo_placement="all_features"`
+did not, so that one configuration returned `(rows, 1, width)` while every
+other returned `(rows, width)` — enough to break a `Dense` head bolted onto the
+preprocessor, decided by a flag that says nothing about shape.
+
+Every configuration now returns `(rows, width)`. If you added a `Reshape` or a
+`Flatten` after the preprocessor to work around this, remove it.
+
+## 🧾 `predict()` takes the shapes it documents
+
+Its docstring offers "pandas DataFrame, dict, or TensorFlow dataset". A
+DataFrame went straight to Keras, which reads a frame as a block of floats and
+raised `could not convert string to float` on the first categorical column. A
+dict of flat lists — the natural spelling, and exactly what
+`InferenceFormatter` produces — converted to shape `(N,)` where every input is
+declared `(N, 1)`, and failed with `as_list() is not defined on an unknown
+TensorShape`. Both carried the right values; only the container was wrong.
+
+<div class="code-container">
+
+```python
+# All four of these now give the same tensor.
+preprocessor.predict(frame)
+preprocessor.predict({"age": frame["age"].tolist(), "city": frame["city"].tolist()})
+preprocessor.predict({"age": [[35.0]], "city": [["paris"]]})
+preprocessor.predict(tf.data.Dataset.from_tensor_slices(dict(frame)).batch(32))
+```
+
+</div>
+
+## 🔤 `max_tokens` and `ngrams` on a text feature
+
+Both were accepted and neither could work, because the vocabulary handed to
+`TextVectorization` came from the statistics pass, which collects single
+standardized words:
+
+- `max_tokens` below the vocabulary the data holds was refused by Keras with
+  "Attempted to set a vocabulary larger than the maximum vocab size", so the
+  only reason to set the option — asking for a smaller vocabulary — could not
+  build. A larger one worked and did nothing.
+- `ngrams` asked for word pairs the statistics never recorded, so every n-gram
+  landed in the single out-of-vocabulary slot. The output width did not move.
+
+Either option, and a custom `standardize` or `split`, now reads the column
+again and lets the layer build the vocabulary it will actually use — the same
+thing `output_mode="tf_idf"` already did. **A model that set `ngrams` is wider
+than it was.**
+
 ## 🚫 Configurations that are now rejected
 
 These configurations used to be accepted and then silently do the wrong thing.
@@ -246,6 +324,19 @@ PreprocessingModel(
 
 An expert index outside the mixture, or a name the mixture never sees, is
 rejected the same way.
+
+A date format the parser cannot read is the next. `DateFeature` never read the
+format string it was given, so `format="%d-%m-%Y"` was accepted, ignored, and
+met again at the first batch as an assertion failure inside a TensorFlow graph
+error, far from the line that caused it. Dates are read as year, then month,
+then day; anything else raises where you write it. `date_format` is accepted as
+a synonym for `format`, and `output_format` and `extract` — which nothing reads
+— now say so in a warning.
+
+The same parser gained a capability rather than losing one: a time after the
+date is dropped instead of rejected, so `"2021-06-15 13:45:00"` and its ISO
+`T` spelling are read as the date they carry. A timestamp column previously had
+no way through the layer at all.
 
 A categorical feature whose column holds no values at all is the other case. Its
 vocabulary came back empty and was replaced with `["<UNK>"]`, which for a string
@@ -470,8 +561,13 @@ vocabularies as byte reprs — the literal string `"b'paris'"` rather than
 **every category missed the vocabulary and encoded identically to an unseen
 value**.
 
-KDP now detects that format and recomputes from the data instead of trusting
-it, logging a warning that names the file. You do not have to do anything,
+Files written before this release are also missing the `min`, `max`,
+`skewness` and `kurtosis` entries the model advisor reads; a stats file without
+them still builds a preprocessor, but the advisor falls back to its neutral
+defaults. Pass `overwrite_stats=True` once to collect them.
+
+KDP now detects the byte-repr format and recomputes from the data instead of
+trusting it, logging a warning that names the file. You do not have to do anything,
 but be aware that:
 
 - the first build after upgrading re-reads your dataset, so it takes as long
@@ -479,6 +575,61 @@ but be aware that:
 - `path_data` must still point at the data for that recomputation to happen.
 
 To recompute deliberately instead, pass `overwrite_stats=True` once.
+
+## 🕳️ Missing values reaching `predict()`
+
+A frame with a gap in it raised `Invalid dtype: object` — pandas gives a column
+mixing `NaN` with strings the object dtype, and Keras refuses that outright.
+`predict()` now takes a DataFrame apart the way `InferenceFormatter` does,
+deciding each column's type from the values that are actually there, so the two
+paths agree.
+
+What each kind of gap becomes:
+
+| Column | A missing value becomes |
+|--------|-------------------------|
+| Categorical, text | the empty string, which every vocabulary layer maps to its out-of-vocabulary slot |
+| Numeric | `NaN`, which normalization carries through to that one column of that one row |
+| Date | refused — see below |
+
+The `NaN` is deliberate: the statistics know the column's mean, but filling it
+in would hide a hole in your data behind a plausible number. It stays inside
+the feature it came from — the rest of the row, and the rest of the batch, are
+unaffected — so you can find it with `np.isfinite` on the output. Fill the
+column yourself before preprocessing if you want something else.
+
+A date is the exception: there is no neutral date, so a value the parser cannot
+read stops the batch rather than being invented. It stopped it before too, as a
+TensorFlow graph error naming an internal assertion node; the message now says
+what was expected, that an empty value counts as invalid, and prints the value
+that failed. Fill or drop those rows before preprocessing.
+
+## 📈 The advisor can tell distributions apart
+
+`ModelAdvisor` reads `skewness`, `kurtosis`, `min` and `max` off each numeric
+feature, and the statistics carried none of them. Every column arrived with the
+neutral defaults — skew 0, kurtosis 3 — and came back as "Normal distribution
+detected, standard normalization recommended" whatever shape it had, while the
+rescaling factor derived from `min` and `max` always worked out to exactly 1.
+
+The statistics now collect all four, pooled batch by batch in float64 like the
+mean and variance, so the advisor's existing logic reaches its heavy-tailed,
+log-normal and uniform branches for the first time. The generated code snippet
+also carries a `path_data` line: without it, pasting the advice raised, because
+every configuration the advisor recommends needs the data to build.
+
+## ⚠️ Columns float32 cannot hold
+
+Everything after the CSV reader is float32, which carries about seven
+significant digits. A column whose values sit far from zero and vary only
+slightly loses that variation on the way in: Unix timestamps in seconds are 128
+apart in float32 near `1.6e9`, so a column spread over half a minute arrives as
+one or two distinct numbers. Normalization then works perfectly on what is
+left, reports a standard deviation of 1.0, and hands the model a constant.
+
+The loss happens before any statistic is computed and cannot be undone there,
+so this is a warning naming the column, not a change in behaviour. Subtract a
+reference point before training, or declare the column as a `DATE` feature.
 
 ## 🐍 Requirements
 
