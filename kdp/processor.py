@@ -2043,6 +2043,32 @@ class PreprocessingModel:
             else:
                 raise ValueError("No features available for concatenation")
 
+    def _concatenation_order(self) -> list[str]:
+        """The processed features to concatenate, in a stable order.
+
+        Declared features come first, in the order `features_specs` lists them,
+        followed by the crosses in the order `feature_crosses` gives them.
+        Anything else is sorted by name so that it cannot move either.
+
+        Returns:
+            The feature names to concatenate, without the selection weights.
+        """
+        ordered = [
+            name for name in self.features_specs if name in self.processed_features
+        ]
+        ordered += [
+            name
+            for name in self._cross_feature_names
+            if name in self.processed_features
+        ]
+        placed = set(ordered)
+        ordered += sorted(
+            name
+            for name in self.processed_features
+            if name not in placed and not name.endswith("_weights")
+        )
+        return ordered
+
     def _group_features_by_type(self) -> tuple[list, list]:
         """Group processed features by type for concatenation.
 
@@ -2064,11 +2090,19 @@ class PreprocessingModel:
         passthrough_names_numeric = []
         passthrough_names_string = []
 
-        # Group processed features by type
-        for feature_name, feature in self.processed_features.items():
-            # Skip feature weights
-            if feature_name.endswith("_weights"):
-                continue
+        # Group processed features by type.
+        #
+        # In the order the features were declared, not the order they finished
+        # being built in. Features are processed in parallel batches, so
+        # `processed_features` is keyed by whichever worker returned first:
+        # building the same configuration twice put the columns of `concat_all`
+        # in a different order, five different layouts in six builds. A model
+        # trained on one build and served by another read every feature as
+        # another one, and nothing said so. The saved `.keras` file was never
+        # affected -- the order is baked into its graph -- so this only bit
+        # callers who rebuilt the preprocessor instead of reloading it.
+        for feature_name in self._concatenation_order():
+            feature = self.processed_features[feature_name]
 
             # A cross is configured with `feature_crosses`, not by declaring a
             # column, so it has no entry in `features_specs`. The lookup below

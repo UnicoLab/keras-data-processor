@@ -228,6 +228,24 @@ nothing, produced without a word. It raises now, naming the configs that widen
 the feature; paired with any of them the statistics match `pandas.rolling`
 exactly.
 
+## 🔢 The column order no longer moves between builds
+
+Features are preprocessed in parallel batches, and the concatenated output was
+assembled by walking a dict keyed in whichever order the workers happened to
+finish. Building the same configuration twice laid the columns out differently
+— five distinct layouts in six builds of the same six features. Nothing raised,
+and each build's numbers were right for the layout it chose.
+
+The damage lands on anyone who trains a model on one build of the preprocessor
+and serves it from another: every feature is read as a different one. Reloading
+a saved `.keras` file was never affected, because the order is baked into its
+graph.
+
+Columns now follow the order features are declared in — numeric first, then
+categorical, then any crosses — and `processed_features_dims` reports the same
+order. **If you recorded a column-to-feature mapping from an earlier build,
+take it again.**
+
 ## 📆 Calendar time series features can be built
 
 The documented way to ask for calendar components is a `TimeSeriesFeature`
