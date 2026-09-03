@@ -439,7 +439,10 @@ class FeatureMoE(keras.layers.Layer):
             expert_hidden_dims: Hidden dimensions for each expert
             routing: Routing mechanism - "learned" or "predefined"
             sparsity: Number of experts to use per feature (for sparse routing)
-            routing_activation: Activation for routing weights ("softmax" or "sparsemax")
+            routing_activation: Accepted and not used. Routing weights are
+                always a softmax over the logits; "sparsemax" is not
+                implemented. To route each feature to fewer experts, set
+                `sparsity`, which masks all but its top-k logits.
             feature_names: Names of input features (required for predefined routing)
             predefined_assignments: Mapping from feature name to expert index
             freeze_experts: Whether to freeze the expert weights during training

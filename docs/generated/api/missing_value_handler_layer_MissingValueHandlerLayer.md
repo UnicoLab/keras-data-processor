@@ -17,7 +17,11 @@ including forward fill, backward fill, interpolation, and statistical imputation
 - **window_size**: Window size for rolling strategies (default: 5)
 - **seasonal_period**: Period for seasonal imputation (default: 7)
 - **add_indicators**: Whether to add binary indicators for missing values (default: True)
-- **extrapolate**: Whether to extrapolate for missing values at the beginning/end (default: True)
+- **extrapolate**: Whether to fill gaps left at the start or end of a series
+        (default: True). No strategy can reach these on its own -- a gap at
+        the start has nothing before it, a gap at the end nothing after --
+        so with `extrapolate=False` they come back exactly as they arrived,
+        `mask_value` and all.
 
 
 ## Constructor

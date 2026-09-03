@@ -266,6 +266,42 @@ pass. The sin/cos components are requested by name, and always were —
 `features=["month_sin", "month_cos", "day_of_week_sin", "day_of_week_cos"]`.
 The flag is deprecated, warns when you pass it, and still loads.
 
+### A `NaN` at the edge of a series reached the model
+
+No imputation strategy can fill a gap at the very start or end of a series: a
+gap at the start has nothing before it to carry forward, a gap at the end
+nothing after it to carry back. `MissingValueHandlerLayer` has an `extrapolate`
+option, documented and defaulting to `True`, that names exactly this case — and
+it was read nowhere. With the default `forward_fill` strategy and
+`mask_value=float("nan")`, a leading `NaN` came back untouched and went
+straight into the model; `backward_fill` and `linear_interpolation` did the
+same at the end.
+
+Those gaps now take the nearest value that is not itself a gap, so no strategy
+leaves a missing value behind. A series missing everywhere has nothing to reach
+for and becomes zeros. Setting `extrapolate=False` keeps the old behaviour, and
+now genuinely means it.
+
+### Options that are accepted and do nothing
+
+Each of these was stored, round-tripped through `get_config`, and read nowhere.
+None of them raises — they are documented as inert so nobody plans around
+behaviour that is not there:
+
+| Option | Why it does nothing |
+|--------|---------------------|
+| `WaveletTransformLayer(drop_na=...)` | The transform zero-fills, so no row carries a `NaN` for it to drop |
+| `MovingAverageLayer(pad_value=...)` | With `drop_na=False` the leading rows keep their original values instead of being padded |
+| `CalendarFeatureLayer(onehot_categorical=...)` | Every requested feature comes back as one numeric column |
+| `CalendarFeatureLayer(cyclic_encoding=...)` | See above — the components are requested by name |
+| `DistributionAwareEncoder(handle_sparsity=...)` | Sparse data is detected and handled as one of the recognised distributions either way |
+| `DateParsingLayer(date_format=...)` | Both `YYYY-MM-DD` and `YYYY/MM/DD` are parsed regardless; the separator is normalised first |
+| `FeatureMoE(routing_activation=...)` | Routing is always a softmax. For fewer experts per feature, use `sparsity` |
+
+A test now walks every class in `kdp` and fails on a constructor argument that
+is stored and never read unless its docstring says so, so this list cannot grow
+without someone deciding it should.
+
 !!! warning "`month` is not cyclic"
     If you asked for `month` and set `cyclic_encoding=True`, you were getting a
     plain normalised month all along, where December and January sit at

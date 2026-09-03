@@ -24,7 +24,11 @@ class MissingValueHandlerLayer(Layer):
         window_size: Window size for rolling strategies (default: 5)
         seasonal_period: Period for seasonal imputation (default: 7)
         add_indicators: Whether to add binary indicators for missing values (default: True)
-        extrapolate: Whether to extrapolate for missing values at the beginning/end (default: True)
+        extrapolate: Whether to fill gaps left at the start or end of a series
+            (default: True). No strategy can reach these on its own -- a gap at
+            the start has nothing before it, a gap at the end nothing after --
+            so with `extrapolate=False` they come back exactly as they arrived,
+            `mask_value` and all.
     """
 
     def __init__(
@@ -158,6 +162,9 @@ class MissingValueHandlerLayer(Layer):
         elif self.strategy == "seasonal":
             self._numpy_seasonal_imputation(imputed, missing_mask)
 
+        if self.extrapolate:
+            self._numpy_extrapolate_edges(imputed, missing_mask)
+
         # Add indicators if requested
         if self.add_indicators:
             indicators = missing_mask.astype(np.float32)
@@ -203,6 +210,9 @@ class MissingValueHandlerLayer(Layer):
             elif self.strategy == "seasonal":
                 self._numpy_seasonal_imputation(feature_imputed, feature_mask)
 
+            if self.extrapolate:
+                self._numpy_extrapolate_edges(feature_imputed, feature_mask)
+
             # Update the imputed array
             imputed[:, :, f] = feature_imputed
 
@@ -212,6 +222,34 @@ class MissingValueHandlerLayer(Layer):
             return np.concatenate([imputed, indicators], axis=-1)
         else:
             return imputed
+
+    def _numpy_extrapolate_edges(self, data, mask) -> None:
+        """Fill gaps left at the start or end of a series, in place.
+
+        Every strategy leaves these behind, because a gap at the start has
+        nothing before it to carry forward and a gap at the end has nothing
+        after it to carry back. `forward_fill` -- the default -- therefore
+        returned a leading `NaN` exactly as it arrived, and it went into the
+        model; `backward_fill` and `linear_interpolation` did the same at the
+        end. Each remaining gap takes the nearest value that is not itself a
+        gap. A series that is missing everywhere has nothing to reach for and
+        becomes zeros.
+
+        Args:
+            data: The imputed batch, shape `(batch, time)`, modified in place.
+            mask: The batch's original missing mask.
+        """
+        still_missing = mask & self._missing_mask(data)
+        for row in range(data.shape[0]):
+            gaps = np.nonzero(still_missing[row])[0]
+            if gaps.size == 0:
+                continue
+            valid = np.nonzero(~still_missing[row])[0]
+            if valid.size == 0:
+                data[row, gaps] = 0.0
+                continue
+            nearest = valid[np.abs(valid[None, :] - gaps[:, None]).argmin(axis=1)]
+            data[row, gaps] = data[row, nearest]
 
     def _numpy_forward_fill(self, data, mask) -> None:
         """Forward fill missing values in-place."""

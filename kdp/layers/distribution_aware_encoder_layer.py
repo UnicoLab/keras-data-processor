@@ -139,7 +139,9 @@ class DistributionAwareEncoder(keras.layers.Layer):
             detect_periodicity: If True, the layer will check for and handle periodic patterns
                 by adding sin/cos features, increasing the output dimension. When True, periodic
                 data will have 3x the original feature dimension. Default is True.
-            handle_sparsity: If True, special handling for sparse data (many zeros). Default is True.
+            handle_sparsity: Accepted and not used. Sparse data is
+                detected and handled as one of the distributions the
+                encoder recognises, whatever this says.
             auto_detect: If True, automatically detect the distribution type during training.
                 If False, the specified distribution_type will be used. Default is True.
             distribution_type: The specific distribution type to use if auto_detect is False.

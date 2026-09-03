@@ -32,7 +32,9 @@ learn seasonal patterns related to the calendar.
         'month_cos', 'day_of_week_sin', 'day_of_week_cos' -- to get them.
 - **input_format**: Format of the input date string. Default is '%Y-%m-%d'.
 - **normalize**: Whether to normalize numeric features to [0, 1] range.
-- **onehot_categorical**: Whether to one-hot encode categorical features.
+- **onehot_categorical**: Accepted and not used. Every requested
+        feature comes back as a single numeric column whatever this
+        says.
 
 
 ## Constructor

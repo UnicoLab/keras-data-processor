@@ -962,6 +962,14 @@ filled = MissingValueHandlerLayer(
   </table>
 </div>
 
+!!! note "Gaps at the ends of a series"
+    No strategy can reach a gap at the very start or end: there is nothing on
+    one side to fill from. `extrapolate` (default `True`) gives those gaps the
+    nearest value that is not itself a gap, so the layer never returns a
+    missing value. Until this release the flag was accepted and ignored, and
+    with `mask_value=float("nan")` a leading `NaN` went straight into the
+    model.
+
 !!! note "Strategies for missing values"
     `forward_fill`, `backward_fill`, `linear_interpolation`, `mean`, `median`,
     `rolling_mean` and `seasonal`. Until this release only a literal sentinel

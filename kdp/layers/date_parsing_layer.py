@@ -8,8 +8,9 @@ class DateParsingLayer(keras.layers.Layer):
         """Initializing DateParsingLayer.
 
         Args:
-            date_format (str): format of the string encoded date to parse.
-                Supported formats: YYYY-MM-DD, YYYY/MM/DD
+            date_format (str): Accepted and not used. Both supported
+                spellings, YYYY-MM-DD and YYYY/MM/DD, are parsed whatever this
+                says: the separator is normalised before the date is read.
             kwargs (dict): other params to pass to the class.
         """
         super().__init__(**kwargs)

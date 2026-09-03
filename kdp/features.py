@@ -854,7 +854,8 @@ class TimeSeriesFeature(Feature):
             keep_original = self.moving_average_config.get("keep_original", True)
             dim *= len(periods) + 1 if keep_original else len(periods)
 
-        # The remaining transforms append their columns to whatever came before.
+        # The three below replace what came before them rather than adding to
+        # it, so each asks its own layer how wide its output is.
         if self.wavelet_transform_config:
             # The wavelet replaces the columns it is given with coefficients
             # rather than appending to them, and how many coefficients it

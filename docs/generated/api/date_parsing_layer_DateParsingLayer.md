@@ -8,8 +8,9 @@ __init__(self, date_format: str = 'YYYY-MM-DD', **kwargs) -> None
 
 Initializing DateParsingLayer.
 
-### Parameters- **date_format (str)**: format of the string encoded date to parse.
-        Supported formats: YYYY-MM-DD, YYYY/MM/DD
+### Parameters- **date_format (str)**: Accepted and not used. Both supported
+        spellings, YYYY-MM-DD and YYYY/MM/DD, are parsed whatever this
+- **says**: the separator is normalised before the date is read.
     kwargs (dict): other params to pass to the class.
 
 

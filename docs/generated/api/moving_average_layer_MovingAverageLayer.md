@@ -7,7 +7,9 @@ It's useful for smoothing and identifying longer-term trends.
 
 ### Parameters- **periods**: List of integers indicating the periods for the moving averages
 - **drop_na**: Boolean indicating whether to drop rows with insufficient history
-- **pad_value**: Value to use for padding when drop_na=False
+- **pad_value**: Accepted and not used. With `drop_na=False` the
+        leading rows keep their original values rather than being
+        padded, so there is nothing for this to fill.
 - **keep_original**: Whether to include the original values in the output
 
 

@@ -12,7 +12,9 @@ It can capture patterns at different time scales without external dependencies.
 - **window_sizes**: List of window sizes for each level (default: None, which
         automatically calculates window sizes as powers of 2)
 - **flatten_output**: Whether to flatten the coefficients (default: True)
-- **drop_na**: Whether to drop rows with NaN values after transform (default: True)
+- **drop_na**: Accepted and not used. The transform fills every
+        coefficient it does not compute with zero, so there are no
+        rows carrying NaN for this to drop.
 
 
 ## Constructor
