@@ -238,31 +238,13 @@ class TSFreshFeatureLayer(Layer):
         # Apply the function
         result = tf.py_function(extract_tsfresh_features, [inputs], tf.float32)
 
-        # Set the shape
-        if self.window_size is None:
-            # Single window case
-            n_output_features = self._get_n_output_features()
-
-            if len(inputs.shape) == 2:
-                # Single feature input
-                result.set_shape([inputs.shape[0], n_output_features])
-            else:
-                # Multi-feature input
-                result.set_shape([inputs.shape[0], inputs.shape[2] * n_output_features])
-        else:
-            # Multiple windows case
-            n_output_features = self._get_n_output_features()
-            time_steps = inputs.shape[1]
-            n_windows = (time_steps - self.window_size) // self.stride + 1
-
-            if len(inputs.shape) == 2:
-                # Single feature input
-                result.set_shape([inputs.shape[0], n_windows, n_output_features])
-            else:
-                # Multi-feature input
-                result.set_shape(
-                    [inputs.shape[0], n_windows, inputs.shape[2] * n_output_features],
-                )
+        # `compute_output_shape` is the same arithmetic, and it clamps the
+        # window to the length of the series the way the extraction above does.
+        # Repeating the calculation here without that clamp made `n_windows`
+        # negative whenever the window was longer than the series, and
+        # `set_shape` rejected the negative dimension outright -- so a
+        # `window_size` above the series length could not run at all.
+        result.set_shape(self.compute_output_shape(inputs.shape))
 
         return result
 
@@ -467,11 +449,13 @@ class TSFreshFeatureLayer(Layer):
         if self.window_size is None:
             # Single window over entire series
             return (batch_size, n_output_features)
-        else:
-            # Multiple windows
-            window_size = min(self.window_size, time_steps)
-            n_windows = (time_steps - window_size) // self.stride + 1
-            return (batch_size, n_windows, n_output_features)
+        # Multiple windows. A window longer than the series covers all of it,
+        # which is one window, so the count never drops below one.
+        if time_steps is None:
+            return (batch_size, None, n_output_features)
+        window_size = min(self.window_size, time_steps)
+        n_windows = max((time_steps - window_size) // self.stride + 1, 1)
+        return (batch_size, n_windows, n_output_features)
 
     def get_config(self) -> dict:
         """Return the configuration of the layer."""

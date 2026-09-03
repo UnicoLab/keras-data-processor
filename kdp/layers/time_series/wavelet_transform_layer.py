@@ -190,8 +190,14 @@ class WaveletTransformLayer(Layer):
             else:
                 result.set_shape([inputs.shape[0], inputs.shape[2] * n_output_features])
         else:
-            # For non-flattened output, we'll use dynamic shape
-            result.set_shape([None, None])
+            n_channels = inputs.shape[2] if len(inputs.shape) == 3 else 1
+            result.set_shape(
+                [
+                    inputs.shape[0],
+                    n_channels,
+                    self._get_n_output_features(inputs.shape[1]),
+                ],
+            )
 
         return result
 
@@ -211,40 +217,42 @@ class WaveletTransformLayer(Layer):
         # Calculate total size of output features
         n_output_features = self._get_n_output_features(time_steps)
 
+        # The coefficients are always gathered into one flat row per sample:
+        # each channel occupies its own contiguous block of
+        # `n_output_features`. `flatten_output=False` returns exactly the same
+        # numbers, split back out by channel at the end. It used to return
+        # `np.zeros(...)` there instead -- every coefficient discarded -- and
+        # then failed on a rank-2 `set_shape`, so the option never ran at all.
+        result = np.zeros(
+            (batch_size, n_features * n_output_features),
+            dtype=np.float32,
+        )
+
+        for b in range(batch_size):
+            feature_idx = 0
+
+            for f in range(n_features):
+                level_coeffs, orig_size = all_coeffs[b][f]
+
+                # Filter levels based on keep_levels
+                filtered_coeffs = self._filter_levels(level_coeffs)
+
+                # Flatten and store coefficients
+                for coeffs in filtered_coeffs:
+                    # Normalize by original length for easier comparison
+                    normalized_coeffs = coeffs / orig_size
+
+                    for val in normalized_coeffs:
+                        result[b, feature_idx] = val
+                        feature_idx += 1
+
+                        # Prevent index out of bounds if coefficients are larger than expected
+                        if feature_idx >= n_features * n_output_features:
+                            break
+
         if self.flatten_output:
-            # Initialize output array
-            result = np.zeros(
-                (batch_size, n_features * n_output_features),
-                dtype=np.float32,
-            )
-
-            for b in range(batch_size):
-                feature_idx = 0
-
-                for f in range(n_features):
-                    level_coeffs, orig_size = all_coeffs[b][f]
-
-                    # Filter levels based on keep_levels
-                    filtered_coeffs = self._filter_levels(level_coeffs)
-
-                    # Flatten and store coefficients
-                    for coeffs in filtered_coeffs:
-                        # Normalize by original length for easier comparison
-                        normalized_coeffs = coeffs / orig_size
-
-                        for val in normalized_coeffs:
-                            result[b, feature_idx] = val
-                            feature_idx += 1
-
-                            # Prevent index out of bounds if coefficients are larger than expected
-                            if feature_idx >= n_features * n_output_features:
-                                break
-
             return result
-        else:
-            # For non-flattened output, return a more complex structure
-            # This is a simplified approach to demonstrate the concept
-            return np.zeros((batch_size, n_features, n_output_features))
+        return result.reshape(batch_size, n_features, n_output_features)
 
     def _filter_levels(self, level_coeffs) -> list:
         """Filter coefficient levels based on keep_levels."""
@@ -308,8 +316,13 @@ class WaveletTransformLayer(Layer):
 
             output_shape = (input_shape[0], n_output_features)
         else:
-            # For non-flattened output
-            output_shape = (input_shape[0], None)
+            # Same coefficients, kept per input channel.
+            n_channels = input_shape[2] if len(input_shape) == 3 else 1
+            output_shape = (
+                input_shape[0],
+                n_channels,
+                self._get_n_output_features(input_shape[1]),
+            )
 
         return output_shape
 

@@ -2,6 +2,8 @@ import tensorflow as tf
 import numpy as np
 import unittest
 
+import keras
+
 from kdp.layers.time_series import WaveletTransformLayer
 
 
@@ -193,6 +195,40 @@ class TestWaveletTransformLayer(unittest.TestCase):
         self.assertEqual(config["window_sizes"], [2, 4, 8, 16])
         self.assertFalse(config["flatten_output"])
         self.assertFalse(config["drop_na"])
+
+    def test_unflattened_output_carries_the_same_coefficients(self):
+        """`flatten_output=False` returned `np.zeros(...)` -- every coefficient
+        thrown away -- and then declared a rank-2 shape for a rank-3 tensor, so
+        `set_shape` raised and the option could not run on any input at all.
+        """
+        rng = np.random.default_rng(11)
+        for shape in ((1, 32), (1, 32, 1), (2, 32, 3)):
+            data = tf.constant(rng.normal(0, 1, shape).astype("float32"))
+
+            flat = np.asarray(
+                WaveletTransformLayer(levels=2, flatten_output=True)(data),
+            )
+            layer = WaveletTransformLayer(levels=2, flatten_output=False)
+            deep = np.asarray(layer(data))
+
+            self.assertFalse(np.all(deep == 0))
+            self.assertEqual(len(deep.shape), 3)
+            np.testing.assert_allclose(deep.reshape(flat.shape), flat)
+            self.assertEqual(
+                tuple(deep.shape),
+                tuple(layer.compute_output_shape(shape)),
+            )
+
+    def test_unflattened_output_builds_in_a_graph(self):
+        """The declared shape has to survive functional model construction."""
+        inputs = keras.Input(shape=(32, 3))
+        model = keras.Model(
+            inputs,
+            WaveletTransformLayer(levels=2, flatten_output=False)(inputs),
+        )
+        rng = np.random.default_rng(12)
+        result = model(tf.constant(rng.normal(0, 1, (2, 32, 3)).astype("float32")))
+        self.assertEqual(tuple(result.shape)[1:], model.output_shape[1:])
 
 
 if __name__ == "__main__":

@@ -22,6 +22,7 @@ configuration changes, but the numbers coming out of the preprocessor do.
 |------|--------|-----|
 | Time series layers | `DifferencingLayer`, `MovingAverageLayer`, `RollingStatsLayer`, `LagFeatureLayer` and `AutoLagSelectionLayer` returned fixed constants for certain shapes instead of computing over the input | Values are computed from the data in every case |
 | `AutoLagSelectionLayer` on multi-channel input | Lags were chosen from the autocorrelation of channel 0 alone, then applied to every channel, so reordering the columns of the same data changed the result | The autocorrelation is averaged over the channels as well as the batch, so every channel contributes and the choice does not depend on column order |
+| `TimeSeriesFeature.get_output_dim()` on wavelet, tsfresh or calendar configs | Counted those transforms as columns added to the series. They replace it: the wavelet returns coefficients, tsfresh returns statistics, the calendar returns date components. The declared width matched no configuration at all | Each layer is asked for its own width, so the number matches the tensor the stack produces |
 | `DistributionTransformLayer` — `robust-scale` | Median and IQR were taken across the whole tensor | Computed per feature, as the transform is defined |
 | `DistributionTransformLayer` — `quantile` | Ranking was global | Ranked per feature |
 | Distribution-aware encoding | `preferred_distribution` was accepted and then ignored, so the layer always auto-detected | The requested distribution is honoured |
@@ -240,6 +241,37 @@ the cause. Both now raise a `ValueError` that names the feature and points at
 This check is deliberately narrow. A column of empty strings has the vocabulary
 `[""]` and a column with one repeated value has a vocabulary of length one;
 neither is empty, and both still build.
+
+## 〰️ Time series options that could not run
+
+Three documented options raised or returned nothing, on every input.
+
+`WaveletTransformLayer(flatten_output=False)` returned an array of zeros —
+every coefficient it had just computed, discarded — and then declared a rank-2
+shape for the rank-3 tensor it returned, so `set_shape` rejected it before the
+zeros could reach anyone. It now returns the same coefficients as
+`flatten_output=True`, split out per input channel, and inside a
+`TimeSeriesFeature` they are folded back into the feature's columns, so the
+width is the same either way.
+
+`TSFreshFeatureLayer(window_size=...)` computed the window count from the raw
+`window_size` while the extraction clamped it to the length of the series.
+A window longer than the series therefore declared a negative number of
+windows and raised `Dimension -1 must be >= 0`. A window longer than the
+series now covers all of it, which is one window.
+
+`CalendarFeatureLayer(cyclic_encoding=...)` was accepted, stored and
+serialized, and read nowhere: the output is identical whichever value you
+pass. The sin/cos components are requested by name, and always were —
+`features=["month_sin", "month_cos", "day_of_week_sin", "day_of_week_cos"]`.
+The flag is deprecated, warns when you pass it, and still loads.
+
+!!! warning "`month` is not cyclic"
+    If you asked for `month` and set `cyclic_encoding=True`, you were getting a
+    plain normalised month all along, where December and January sit at
+    opposite ends of the range. Add `month_sin` and `month_cos` to `features`
+    to get the encoding the flag promised. This widens your output, so re-fit
+    anything trained on it.
 
 ## 🔤 `TextVectorizerOutputOptions`
 

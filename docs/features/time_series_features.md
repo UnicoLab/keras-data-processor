@@ -212,8 +212,8 @@ sales_feature = TimeSeriesFeature(
 calendar_feature = TimeSeriesFeature(
     name="date",
     calendar_feature_config={
-        "features": ["month", "day", "day_of_week", "is_weekend"],  # Features to extract
-        "cyclic_encoding": True,       # Use cyclic encoding for cyclical features
+        # Ask for the sin/cos components by name to get them.
+        "features": ["month_sin", "month_cos", "day_of_week", "is_weekend"],
         "input_format": "%Y-%m-%d",    # Input date format
         "normalize": True              # Whether to normalize outputs
     }
@@ -347,9 +347,9 @@ preprocessor = PreprocessingModel(
       </tr>
       <tr>
         <td><code>cyclic_encoding</code></td>
-        <td>Use sine/cosine encoding for cyclical features</td>
-        <td>True</td>
-        <td>Better captures cyclical nature of time features</td>
+        <td>Deprecated, and ignored. Name the components instead</td>
+        <td>—</td>
+        <td>Add <code>month_sin</code>, <code>month_cos</code>, <code>day_of_week_sin</code>, <code>day_of_week_cos</code> to <code>features</code></td>
       </tr>
       <tr>
         <td><code>drop_na</code></td>
@@ -567,10 +567,9 @@ timestamp_calendar = TimeSeriesFeature(
     name="timestamp",
     calendar_feature_config={
         "features": [
-            "month", "day_of_week", "hour", "is_weekend",
+            "month_sin", "month_cos", "day_of_week", "hour", "is_weekend",
             "is_month_start", "is_month_end"
         ],
-        "cyclic_encoding": True,     # Use sine/cosine encoding for cyclical features
         "input_format": "%Y-%m-%d %H:%M:%S"  # Datetime format
     }
 )
@@ -640,8 +639,7 @@ features = {
     "date": TimeSeriesFeature(
         name="date",
         calendar_feature_config={
-            "features": ["month", "day_of_week", "is_weekend", "is_year_start"],
-            "cyclic_encoding": True
+            "features": ["month_sin", "month_cos", "day_of_week", "is_weekend"],
         }
     ),
 
@@ -733,8 +731,7 @@ features = {
     "date": TimeSeriesFeature(
         name="date",
         calendar_feature_config={
-            "features": ["month", "day_of_week", "is_month_start", "is_month_end", "quarter"],
-            "cyclic_encoding": True
+            "features": ["month_sin", "month_cos", "is_month_start", "is_month_end", "quarter"],
         }
     )
 }
@@ -831,8 +828,7 @@ features = {
     "timestamp": TimeSeriesFeature(
         name="timestamp",
         calendar_feature_config={
-            "features": ["hour", "day_of_week", "is_weekend", "month"],
-            "cyclic_encoding": True,
+            "features": ["hour", "day_of_week", "is_weekend", "month_sin", "month_cos"],
             "normalize": True
         }
     )
@@ -891,6 +887,13 @@ print("selected lags:", lags.selected_lags.numpy())
 ```
 
 </div>
+
+!!! note "Cyclic calendar components are requested by name"
+    `month` gives the month as a plain number, so December and January land at
+    opposite ends of the range. To get the wrap-around encoding, put the
+    components themselves in `features`: `month_sin`, `month_cos`,
+    `day_sin`, `day_cos`, `day_of_week_sin`, `day_of_week_cos`. The
+    `cyclic_encoding` flag has never done this and is deprecated.
 
 !!! note "One set of lags for every channel"
     `AutoLagSelectionLayer` selects a single set of lags and applies it to the

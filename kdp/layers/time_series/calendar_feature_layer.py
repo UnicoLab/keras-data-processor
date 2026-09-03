@@ -6,6 +6,21 @@ from loguru import logger
 import pandas as pd
 
 
+class _Unset:
+    """Marks an argument nobody passed, so a default is not mistaken for one."""
+
+    def __repr__(self) -> str:
+        """Show the sentinel as `<unset>` in signatures and error messages.
+
+        Returns:
+            str: The placeholder text.
+        """
+        return "<unset>"
+
+
+_UNSET = _Unset()
+
+
 @keras.saving.register_keras_serializable(package="kdp.layers")
 class CalendarFeatureLayer(Layer):
     """Layer for generating calendar features from date or timestamp inputs.
@@ -36,7 +51,9 @@ class CalendarFeatureLayer(Layer):
             - 'day_cos': Cosinusoidal encoding of day of month
             - 'day_of_week_sin': Sinusoidal encoding of day of week
             - 'day_of_week_cos': Cosinusoidal encoding of day of week
-        cyclic_encoding: Whether to use sin/cos encoding for cyclic features
+        cyclic_encoding: Deprecated and ignored. It never changed the output.
+            Ask for the sin/cos components by name -- 'month_sin',
+            'month_cos', 'day_of_week_sin', 'day_of_week_cos' -- to get them.
         input_format: Format of the input date string. Default is '%Y-%m-%d'.
         normalize: Whether to normalize numeric features to [0, 1] range.
         onehot_categorical: Whether to one-hot encode categorical features.
@@ -45,7 +62,7 @@ class CalendarFeatureLayer(Layer):
     def __init__(
         self,
         features=None,
-        cyclic_encoding=True,
+        cyclic_encoding=_UNSET,
         input_format="%Y-%m-%d",
         normalize=True,
         onehot_categorical=False,
@@ -73,7 +90,22 @@ class CalendarFeatureLayer(Layer):
         else:
             self.features = features
 
-        self.cyclic_encoding = cyclic_encoding
+        # `cyclic_encoding` has never changed what this layer returns: the
+        # sin and cos components are requested by name, as `month_sin` and
+        # `month_cos`, and asking for `month` gives the plain value whatever
+        # this flag says. It is kept so existing configurations and saved
+        # models still load, and it says so rather than nodding along.
+        self._cyclic_encoding_given = cyclic_encoding is not _UNSET
+        self.cyclic_encoding = (
+            True if cyclic_encoding is _UNSET else bool(cyclic_encoding)
+        )
+        if self._cyclic_encoding_given:
+            logger.warning(
+                "CalendarFeatureLayer: 'cyclic_encoding' has no effect and is "
+                "deprecated. Request the sin/cos components by name instead -- "
+                "features=['month_sin', 'month_cos', 'day_of_week_sin', "
+                "'day_of_week_cos'] -- which is what produces them.",
+            )
         self.input_format = input_format
         self.normalize = normalize
         self.onehot_categorical = onehot_categorical
@@ -338,10 +370,11 @@ class CalendarFeatureLayer(Layer):
         """Return the configuration of the layer."""
         config = {
             "features": self.features,
-            "cyclic_encoding": self.cyclic_encoding,
             "input_format": self.input_format,
             "normalize": self.normalize,
             "onehot_categorical": self.onehot_categorical,
         }
+        if self._cyclic_encoding_given:
+            config["cyclic_encoding"] = self.cyclic_encoding
         base_config = super().get_config()
         return {**base_config, **config}

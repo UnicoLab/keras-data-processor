@@ -27,7 +27,9 @@ learn seasonal patterns related to the calendar.
         - 'day_cos': Cosinusoidal encoding of day of month
         - 'day_of_week_sin': Sinusoidal encoding of day of week
         - 'day_of_week_cos': Cosinusoidal encoding of day of week
-- **cyclic_encoding**: Whether to use sin/cos encoding for cyclic features
+- **cyclic_encoding**: Deprecated and ignored. It never changed the output.
+        Ask for the sin/cos components by name -- 'month_sin',
+        'month_cos', 'day_of_week_sin', 'day_of_week_cos' -- to get them.
 - **input_format**: Format of the input date string. Default is '%Y-%m-%d'.
 - **normalize**: Whether to normalize numeric features to [0, 1] range.
 - **onehot_categorical**: Whether to one-hot encode categorical features.
@@ -36,7 +38,7 @@ learn seasonal patterns related to the calendar.
 ## Constructor
 
 ```python
-__init__(self, features=None, cyclic_encoding=True, input_format='%Y-%m-%d', normalize=True, onehot_categorical=False, **kwargs)
+__init__(self, features=None, cyclic_encoding=<unset>, input_format='%Y-%m-%d', normalize=True, onehot_categorical=False, **kwargs)
 ```
 
 Initialize the CalendarFeatureLayer.

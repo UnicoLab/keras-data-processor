@@ -259,6 +259,41 @@ class TestTSFreshFeatureLayer(unittest.TestCase):
         self.assertFalse(config["drop_na"])
         self.assertTrue(config["normalize"])
 
+    def test_a_window_longer_than_the_series(self):
+        """The extraction clamps the window to the series; the shape did not.
+
+        `n_windows` came out negative and `set_shape` refused it, so a
+        `window_size` above the series length raised instead of running.
+        """
+        data = tf.constant(np.arange(1, 41, dtype="float32").reshape(4, 10))
+        for window_size in (3, 10, 15, 40):
+            layer = TSFreshFeatureLayer(
+                features=["mean", "std"],
+                window_size=window_size,
+            )
+            output = layer(data)
+            self.assertEqual(
+                tuple(output.shape),
+                tuple(layer.compute_output_shape((4, 10))),
+            )
+            self.assertGreaterEqual(int(output.shape[1]), 1)
+            self.assertTrue(np.isfinite(np.asarray(output)).all())
+
+    def test_the_declared_shape_matches_the_values(self):
+        """Windowed and whole-series output, checked against what comes back."""
+        data = tf.constant(np.arange(1, 61, dtype="float32").reshape(4, 15))
+        for window_size, stride in ((None, 1), (5, 1), (5, 3), (4, 2)):
+            layer = TSFreshFeatureLayer(
+                features=["mean", "std", "min"],
+                window_size=window_size,
+                stride=stride,
+            )
+            output = layer(data)
+            self.assertEqual(
+                tuple(output.shape),
+                tuple(layer.compute_output_shape((4, 15))),
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

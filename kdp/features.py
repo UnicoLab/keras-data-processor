@@ -11,6 +11,25 @@ from kdp.layers.distribution_aware_encoder_layer import (
 from kdp.layers_factory import PreprocessorLayerFactory
 
 
+def _columns(shape: tuple) -> int:
+    """How many columns a layer output occupies once flattened.
+
+    A transform that returns a rank-3 tensor -- one block per window, or per
+    input channel -- contributes the product of those dimensions to the feature
+    vector, because the pipeline flattens it.
+
+    Args:
+        shape: The shape a layer reports, batch dimension first.
+
+    Returns:
+        int: The number of columns, ignoring the batch dimension.
+    """
+    width = 1
+    for size in shape[1:]:
+        width *= int(size)
+    return width
+
+
 class TextVectorizerOutputOptions(str, Enum):
     """Output modes accepted by `TextFeature(output_mode=...)`.
 
@@ -717,6 +736,15 @@ class TimeSeriesFeature(Feature):
                     name=f"{self.name}_wavelet",
                 ),
             )
+            if not flatten_output:
+                # `flatten_output=False` keeps the coefficients split by
+                # channel, which is a rank-3 tensor. Everything downstream of a
+                # feature -- the next transform, and the concatenation into the
+                # model output -- works on `(batch, columns)`, so the split is
+                # folded back here. The columns are identical either way.
+                layers.append(
+                    keras.layers.Flatten(name=f"{self.name}_wavelet_flatten"),
+                )
 
         # Add TSFresh feature layer if configured
         if self.tsfresh_feature_config:
@@ -743,6 +771,14 @@ class TimeSeriesFeature(Feature):
                     name=f"{self.name}_tsfresh",
                 ),
             )
+            if window_size is not None:
+                # With a window the layer returns one statistic block per
+                # window -- a rank-3 tensor. Everything downstream of a feature
+                # works on `(batch, columns)`, so the windows are folded into
+                # the columns here.
+                layers.append(
+                    keras.layers.Flatten(name=f"{self.name}_tsfresh_flatten"),
+                )
 
         # Add calendar feature layer if configured
         if self.calendar_feature_config:
@@ -750,17 +786,25 @@ class TimeSeriesFeature(Feature):
                 "features",
                 ["month", "day", "day_of_week", "is_weekend"],
             )
-            cyclic_encoding = self.calendar_feature_config.get("cyclic_encoding", True)
             input_format = self.calendar_feature_config.get("input_format", "%Y-%m-%d")
             normalize = self.calendar_feature_config.get("normalize", True)
+
+            # `cyclic_encoding` is deprecated and does nothing. It is forwarded
+            # only when the caller actually wrote it, so the layer can say so
+            # once, rather than warning about a default nobody chose.
+            calendar_kwargs = {}
+            if "cyclic_encoding" in self.calendar_feature_config:
+                calendar_kwargs["cyclic_encoding"] = self.calendar_feature_config[
+                    "cyclic_encoding"
+                ]
 
             layers.append(
                 CalendarFeatureLayer(
                     features=features,
-                    cyclic_encoding=cyclic_encoding,
                     input_format=input_format,
                     normalize=normalize,
                     name=f"{self.name}_calendar",
+                    **calendar_kwargs,
                 ),
             )
 
@@ -778,6 +822,14 @@ class TimeSeriesFeature(Feature):
         Returns:
             int: The number of columns the layer stack produces.
         """
+        from kdp.layers.time_series.calendar_feature_layer import (
+            CalendarFeatureLayer,
+        )
+        from kdp.layers.time_series.tsfresh_feature_layer import TSFreshFeatureLayer
+        from kdp.layers.time_series.wavelet_transform_layer import (
+            WaveletTransformLayer,
+        )
+
         dim = 1
 
         if self.lag_config and "lags" in self.lag_config:
@@ -804,47 +856,50 @@ class TimeSeriesFeature(Feature):
 
         # The remaining transforms append their columns to whatever came before.
         if self.wavelet_transform_config:
-            levels = self.wavelet_transform_config.get("levels", 3)
-            keep_levels = self.wavelet_transform_config.get("keep_levels", "all")
-            flatten_output = self.wavelet_transform_config.get("flatten_output", True)
-
-            if not flatten_output:
-                wavelet_dims = 1
-            elif keep_levels == "all":
-                wavelet_dims = levels
-            elif isinstance(keep_levels, list):
-                wavelet_dims = len(keep_levels)
-            else:
-                wavelet_dims = 1
-            dim += wavelet_dims
+            # The wavelet replaces the columns it is given with coefficients
+            # rather than appending to them, and how many coefficients it
+            # produces depends on how wide its input is. Asking the layer is
+            # the only way to get that right: counting `levels` -- what this
+            # did before -- matched the real width for no configuration at all.
+            dim = _columns(
+                WaveletTransformLayer(
+                    levels=self.wavelet_transform_config.get("levels", 3),
+                    window_sizes=self.wavelet_transform_config.get("window_sizes"),
+                    keep_levels=self.wavelet_transform_config.get(
+                        "keep_levels",
+                        "all",
+                    ),
+                ).compute_output_shape((None, dim)),
+            )
 
         if self.tsfresh_feature_config:
-            features = self.tsfresh_feature_config.get(
-                "features",
-                ["mean", "std", "min", "max", "median"],
+            # Also a replacement: the statistics stand in for the series they
+            # were computed from. Counting them as extra columns on top of it
+            # over-reported the width for every configuration.
+            dim = _columns(
+                TSFreshFeatureLayer(
+                    features=self.tsfresh_feature_config.get(
+                        "features",
+                        ["mean", "std", "min", "max", "median"],
+                    ),
+                    window_size=self.tsfresh_feature_config.get("window_size"),
+                    stride=self.tsfresh_feature_config.get("stride", 1),
+                ).compute_output_shape((None, dim)),
             )
-            dim += len(features)
 
         if self.calendar_feature_config:
-            features = self.calendar_feature_config.get(
-                "features",
-                ["month", "day", "day_of_week", "is_weekend"],
+            # The calendar columns replace the date column they are read from,
+            # one column per requested feature. `cyclic_encoding` does not
+            # widen the output: sin and cos components are requested by name,
+            # as `month_sin` and `month_cos`.
+            dim = _columns(
+                CalendarFeatureLayer(
+                    features=self.calendar_feature_config.get(
+                        "features",
+                        ["month", "day", "day_of_week", "is_weekend"],
+                    ),
+                ).compute_output_shape((None, dim)),
             )
-            cyclic_encoding = self.calendar_feature_config.get("cyclic_encoding", True)
-            # Cyclic components are encoded as a sin/cos pair.
-            cyclic_features = {
-                "month",
-                "day",
-                "day_of_week",
-                "quarter",
-                "hour",
-                "minute",
-            }
-            if cyclic_encoding:
-                for feature in features:
-                    dim += 2 if feature in cyclic_features else 1
-            else:
-                dim += len(features)
 
         return dim
 

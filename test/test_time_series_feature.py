@@ -363,6 +363,67 @@ class TestTimeSeriesFeature(unittest.TestCase):
                     "moving_average_config": {"periods": [2]},
                 }
             ],
+            # The three below replace the columns they are given rather than
+            # adding to them. Counting them as additions over-reported the
+            # width for every configuration, and nothing measured it.
+            [
+                {
+                    "name": "sales",
+                    "lag_config": {"lags": [1, 2]},
+                    "wavelet_transform_config": {"levels": 2},
+                }
+            ],
+            [
+                {
+                    "name": "sales",
+                    "lag_config": {"lags": [1, 2]},
+                    "wavelet_transform_config": {"levels": 2, "keep_levels": "approx"},
+                }
+            ],
+            [
+                {
+                    "name": "sales",
+                    "lag_config": {"lags": [1, 2]},
+                    "wavelet_transform_config": {"levels": 2, "flatten_output": False},
+                }
+            ],
+            [
+                {
+                    "name": "sales",
+                    "tsfresh_feature_config": {"features": ["mean", "std", "min"]},
+                }
+            ],
+            [
+                {
+                    "name": "sales",
+                    "lag_config": {"lags": [1, 2, 3, 4]},
+                    "tsfresh_feature_config": {
+                        "features": ["mean"],
+                        "window_size": 2,
+                    },
+                }
+            ],
+            # A window longer than the series covers all of it. This used to
+            # make the declared window count negative, and `set_shape` refused
+            # it, so the configuration could not run at all.
+            [
+                {
+                    "name": "sales",
+                    "lag_config": {"lags": [1, 2]},
+                    "tsfresh_feature_config": {
+                        "features": ["mean", "std"],
+                        "window_size": 5,
+                    },
+                }
+            ],
+            [
+                {
+                    "name": "sales",
+                    "lag_config": {"lags": [1, 2]},
+                    "wavelet_transform_config": {"levels": 2},
+                    "tsfresh_feature_config": {"features": ["mean", "std"]},
+                }
+            ],
         ]
     )
     def test_output_dim_matches_actual_layer_output(self, config):
@@ -374,52 +435,46 @@ class TestTimeSeriesFeature(unittest.TestCase):
         actual_columns = int(data.shape[-1]) if data.shape.rank > 1 else 1
         self.assertEqual(feature.get_output_dim(), actual_columns)
 
-    def test_output_dim_with_new_transforms(self):
-        """Test output dimension calculation with the new transform layers."""
-        # Test with wavelet transform
-        feature = TimeSeriesFeature(
-            name="sales", wavelet_transform_config={"levels": 3, "flatten_output": True}
-        )
-        # Original value (1) + wavelet features (3) = 4
-        self.assertEqual(feature.get_output_dim(), 4)
+    def test_output_dim_matches_actual_calendar_output(self):
+        """Calendar columns replace the date column; they are not added to it.
 
-        # Test with tsfresh features
-        feature = TimeSeriesFeature(
-            name="sales",
-            tsfresh_feature_config={
-                "features": ["mean", "std", "min", "max", "median"]
-            },
-        )
-        # Original value (1) + 5 statistical features = 6
-        self.assertEqual(feature.get_output_dim(), 6)
+        `get_output_dim` counted the original column plus two columns for every
+        "cyclic" feature. The layer emits one column per requested feature and
+        never a sin/cos pair unless the pair is requested by name, so the
+        declared width matched no configuration at all.
+        """
+        dates = tf.constant([[f"2021-{month % 12 + 1:02d}-15"] for month in range(24)])
+        for calendar_config in (
+            {"features": ["month", "day_of_week", "is_weekend"]},
+            {"features": ["month_sin", "month_cos", "is_weekend"]},
+            {"features": ["month"], "normalize": False},
+        ):
+            feature = TimeSeriesFeature(
+                name="sales",
+                calendar_feature_config=calendar_config,
+            )
+            data = dates
+            for layer in feature.build_layers():
+                data = layer(data)
+            self.assertEqual(feature.get_output_dim(), int(data.shape[-1]))
+            self.assertEqual(len(data.shape), 2)
 
-        # Test with calendar features with cyclic encoding
-        feature = TimeSeriesFeature(
-            name="sales",
-            calendar_feature_config={
-                "features": ["month", "day_of_week", "is_weekend"],
-                "cyclic_encoding": True,
-            },
-        )
-        # Original value (1) + month(sin+cos) + day_of_week(sin+cos) + is_weekend = 6
-        self.assertEqual(feature.get_output_dim(), 6)
+    def test_cyclic_encoding_is_deprecated_and_changes_nothing(self):
+        """It was accepted, stored, serialized -- and read nowhere."""
+        dates = tf.constant([[f"2021-{month % 12 + 1:02d}-15"] for month in range(24)])
+        outputs = []
+        for flag in (True, False):
+            feature = TimeSeriesFeature(
+                name="sales",
+                calendar_feature_config={
+                    "features": ["month", "day_of_week"],
+                    "cyclic_encoding": flag,
+                },
+            )
+            data = dates
+            for layer in feature.build_layers():
+                data = layer(data)
+            outputs.append(np.asarray(data))
+            self.assertEqual(feature.get_output_dim(), int(data.shape[-1]))
 
-        # Test with calendar features without cyclic encoding
-        feature = TimeSeriesFeature(
-            name="sales",
-            calendar_feature_config={
-                "features": ["month", "day_of_week", "is_weekend"],
-                "cyclic_encoding": False,
-            },
-        )
-        # Original value (1) + 3 features = 4
-        self.assertEqual(feature.get_output_dim(), 4)
-
-        # Test combining multiple new transforms
-        feature = TimeSeriesFeature(
-            name="sales",
-            wavelet_transform_config={"levels": 2},
-            tsfresh_feature_config={"features": ["mean", "std"]},
-        )
-        # Original (1) + wavelet (2) + tsfresh (2) = 5
-        self.assertEqual(feature.get_output_dim(), 5)
+        np.testing.assert_allclose(outputs[0], outputs[1])
