@@ -30,9 +30,9 @@
     <p>Optimized for large-scale feature crosses</p>
   </div>
   <div class="benefit-card">
-    <span class="benefit-icon">🧠</span>
-    <h3>Smart Embeddings</h3>
-    <p>Learn meaningful feature combinations</p>
+    <span class="benefit-icon">🎛️</span>
+    <h3>Fixed Width</h3>
+    <p>Each cross adds one column, whatever the cardinality</p>
   </div>
 </div>
 
@@ -41,7 +41,7 @@
 <div class="architecture-diagram">
   <img src="imgs/cross_features.png" alt="Cross Features Architecture" class="architecture-image">
   <div class="diagram-caption">
-    <p>KDP's cross features combine input features through a sophisticated embedding process, creating rich representations of feature interactions.</p>
+    <p>KDP crosses two columns by hashing the pair of raw values into a fixed number of bins, and appends that bin index to the output as a single column.</p>
   </div>
 </div>
 
@@ -53,15 +53,15 @@
   </div>
 
   <div class="approach-card">
-    <span class="approach-icon">📊</span>
-    <h3>Vocabulary Creation</h3>
-    <p>Building a vocabulary of meaningful combinations</p>
+    <span class="approach-icon">#️⃣</span>
+    <h3>Hashing</h3>
+    <p>Mapping each pair into one of <code>nr_bins</code> buckets</p>
   </div>
 
   <div class="approach-card">
     <span class="approach-icon">🧮</span>
-    <h3>Embedding Generation</h3>
-    <p>Creating dense representations of combined features</p>
+    <h3>One Extra Column</h3>
+    <p>The bin index, appended to the categorical block</p>
   </div>
 
   <div class="approach-card">
@@ -78,7 +78,8 @@
 ```python
 from kdp import PreprocessingModel, FeatureType
 
-# Define your features
+# Define your features. Both sides of a cross must be categorical: the pair of
+# raw values is hashed, so the columns have to be strings or integers.
 features = {
     "product_category": FeatureType.STRING_CATEGORICAL,
     "user_country": FeatureType.STRING_CATEGORICAL,
@@ -90,12 +91,15 @@ preprocessor = PreprocessingModel(
     path_data="customer_data.csv",
     features_specs=features,
 
-    # Define crosses as (feature1, feature2, embedding_dim)
+    # Define crosses as (feature1, feature2, nr_bins)
     feature_crosses=[
-        ("product_category", "user_country", 32),  # Cross with 32-dim embedding
-        ("age_group", "user_country", 16)          # Cross with 16-dim embedding
+        ("product_category", "user_country", 32),  # pairs hashed into 32 bins
+        ("age_group", "user_country", 16)          # pairs hashed into 16 bins
     ]
 )
+
+# Each cross adds exactly one column to the output, holding the bin index of
+# the (feature1, feature2) pair -- a value in [0, nr_bins).
 ```
 
 </div>
@@ -115,33 +119,21 @@ preprocessor = PreprocessingModel(
     <tbody>
       <tr>
         <td><code>feature1</code></td>
-        <td>First feature to cross</td>
+        <td>First feature to cross. Must be declared in <code>features_specs</code> and be a string or integer column</td>
         <td>-</td>
-        <td>Any feature name</td>
+        <td>Any categorical feature name</td>
       </tr>
       <tr>
         <td><code>feature2</code></td>
-        <td>Second feature to cross</td>
+        <td>Second feature to cross, under the same rules</td>
         <td>-</td>
-        <td>Any feature name</td>
+        <td>Any categorical feature name</td>
       </tr>
       <tr>
-        <td><code>embedding_dim</code></td>
-        <td>Dimensionality of cross embedding</td>
-        <td>16</td>
-        <td>8-64</td>
-      </tr>
-      <tr>
-        <td><code>hash_bucket_size</code></td>
-        <td>Size of hash space for combinations</td>
-        <td>10000</td>
-        <td>1000-100000</td>
-      </tr>
-      <tr>
-        <td><code>use_attention</code></td>
-        <td>Apply attention to cross embeddings</td>
-        <td>False</td>
-        <td>Boolean</td>
+        <td><code>nr_bins</code></td>
+        <td>Number of hash buckets the pair is mapped into. Bigger means fewer collisions between distinct pairs</td>
+        <td>-</td>
+        <td>Around the number of pairs you expect to see</td>
       </tr>
     </tbody>
   </table>
@@ -174,21 +166,33 @@ preprocessor = PreprocessingModel(
   </div>
 
   <div class="feature-type-card">
-    <h3>Categorical × Numerical</h3>
-    <p>Capture how numerical relationships change across categories:</p>
+    <h3>Categorical × Bucketed Numerical</h3>
+    <p>A numeric column cannot be crossed directly -- hashing needs discrete
+    values, and a float column is refused when the preprocessor is built. Bucket
+    it into a categorical column of your own first:</p>
     <div class="code-container">
 
 ```python
+import pandas as pd
 from kdp import FeatureType, PreprocessingModel
 
-# Creating categorical × numerical crosses
+# Turn the numeric column into bands, then cross the bands
+frame = pd.read_csv("products.csv")
+frame["price_band"] = pd.cut(
+    frame["price"],
+    bins=[0, 10, 50, 200, float("inf")],
+    labels=["budget", "standard", "premium", "luxury"],
+).astype(str)
+frame.to_csv("products_banded.csv", index=False)
+
 preprocessor = PreprocessingModel(
+    path_data="products_banded.csv",
     features_specs={
         "product_category": FeatureType.STRING_CATEGORICAL,
-        "price": FeatureType.FLOAT_RESCALED
+        "price_band": FeatureType.STRING_CATEGORICAL,
     },
     feature_crosses=[
-        ("product_category", "price", 32)
+        ("product_category", "price_band", 32)
     ]
 )
 ```
@@ -197,23 +201,34 @@ preprocessor = PreprocessingModel(
   </div>
 
   <div class="feature-type-card">
-    <h3>Date Component Crosses</h3>
-    <p>Useful for temporal patterns that depend on multiple time components:</p>
+    <h3>Date Crosses</h3>
+    <p>A <code>DateFeature</code> is one column that expands into cyclical
+    encodings inside the model; there are no separate
+    <code>&lt;name&gt;_hour</code> or <code>&lt;name&gt;_day_of_week</code>
+    features to cross. Derive the components you want to cross as their own
+    categorical columns:</p>
     <div class="code-container">
 
 ```python
-# Creating date component crosses
-from kdp.features import DateFeature
+import pandas as pd
+from kdp import FeatureType, PreprocessingModel
+
+frame = pd.read_csv("transactions.csv")
+stamps = pd.to_datetime(frame["transaction_time"])
+frame["transaction_day_of_week"] = stamps.dt.day_name()
+frame["transaction_hour"] = stamps.dt.hour.astype(str)
+frame.to_csv("transactions_parts.csv", index=False)
 
 preprocessor = PreprocessingModel(
+    path_data="transactions_parts.csv",
     features_specs={
-        "transaction_time": DateFeature(
-            name="transaction_time"
-        )
+        "transaction_time": FeatureType.DATE,
+        "transaction_day_of_week": FeatureType.STRING_CATEGORICAL,
+        "transaction_hour": FeatureType.STRING_CATEGORICAL,
     },
     # Cross day of week with hour of day
     feature_crosses=[
-        ("transaction_time_day_of_week", "transaction_time_hour", 16)
+        ("transaction_day_of_week", "transaction_hour", 16)
     ]
 )
 ```
@@ -235,13 +250,13 @@ preprocessor = PreprocessingModel(
         "product_category": FeatureType.STRING_CATEGORICAL,
         "user_country": FeatureType.STRING_CATEGORICAL,
         "device_type": FeatureType.STRING_CATEGORICAL,
-        "user_age": FeatureType.FLOAT_NORMALIZED
+        "age_group": FeatureType.STRING_CATEGORICAL
     },
     # Define multiple crosses to capture different interactions
     feature_crosses=[
         ("product_category", "user_country", 32),
         ("device_type", "user_country", 16),
-        ("product_category", "user_age", 24)
+        ("product_category", "age_group", 24)
     ]
 )
 ```
@@ -334,10 +349,14 @@ preprocessor = PreprocessingModel(
         ),
         "product_price_range": FeatureType.STRING_CATEGORICAL,
 
-        # Temporal features
+        # Temporal features. The date column feeds the model its cyclical
+        # encodings; the two categorical columns beside it are what the crosses
+        # use, because a cross needs discrete values.
         "browse_time": DateFeature(
             name="browse_time"
-        )
+        ),
+        "browse_is_weekend": FeatureType.STRING_CATEGORICAL,
+        "browse_hour": FeatureType.STRING_CATEGORICAL
     },
 
     # Define crosses for recommendation patterns
@@ -349,10 +368,10 @@ preprocessor = PreprocessingModel(
         ("user_device", "product_price_range", 16),
 
         # Temporal × product (weekend browsing patterns)
-        ("browse_time_is_weekend", "product_category", 32),
+        ("browse_is_weekend", "product_category", 32),
 
         # Time of day × product (morning vs evening preferences)
-        ("browse_time_hour", "product_category", 32)
+        ("browse_hour", "product_category", 32)
     ]
 )
 ```
@@ -385,10 +404,13 @@ preprocessor = PreprocessingModel(
         "user_country": FeatureType.STRING_CATEGORICAL,
         "account_age_days": FeatureType.FLOAT_NORMALIZED,
 
-        # Time features
+        # Time features, plus the discrete columns the crosses need: an hour
+        # band and an amount band derived from the raw columns above.
         "transaction_time": DateFeature(
             name="transaction_time"
-        )
+        ),
+        "transaction_hour": FeatureType.STRING_CATEGORICAL,
+        "amount_band": FeatureType.STRING_CATEGORICAL
     },
 
     # Cross features for fraud patterns
@@ -396,14 +418,14 @@ preprocessor = PreprocessingModel(
         # Country × merchant (unusual combinations)
         ("user_country", "merchant_category", 32),
 
-        # Payment method × amount (unusual payment methods for large amounts)
-        ("payment_method", "transaction_amount", 24),
+        # Payment method × amount band (unusual methods for large amounts)
+        ("payment_method", "amount_band", 24),
 
-        # Time × amount (unusual times for large transactions)
-        ("transaction_time_hour", "transaction_amount", 24),
+        # Hour × amount band (unusual times for large transactions)
+        ("transaction_hour", "amount_band", 24),
 
         # Country × time (transactions from unusual locations at odd hours)
-        ("user_country", "transaction_time_hour", 32)
+        ("user_country", "transaction_hour", 32)
     ],
 
     # Enable tabular attention for additional interaction discovery
@@ -420,11 +442,11 @@ preprocessor = PreprocessingModel(
 <div class="architecture-diagram">
   <div class="mermaid">
     graph TD
-      A1[Feature 1] --> C[Feature Combination]
+      A1[Feature 1] --> C[Pair the raw values]
       A2[Feature 2] --> C
-      C --> D[Hash/Lookup]
-      D --> E[Embedding Layer]
-      E --> F[Cross Representation]
+      C --> D[Hash into nr_bins buckets]
+      D --> E[Cast the bin index to float32]
+      E --> F[One extra output column]
 
       style A1 fill:#e3f2fd,stroke:#64b5f6,stroke-width:2px
       style A2 fill:#e3f2fd,stroke:#64b5f6,stroke-width:2px
@@ -434,7 +456,7 @@ preprocessor = PreprocessingModel(
       style F fill:#e8eaf6,stroke:#7986cb,stroke-width:2px
   </div>
   <div class="diagram-caption">
-    <p>KDP combines features, creates a vocabulary or hash space for combinations, and embeds these into dense representations to capture meaningful interactions.</p>
+    <p>KDP pairs the two raw values, hashes the pair into one of <code>nr_bins</code> buckets, and appends that bin index to the output as a single float column alongside the categorical features.</p>
   </div>
 </div>
 
@@ -454,22 +476,22 @@ preprocessor = PreprocessingModel(
 
   <div class="pro-tip-card">
     <h3>⚠️ Beware of Sparsity</h3>
-    <p>Crosses between high-cardinality features can create sparse combinations:</p>
+    <p>Crosses between high-cardinality features produce many distinct pairs, and <code>nr_bins</code> decides how many of them share a bucket:</p>
     <ul>
-      <li>Use embeddings (default in KDP) rather than one-hot encoding</li>
-      <li>Consider hashing for very high cardinality crosses</li>
-      <li>Use category_encoding="hashing" for feature types with many values</li>
+      <li>Too few bins and unrelated pairs collide into one value</li>
+      <li>Too many and most bins are never seen by the model</li>
+      <li>The columns feeding a cross can themselves use <code>category_encoding="hashing"</code> when they have many values</li>
     </ul>
   </div>
 
   <div class="pro-tip-card">
-    <h3>📏 Cross Dimensionality</h3>
-    <p>Choose embedding dimension based on cross importance and complexity:</p>
+    <h3>📏 Choosing nr_bins</h3>
+    <p>The third element of the tuple is the number of hash buckets, not an embedding size:</p>
     <ul>
-      <li>More important crosses deserve higher dimensionality</li>
-      <li>Simple crosses: 8-16 dimensions</li>
-      <li>Complex crosses: 32-64 dimensions</li>
-      <li>Rule of thumb: ⁴√(possible combinations)</li>
+      <li>Start near the number of pairs you actually expect to see</li>
+      <li>Small crosses (a handful of categories each): 8-32 bins</li>
+      <li>Larger crosses: a few times the distinct pair count, to keep collisions rare</li>
+      <li>The output width is one column per cross whatever you choose</li>
     </ul>
   </div>
 
@@ -478,8 +500,8 @@ preprocessor = PreprocessingModel(
     <p>Consider other interaction modeling techniques alongside crosses:</p>
     <ul>
       <li>Enable tabular_attention=True to automatically discover interactions</li>
-      <li>Use transformer_blocks for more sophisticated feature relationships</li>
-      <li>Try dot-product interactions for numerical features</li>
+      <li>Use transfo_nr_blocks for more sophisticated feature relationships</li>
+      <li>Bucket a numeric column into bands to bring it into a cross</li>
     </ul>
   </div>
 </div>

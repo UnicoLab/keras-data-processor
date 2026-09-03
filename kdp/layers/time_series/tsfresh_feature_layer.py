@@ -134,7 +134,28 @@ class TSFreshFeatureLayer(Layer):
 
         Args:
             input_shape: Shape of the input tensor.
+
+        Raises:
+            ValueError: If there is only one step to summarize. Every statistic
+                this layer computes is degenerate over a window of one -- the
+                mean, the minimum and the maximum are all the value itself and
+                the standard deviation is zero -- and `window_size` is clamped
+                to the number of steps available, so a `TimeSeriesFeature` that
+                hands over one column per row got its own column back once per
+                requested statistic, plus a column of zeros. It looked like
+                four engineered features and carried nothing.
         """
+        time_steps = tuple(input_shape)[1] if len(input_shape) > 1 else None
+        if time_steps is not None and time_steps < 2:
+            raise ValueError(
+                "TSFreshFeatureLayer needs at least two time steps on axis 1 "
+                f"and received {time_steps}. In a `TimeSeriesFeature` this means "
+                "combining `tsfresh_feature_config` with a config that widens "
+                "the feature first -- `lag_config`, `rolling_stats_config` or "
+                "`moving_average_config` -- so there is a window to summarize. "
+                "Used directly, pass `(batch, time_steps)` or "
+                "`(batch, time_steps, features)`.",
+            )
         super().build(input_shape)
 
     def call(self, inputs, training=None) -> tf.Tensor:

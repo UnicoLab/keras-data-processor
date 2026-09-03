@@ -22,51 +22,232 @@ MAX_WORKERS = os.cpu_count() or 4
 
 
 class WelfordAccumulator:
-    """Accumulator for computing the mean and variance of a sequence of numbers
-    using the Welford algorithm (streaming data).
+    """Streaming mean and variance for a sequence of numbers.
+
+    Accumulates in float64 and pools each batch with the Chan-Golub-LeVeque
+    update. Both matter, and float32 was doing real damage: the deviations
+    `x - mean` were computed at the magnitude of the values themselves, so a
+    column of large numbers lost every significant digit to cancellation. A
+    column around 1e8 with a spread of 1e3 came out with a variance of
+    *minus* 1.6e6 against a true 1.0e6, and one with a spread of 1e-4 was
+    wrong by four orders of magnitude.
+
+    Nothing raised. `Normalization` divides by the square root of that
+    variance, so the column arrived at the model as a constant -- every ID,
+    epoch timestamp, amount in cents or sensor reading with a large offset
+    silently flattened, its signal gone.
+
+    Pooling each batch from its own mean keeps the subtraction at the scale of
+    the spread rather than the values, and float64 leaves ten orders of
+    magnitude of headroom on top. Together they hold the relative error near
+    1e-13 on the cases that used to break.
     """
 
     def __init__(self):
         """Initializes the accumulators for the Welford algorithm."""
         self.n = tf.Variable(
             0.0,
-            dtype=tf.float32,
+            dtype=tf.float64,
             trainable=False,
         )
         self.mean = tf.Variable(
             0.0,
-            dtype=tf.float32,
+            dtype=tf.float64,
             trainable=False,
         )
         self.M2 = tf.Variable(
             0.0,
-            dtype=tf.float32,
+            dtype=tf.float64,
+            trainable=False,
+        )
+        # Third and fourth central moments, pooled the same way as M2, and the
+        # running extremes. The advisor reads skewness, kurtosis, min and max;
+        # none of them were ever collected, so every column arrived at it with
+        # the neutral defaults -- skew 0, kurtosis 3 -- and was reported as
+        # "Normal distribution detected" whatever shape it had, while the
+        # rescaling factor derived from min and max always came out as 1.
+        self.M3 = tf.Variable(
+            0.0,
+            dtype=tf.float64,
+            trainable=False,
+        )
+        self.M4 = tf.Variable(
+            0.0,
+            dtype=tf.float64,
+            trainable=False,
+        )
+        self.minimum = tf.Variable(
+            float("inf"),
+            dtype=tf.float64,
+            trainable=False,
+        )
+        self.maximum = tf.Variable(
+            float("-inf"),
+            dtype=tf.float64,
             trainable=False,
         )
         self.var = tf.Variable(
             0.0,
-            dtype=tf.float32,
+            dtype=tf.float64,
             trainable=False,
         )
 
     @tf.function
     def update(self, values: tf.Tensor) -> None:
-        """Updates the accumulators with new values using the Welford algorithm.
+        """Pool a batch of values into the running mean and variance.
 
         Args:
             values: The new values to add to the accumulators.
         """
-        values = tf.cast(values, tf.float32)
-        n = self.n + tf.cast(tf.size(values), tf.float32)
-        delta = values - self.mean
-        self.mean.assign(self.mean + tf.reduce_sum(delta / n))
-        self.M2.assign(self.M2 + tf.reduce_sum(delta * (values - self.mean)))
-        self.n.assign(n)
+        values = tf.cast(tf.reshape(values, [-1]), tf.float64)
+        batch_count = tf.cast(tf.size(values), tf.float64)
+
+        # An empty batch has to leave everything untouched, and both divisors
+        # below can be zero when it does. Flooring them at one keeps the
+        # arithmetic finite; every numerator carries `batch_count`, so an empty
+        # batch contributes nothing either way.
+        safe_batch_count = tf.maximum(batch_count, 1.0)
+        batch_mean = tf.reduce_sum(values) / safe_batch_count
+        centered = values - batch_mean
+        batch_m2 = tf.reduce_sum(tf.square(centered))
+        batch_m3 = tf.reduce_sum(centered * tf.square(centered))
+        batch_m4 = tf.reduce_sum(tf.square(tf.square(centered)))
+
+        # The identity element rather than a branch: an empty batch reduces to
+        # the infinity that leaves the running extreme alone.
+        infinity = tf.constant([float("inf")], dtype=tf.float64)
+        batch_min = tf.reduce_min(tf.concat([values, infinity], axis=0))
+        batch_max = tf.reduce_max(tf.concat([values, -infinity], axis=0))
+
+        self._pool(
+            count=batch_count,
+            mean=batch_mean,
+            m2=batch_m2,
+            m3=batch_m3,
+            m4=batch_m4,
+            minimum=batch_min,
+            maximum=batch_max,
+        )
+
+    def _pool(
+        self,
+        count: tf.Tensor,
+        mean: tf.Tensor,
+        m2: tf.Tensor,
+        m3: tf.Tensor,
+        m4: tf.Tensor,
+        minimum: tf.Tensor,
+        maximum: tf.Tensor,
+    ) -> None:
+        """Fold a summarized group of values into the running accumulators.
+
+        The pooled forms of the Chan-Golub-LeVeque update, carried up to the
+        fourth moment. Both `update` and `merge` reduce to the same arithmetic.
+
+        Args:
+            count: How many values the group holds.
+            mean: Their mean.
+            m2: The sum of their squared deviations from that mean.
+            m3: The sum of their cubed deviations.
+            m4: The sum of their fourth-power deviations.
+            minimum: The smallest of them, or +inf for an empty group.
+            maximum: The largest of them, or -inf for an empty group.
+        """
+        total = self.n + count
+        safe_total = tf.maximum(total, 1.0)
+        delta = mean - self.mean
+        held = self.n
+
+        self.M4.assign(
+            self.M4
+            + m4
+            + tf.square(tf.square(delta))
+            * held
+            * count
+            * (held * held - held * count + count * count)
+            / (safe_total * tf.square(safe_total))
+            + 6.0
+            * delta
+            * delta
+            * (held * held * m2 + count * count * self.M2)
+            / tf.square(safe_total)
+            + 4.0 * delta * (held * m3 - count * self.M3) / safe_total,
+        )
+        self.M3.assign(
+            self.M3
+            + m3
+            + delta
+            * tf.square(delta)
+            * held
+            * count
+            * (held - count)
+            / tf.square(safe_total)
+            + 3.0 * delta * (held * m2 - count * self.M2) / safe_total,
+        )
+        self.M2.assign(self.M2 + m2 + delta * delta * held * count / safe_total)
+        self.mean.assign(self.mean + delta * count / safe_total)
+        self.minimum.assign(tf.minimum(self.minimum, minimum))
+        self.maximum.assign(tf.maximum(self.maximum, maximum))
+        self.n.assign(total)
+
+    def merge(self, other: "WelfordAccumulator") -> None:
+        """Pool another accumulator's values into this one.
+
+        Args:
+            other: The accumulator whose values are being folded in.
+        """
+        self._pool(
+            count=tf.cast(other.n, tf.float64),
+            mean=tf.cast(other.mean, tf.float64),
+            m2=tf.cast(other.M2, tf.float64),
+            m3=tf.cast(other.M3, tf.float64),
+            m4=tf.cast(other.M4, tf.float64),
+            minimum=tf.cast(other.minimum, tf.float64),
+            maximum=tf.cast(other.maximum, tf.float64),
+        )
 
     @property
     def variance(self) -> float:
         """Returns the variance of the accumulated values."""
         return self.M2 / (self.n - 1) if self.n > 1 else self.var
+
+    @property
+    def skewness(self) -> float:
+        """How lopsided the values are: 0 when symmetric, positive to the right.
+
+        Returns:
+            The population (Fisher-Pearson) skewness, or 0.0 when there are too
+            few values, or no spread, to have one.
+        """
+        if self.n < 3 or self.M2 <= 0:
+            return tf.constant(0.0, dtype=tf.float64)
+        return tf.sqrt(self.n) * self.M3 / tf.pow(self.M2, 1.5)
+
+    @property
+    def kurtosis(self) -> float:
+        """How heavy the tails are, on the scale where a normal curve is 3.
+
+        Returns:
+            The population kurtosis, or 3.0 when there are too few values, or
+            no spread, to have one.
+        """
+        if self.n < 4 or self.M2 <= 0:
+            return tf.constant(3.0, dtype=tf.float64)
+        return self.n * self.M4 / tf.square(self.M2)
+
+    @property
+    def smallest(self) -> float:
+        """The smallest value seen, or 0.0 before any has been."""
+        if self.n < 1:
+            return tf.constant(0.0, dtype=tf.float64)
+        return self.minimum.value()
+
+    @property
+    def largest(self) -> float:
+        """The largest value seen, or 0.0 before any has been."""
+        if self.n < 1:
+            return tf.constant(0.0, dtype=tf.float64)
+        return self.maximum.value()
 
     @property
     def count(self) -> int:
@@ -120,6 +301,12 @@ class CategoricalAccumulator:
         return tf.unique(all_values)[0].numpy().tolist()
 
 
+# The punctuation `TextVectorization` removes under its default
+# `standardize="lower_and_strip_punctuation"`, copied from that layer so the
+# vocabulary collected here is spelled the way the layer will look it up.
+_KERAS_PUNCTUATION = r'[!"#$%&()\*\+,-\./:;<=>?@\[\\\]^_`{|}~\']'
+
+
 class TextAccumulator:
     def __init__(self) -> None:
         """Initializes the accumulator for text values, where each entry is a list of words separated by spaces.
@@ -151,10 +338,18 @@ class TextAccumulator:
                 f"Unsupported data type for text features: {new_texts.dtype}",
             )
 
-        # Split each string into words and flatten the list
-        new_texts = tf.strings.regex_replace(new_texts, r"\s+", " ")
+        # Tokenize exactly the way `TextVectorization` will, because this
+        # vocabulary is handed to that layer verbatim. Its default
+        # standardization lowercases and then strips punctuation before
+        # splitting on whitespace; this accumulator lowercased but kept the
+        # punctuation, so a column of ordinary prose produced a vocabulary of
+        # "product," and "it!" while the layer looked up "product" and "it".
+        # The width was right and the counts were right; the words simply were
+        # not there, and a large share of every sentence fell into the
+        # out-of-vocabulary slot.
+        new_texts = tf.strings.lower(new_texts)
+        new_texts = tf.strings.regex_replace(new_texts, _KERAS_PUNCTUATION, "")
         split_words = tf.strings.split(new_texts).flat_values
-        split_words = tf.strings.lower(split_words)
 
         # Concatenate new words with existing words and update unique words
         updated_words = tf.unique(tf.concat([self.words, split_words], axis=0))[0]
@@ -246,6 +441,53 @@ class DateAccumulator:
             "day_of_week_sin": self.day_of_week_sin_accumulator.variance.numpy(),
             "day_of_week_cos": self.day_of_week_cos_accumulator.variance.numpy(),
         }
+
+
+def _warn_if_float32_flattens_the_column(
+    feature: str,
+    mean: float,
+    variance: float,
+) -> None:
+    """Say so when a column's spread is too fine for float32 to hold.
+
+    Everything downstream -- the CSV reader, the model's inputs, the
+    normalization layer -- is float32, which carries about seven significant
+    digits. A column whose values sit far from zero but vary only slightly
+    loses that variation on the way in, before any statistic is computed and
+    before any layer sees it. Unix timestamps in seconds are the usual case:
+    values near 1.6e9 are 128 apart in float32, so a column spread over a
+    minute arrives as two or three distinct numbers. Normalization then works
+    perfectly on what is left, and the feature reaching the model is a
+    constant.
+
+    Nothing raises, because the numbers are the ones the file actually
+    contains. This only makes the loss visible.
+
+    Args:
+        feature: The column's name, for the message.
+        mean: The column's mean.
+        variance: The column's variance.
+    """
+    mean = float(mean)
+    variance = float(variance)
+    if not math.isfinite(mean) or not math.isfinite(variance) or variance <= 0.0:
+        return
+
+    # The gap between neighbouring float32 values at this magnitude.
+    resolution = float(np.spacing(np.float32(abs(mean))))
+    spread = math.sqrt(variance)
+    if resolution <= 0.0 or spread >= 16.0 * resolution:
+        return
+
+    levels = max(int(6.0 * spread / resolution), 1)
+    logger.warning(
+        f"Feature '{feature}' has values around {mean:.6g} varying by only "
+        f"{spread:.6g}, which float32 cannot hold: neighbouring values at that "
+        f"magnitude are {resolution:.6g} apart, so the column arrives as about "
+        f"{levels} distinct value(s) and carries almost no information. "
+        f"Subtract a reference point before training (for a Unix timestamp, "
+        f"the start of your data), or declare the column as a DATE feature.",
+    )
 
 
 class DatasetStatistics:
@@ -349,15 +591,32 @@ class DatasetStatistics:
             )
 
         file_path = Path(path)
-        # Check if the path is a directory
-        if file_path.suffix:
-            # Get the parent directory if the path is a file
-            base_path = file_path.parent
-            csv_pattern = base_path / "*.csv"
-        else:
-            csv_pattern = file_path / "*.csv"
+        # A path that names a file means that file. It used to be replaced with
+        # `<parent>/*.csv`, so `path_data="data/train.csv"` computed statistics
+        # over every CSV sitting beside it -- `test.csv` included. That is the
+        # usage every example in the documentation shows, and the leak was
+        # silent: the numbers came back, just drawn from the wrong rows.
+        if file_path.is_file():
+            return str(file_path)
+        if file_path.is_dir():
+            return str(file_path / "*.csv")
 
-        return str(csv_pattern)
+        # Neither, so it is either a glob the caller wrote themselves
+        # ("data/*.csv", "shard-*.csv") or a path that does not exist. A glob is
+        # passed through; anything else is reported here rather than inside
+        # `tf.data`, which answers a missing file with an empty dataset and
+        # statistics quietly computed from nothing.
+        if any(character in str(file_path) for character in "*?["):
+            return str(file_path)
+        if file_path.suffix:
+            raise FileNotFoundError(
+                f"`path_data` points at {str(file_path)!r}, which does not "
+                "exist. Pass a CSV file, a directory of CSV files, or a glob.",
+            )
+        raise FileNotFoundError(
+            f"`path_data` points at {str(file_path)!r}, which is not a file or "
+            "a directory. Pass a CSV file, a directory of CSV files, or a glob.",
+        )
 
     def _read_data_into_dataset(self) -> tf.data.Dataset:
         """Reading CSV files from the provided path into a tf.data.Dataset."""
@@ -459,6 +718,20 @@ class DatasetStatistics:
                 )
                 continue
 
+            # A calendar feature's column holds dates, not numbers: everything
+            # it produces is derived from the string by `CalendarFeatureLayer`,
+            # and there is no mean or variance to take. Feeding it to the
+            # accumulator anyway killed the statistics pass with "Cast string to
+            # double is not supported" from inside a `tf.function`, so the
+            # documented way of declaring calendar features could not be built
+            # at all.
+            if feature.dtype == tf.string:
+                logger.debug(
+                    f"'{feature_name}' is a calendar feature; its column holds "
+                    f"dates, so there are no numeric statistics to collect.",
+                )
+                continue
+
             # Prepare for grouped processing if grouping is specified
             if feature.group_by and feature.group_by in list(
                 dataset.element_spec.keys(),
@@ -517,28 +790,25 @@ class DatasetStatistics:
                         accumulator.update(sorted_tensor)
                         group_accumulators[group_key] = accumulator
 
-                # Combine statistics across groups
+                # Combine statistics across groups. Each group is pooled in
+                # whole. Replacing a group with `count` copies of its own mean
+                # -- what this did before -- throws away everything the group
+                # varied by, leaving only the variance *between* the group
+                # means: two groups of spread 25 whose means happened to be
+                # close reported a variance of 0.73 against a true 643.
                 if group_accumulators:
-                    # Create overall accumulator to combine statistics
                     combined_accumulator = WelfordAccumulator()
-
-                    # Combine all group means weighted by count
-                    all_values = []
-                    for _, acc in group_accumulators.items():
-                        mean_tensor = (
-                            tf.ones(shape=(int(acc.count.numpy()),), dtype=tf.float32)
-                            * acc.mean.numpy()
-                        )
-                        all_values.append(mean_tensor)
-
-                    if all_values:
-                        combined_tensor = tf.concat(all_values, axis=0)
-                        combined_accumulator.update(combined_tensor)
+                    for accumulator in group_accumulators.values():
+                        combined_accumulator.merge(accumulator)
 
                     # Calculate and store overall statistics
                     stats = {
                         "mean": float(combined_accumulator.mean.numpy()),
                         "var": float(combined_accumulator.variance.numpy()),
+                        "min": float(combined_accumulator.smallest.numpy()),
+                        "max": float(combined_accumulator.largest.numpy()),
+                        "skewness": float(combined_accumulator.skewness.numpy()),
+                        "kurtosis": float(combined_accumulator.kurtosis.numpy()),
                         "count": int(
                             sum(
                                 acc.count.numpy() for acc in group_accumulators.values()
@@ -613,6 +883,10 @@ class DatasetStatistics:
                 stats = {
                     "mean": float(accumulator.mean.numpy()),
                     "var": float(accumulator.variance.numpy()),
+                    "min": float(accumulator.smallest.numpy()),
+                    "max": float(accumulator.largest.numpy()),
+                    "skewness": float(accumulator.skewness.numpy()),
+                    "kurtosis": float(accumulator.kurtosis.numpy()),
                     "count": int(accumulator.count.numpy()),
                     "dtype": feature.dtype.name
                     if hasattr(feature.dtype, "name")
@@ -705,10 +979,22 @@ class DatasetStatistics:
                 - date: mean and variance for each date component
             """
             if feature_type == "numeric":
+                accumulator = self.numeric_stats[feature]
+                mean = accumulator.mean.numpy()
+                variance = accumulator.variance.numpy()
+                _warn_if_float32_flattens_the_column(feature, mean, variance)
                 return feature, {
-                    "mean": self.numeric_stats[feature].mean.numpy(),
-                    "count": self.numeric_stats[feature].count.numpy(),
-                    "var": self.numeric_stats[feature].variance.numpy(),
+                    "mean": mean,
+                    "count": accumulator.count.numpy(),
+                    "var": variance,
+                    # The advisor reads these four to tell one distribution
+                    # from another and to size a rescaling factor. None of them
+                    # were collected, so it read the neutral defaults and
+                    # called every column normal.
+                    "min": float(accumulator.smallest.numpy()),
+                    "max": float(accumulator.largest.numpy()),
+                    "skewness": float(accumulator.skewness.numpy()),
+                    "kurtosis": float(accumulator.kurtosis.numpy()),
                     "dtype": self.features_specs[feature].dtype,
                 }
             elif feature_type == "categorical":

@@ -810,6 +810,11 @@ class ModelAdvisor:
         code.append("")
         code.append("# Create preprocessing model with recommended configuration")
         code.append("model = PreprocessingModel(")
+        # Without this the snippet cannot be run: every configuration the
+        # advisor recommends has numeric, text or vocabulary-based features in
+        # it, and building one of those needs the data. Pasting the snippet
+        # raised "neither `features_stats` nor `path_data` was provided".
+        code.append('    path_data="your_data.csv",  # the data these came from')
         code.append("    features_specs=features,")
 
         # Add global configuration

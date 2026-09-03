@@ -47,7 +47,7 @@ preprocessor = PreprocessingModel(
         "signup_date": DateFeature(
             name="signup_date",
             feature_type=FeatureType.DATE,
-            format="YYYY-MM-DD",   # or "YYYY/MM/DD"
+            format="YYYY-MM-DD",   # or "YYYY/MM/DD", each with an optional time
             add_season=True,       # append a 4-dim one-hot season
         ),
     },
@@ -59,7 +59,8 @@ preprocessor.build_preprocessor()
 
 ## ⚙️ Configuration Parameters
 
-`DateFeature` takes exactly two options. Anything else you pass is ignored.
+`DateFeature` takes exactly two options. Anything else you pass is accepted
+and not used, and says so in a warning.
 
 <div class="table-container">
   <table>
@@ -76,7 +77,7 @@ preprocessor.build_preprocessor()
         <td><code>format</code></td>
         <td>str</td>
         <td><code>"YYYY-MM-DD"</code></td>
-        <td>Layout of the date string. Only <code>YYYY-MM-DD</code> and <code>YYYY/MM/DD</code> are supported; anything else raises at parse time.</td>
+        <td>Layout of the date string. Dates are read as year, then month, then day, separated by <code>-</code> or <code>/</code>, and may be followed by a time -- <code>"%Y-%m-%d"</code>, <code>"%Y/%m/%d"</code>, <code>"%Y-%m-%d %H:%M:%S"</code> and <code>"YYYY-MM-DD"</code> all describe a column this reads. A day-first or month-first format is refused where you write it. <code>date_format</code> is accepted as a synonym.</td>
       </tr>
       <tr>
         <td><code>add_season</code></td>
@@ -93,8 +94,9 @@ preprocessor.build_preprocessor()
     `add_day_of_week`, `add_hour`, `add_is_weekend`, `add_quarter`,
     `cyclical_encoding`, `add_time_since_reference`, `reference_date` and
     `time_since_unit`. None of them are read by KDP. `DateFeature` accepts
-    arbitrary keyword arguments without complaint, so passing them looks like
-    it works and silently changes nothing. Year, month, day of month and day
+    arbitrary keyword arguments, and only `output_format` and `extract` are
+    called out in a warning; the rest pass without a word and change nothing.
+    Year, month, day of month and day
     of week are **always** extracted and **always** cyclically encoded; that
     is not configurable. For anything beyond that, use a
     [custom preprocessing pipeline](../advanced/custom-preprocessing.md).

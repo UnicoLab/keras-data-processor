@@ -121,10 +121,27 @@ class TestQuantileTransform(unittest.TestCase):
 
 
 class TestMinMax(unittest.TestCase):
-    """min-max maps data into [0, 1]."""
+    """min-max maps each feature's own range onto [min_value, max_value].
 
-    def test_scales_into_unit_interval(self):
-        """With clipping disabled, the observed range maps onto [0, 1]."""
+    `min_value` and `max_value` were read as the range the data was assumed to
+    be *in*, not the range to scale it *onto*: the transform computed
+    `(x - min_value) / (max_value - min_value)`, which with their defaults of 0
+    and 1 returns the input untouched. Min-max scaling did nothing at all
+    unless `clip_values` was turned off, and no setting could target a range
+    other than [0, 1]. The only test here covered that one working branch.
+    """
+
+    def test_the_default_settings_scale_into_the_unit_interval(self):
+        """The documented behaviour, and the case that used to be a no-op."""
+        data = _multi_scale_data(seed=5)
+        actual = np.asarray(
+            DistributionTransformLayer(transform_type="min-max")(tf.constant(data)),
+        )
+        self.assertFalse(np.allclose(actual, data))
+        self.assertAlmostEqual(float(actual.min()), 0.0, places=5)
+        self.assertAlmostEqual(float(actual.max()), 1.0, places=5)
+
+    def test_with_clipping_disabled_too(self):
         data = _multi_scale_data(seed=5)
         actual = np.asarray(
             DistributionTransformLayer(transform_type="min-max", clip_values=False)(
@@ -133,6 +150,53 @@ class TestMinMax(unittest.TestCase):
         )
         self.assertAlmostEqual(float(actual.min()), 0.0, places=5)
         self.assertAlmostEqual(float(actual.max()), 1.0, places=5)
+
+    def test_the_target_range_is_the_one_asked_for(self):
+        """[-1, 1] and [0, 10] were both unreachable."""
+        data = _multi_scale_data(seed=6)
+        for low, high in ((-1.0, 1.0), (0.0, 10.0), (5.0, 6.0)):
+            with self.subTest(target=(low, high)):
+                actual = np.asarray(
+                    DistributionTransformLayer(
+                        transform_type="min-max",
+                        min_value=low,
+                        max_value=high,
+                    )(tf.constant(data)),
+                )
+                self.assertAlmostEqual(float(actual.min()), low, places=4)
+                self.assertAlmostEqual(float(actual.max()), high, places=4)
+
+    def test_each_feature_is_scaled_on_its_own_range(self):
+        """Three columns centred at -3, 50 and 1000 each span the whole range.
+
+        A single min and max across the tensor would leave the two narrow
+        columns squeezed into a sliver of it.
+        """
+        data = _multi_scale_data(seed=7)
+        actual = np.asarray(
+            DistributionTransformLayer(transform_type="min-max")(tf.constant(data)),
+        )
+        for column in range(data.shape[1]):
+            self.assertAlmostEqual(float(actual[:, column].min()), 0.0, places=4)
+            self.assertAlmostEqual(float(actual[:, column].max()), 1.0, places=4)
+
+    def test_the_order_of_the_values_is_kept(self):
+        data = _multi_scale_data(seed=8)
+        actual = np.asarray(
+            DistributionTransformLayer(transform_type="min-max")(tf.constant(data)),
+        )
+        for column in range(data.shape[1]):
+            np.testing.assert_array_equal(
+                np.argsort(actual[:, column]),
+                np.argsort(data[:, column]),
+            )
+
+    def test_a_constant_feature_does_not_divide_by_zero(self):
+        constant = np.full((40, 2), 7.0, dtype="float32")
+        actual = np.asarray(
+            DistributionTransformLayer(transform_type="min-max")(tf.constant(constant)),
+        )
+        self.assertTrue(np.isfinite(actual).all())
 
 
 class TestGraphModeCompatibility(unittest.TestCase):

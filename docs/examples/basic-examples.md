@@ -60,14 +60,15 @@ features = {
     ),
 }
 
-# Define cross-feature between 2 arbitrary features, though tabular attention would be more useful for feature crossings
-feature_crosses = [("normalized_float", "rescaled_float", 10)] # 10 is the number of bins to hash into
+# A cross hashes the pair of raw values, so both sides have to be discrete:
+# every feature here is a float and none of them can be crossed. Example 2
+# crosses two categorical features; tabular attention is the tool for finding
+# interactions between numeric ones.
 
 # Now we can create a preprocessing model with the features
 ppr = PreprocessingModel(
     path_data="sample_data.csv",
     features_specs=features,
-    feature_crosses=feature_crosses,
     features_stats_path="features_stats.json",
     overwrite_stats=True,
     output_mode=OutputModeOptions.CONCAT,

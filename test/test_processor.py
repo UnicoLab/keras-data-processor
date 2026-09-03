@@ -549,10 +549,21 @@ class TestPreprocessingModel(unittest.TestCase):
         )
         test_data.to_csv(self._path_data, index=False)
 
-        # Verify preprocessing works
-        dataset = tf.data.Dataset.from_tensor_slices(dict(test_data))
-        preprocessed = model.batch_predict(dataset)
-        self.assertIsNotNone(preprocessed)
+        # Verify preprocessing works. `batch_predict` is a generator, so
+        # holding onto it and asserting it is not None never ran the model.
+        dataset = tf.data.Dataset.from_tensor_slices(dict(test_data)).batch(4)
+        batches = list(model.batch_predict(dataset))
+        self.assertTrue(batches)
+        # Dict output mode: each batch is a mapping of feature name to tensor.
+        rows = 0
+        for batch in batches:
+            tensors = list(batch.values()) if isinstance(batch, dict) else [batch]
+            widths = {int(np.asarray(tensor).shape[0]) for tensor in tensors}
+            self.assertEqual(len(widths), 1, f"features disagree on rows: {widths}")
+            rows += widths.pop()
+            for tensor in tensors:
+                self.assertTrue(np.isfinite(np.asarray(tensor)).all())
+        self.assertEqual(rows, len(test_data))
 
     def test_caching_functionality(self):
         """Test the caching functionality of preprocessed features."""
@@ -695,16 +706,24 @@ class TestPreprocessingModel(unittest.TestCase):
 
                 # Create a small batch of test data
                 test_data = generate_fake_data(test_case["features"], num_rows=5)
-                dataset = tf.data.Dataset.from_tensor_slices(dict(test_data))
+                dataset = tf.data.Dataset.from_tensor_slices(dict(test_data)).batch(5)
 
-                # Test preprocessing
-                preprocessed = ppr.batch_predict(dataset)
-                self.assertIsNotNone(preprocessed)
+                # Test preprocessing. `batch_predict` is a generator: the
+                # assertion below used to be made against the generator object
+                # rather than anything it produced, so the model never ran.
+                batches = [np.asarray(batch) for batch in ppr.batch_predict(dataset)]
+                self.assertTrue(batches)
+                preprocessed = np.concatenate(batches)
+                self.assertEqual(preprocessed.shape[0], 5)
+                self.assertTrue(np.isfinite(preprocessed).all())
 
                 # Additional checks based on feature combination
                 if "date1" in test_case["features"]:
                     date_feature = test_case["features"]["date1"]
-                    if getattr(date_feature, "add_season", False):
+                    # `add_season` lives in the feature's kwargs, not as an
+                    # attribute, so `getattr` here always answered False and
+                    # this check never ran either.
+                    if date_feature.kwargs.get("add_season", False):
                         # Check if output shape includes seasonal encoding
                         self.assertGreaterEqual(
                             preprocessed.shape[-1], 4
@@ -737,9 +756,15 @@ class TestPreprocessingModel(unittest.TestCase):
                 ),
             },
             {
+                # Dates are read as year, then month, then day. This used to
+                # ask for "%m/%d/%Y" and feed month-first strings, which the
+                # parser cannot read -- the case passed because nothing ever
+                # consumed the generator below.
                 "name": "custom_format_date",
                 "config": DateFeature(
-                    name="date", feature_type=FeatureType.DATE, date_format="%m/%d/%Y"
+                    name="date",
+                    feature_type=FeatureType.DATE,
+                    date_format="%Y-%m-%d %H:%M:%S",
                 ),
             },
             {
@@ -771,13 +796,18 @@ class TestPreprocessingModel(unittest.TestCase):
 
                 # Test with specific date formats
                 if config["name"] == "custom_format_date":
-                    test_data = pd.DataFrame({"date": ["01/15/2023", "12/31/2022"]})
+                    test_data = pd.DataFrame(
+                        {"date": ["2023-01-15 08:30:00", "2022-12-31 23:59:59"]},
+                    )
                 else:
                     test_data = pd.DataFrame({"date": ["2023-01-15", "2022-12-31"]})
 
-                dataset = tf.data.Dataset.from_tensor_slices(dict(test_data))
-                preprocessed = ppr.batch_predict(dataset)
-                self.assertIsNotNone(preprocessed)
+                dataset = tf.data.Dataset.from_tensor_slices(dict(test_data)).batch(2)
+                batches = [np.asarray(batch) for batch in ppr.batch_predict(dataset)]
+                self.assertTrue(batches)
+                preprocessed = np.concatenate(batches)
+                self.assertEqual(preprocessed.shape[0], 2)
+                self.assertTrue(np.isfinite(preprocessed).all())
 
     def test_preprocessor_with_tabular_attention(self):
         """Test end-to-end preprocessing with TabularAttention."""
@@ -926,7 +956,7 @@ class TestPreprocessingModel(unittest.TestCase):
             tabular_attention_heads=4,
             tabular_attention_dim=64,
             tabular_attention_dropout=0.1,
-            feature_crosses=[("num1", "num2", 5), ("cat1", "cat2", 5)],
+            feature_crosses=[("cat1", "cat2", 5)],
             output_mode=OutputModeOptions.CONCAT,
         )
 
@@ -1365,7 +1395,11 @@ class TestPreprocessingModel(unittest.TestCase):
         self.assertIsNotNone(preprocessed)
 
         # Check output dimensions
-        self.assertEqual(len(preprocessed.shape), 3)  # (batch_size, d_model)
+        # `transfo_placement="all_features"` was the one configuration that came
+        # out rank 3: a transformer block adds a sequence axis and this branch
+        # never took it off again. Every other placement, this test's own
+        # comment, and its three siblings all say (rows, width).
+        self.assertEqual(len(preprocessed.shape), 2)  # (batch_size, d_model)
         self.assertEqual(preprocessed.shape[-1], 23)  # Example dimension
 
     def test_preprocessor_all_features_with_transformer_and_attention_with_distribution_aware_v4(
@@ -1791,9 +1825,14 @@ class TestPreprocessingModel_Combinations(unittest.TestCase):
 
                 if test_case["output_mode"] == OutputModeOptions.CONCAT:
                     if test_case["tabular_attention"]:
-                        # Check output dimensions for concatenated output with attention
+                        # Check output dimensions for concatenated output with attention.
+                        # This case is attention plus `transfo_placement="all_features"`,
+                        # the one combination that used to come back rank 3
+                        # because that branch never removed the sequence axis a
+                        # transformer block adds. Attention on its own has
+                        # always flattened, like every other placement.
                         self.assertEqual(
-                            len(preprocessed.shape), 3
+                            len(preprocessed.shape), 2
                         )  # (batch_size, d_model)
                         self.assertEqual(
                             preprocessed.shape[-1], test_case["tabular_attention_dim"]

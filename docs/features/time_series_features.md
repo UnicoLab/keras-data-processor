@@ -335,7 +335,7 @@ preprocessor = PreprocessingModel(
       </tr>
       <tr>
         <td><code>tsfresh_features</code></td>
-        <td>Statistical features to extract</td>
+        <td>Statistical features to extract. Needs a window to summarize, so pair <code>tsfresh_feature_config</code> with <code>lag_config</code>, <code>rolling_stats_config</code> or <code>moving_average_config</code></td>
         <td>["mean", "std", "min", "max", "median"]</td>
         <td>List of statistical features to compute</td>
       </tr>
@@ -506,10 +506,17 @@ preprocessor = PreprocessingModel(
 ```python
 from kdp import TimeSeriesFeature, PreprocessingModel
 
-# Define a feature with statistical features extraction
+# Define a feature with statistical features extraction.
+#
+# The statistics summarize a window, and a time series feature hands one value
+# per row over, so something has to widen it first: the lags below give each row
+# its own recent history to summarize. Without one of `lag_config`,
+# `rolling_stats_config` or `moving_average_config` there is a single step in
+# the window and every statistic is degenerate, which the layer refuses.
 ecg_data = TimeSeriesFeature(
     name="ecg_signal",
     sort_by="timestamp",
+    lag_config={"lags": list(range(1, 100)), "drop_na": False},
     # Statistical feature extraction
     tsfresh_feature_config={
         "features": [

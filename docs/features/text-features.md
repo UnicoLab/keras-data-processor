@@ -72,19 +72,19 @@ apart from `stop_words`, which KDP applies itself beforehand.
         <td><code>max_tokens</code></td>
         <td>int</td>
         <td>&mdash;</td>
-        <td>Caps the vocabulary. Must be at least as large as the vocabulary found in your data, or Keras raises.</td>
+        <td>Caps the vocabulary, counting the out-of-vocabulary slot (and the padding slot under <code>"int"</code>). When the cap is smaller than the vocabulary the statistics found, the vectorizer is adapted on the column so the words kept are the most frequent ones.</td>
       </tr>
       <tr>
         <td><code>ngrams</code></td>
         <td>int | tuple</td>
         <td><code>None</code></td>
-        <td>Generate n-grams in addition to single tokens.</td>
+        <td>Generate n-grams in addition to single tokens. The statistics collect single words only, so setting this reads the column again to build a vocabulary that holds the n-grams.</td>
       </tr>
       <tr>
         <td><code>split</code>, <code>standardize</code></td>
         <td>str | callable</td>
         <td>Keras defaults</td>
-        <td>Passed straight through to <code>TextVectorization</code>.</td>
+        <td>Passed straight through to <code>TextVectorization</code>. Either one changes what a token is, so setting them also reads the column again rather than reusing the collected vocabulary.</td>
       </tr>
     </tbody>
   </table>
@@ -230,8 +230,8 @@ preprocessor = PreprocessingModel(
     <p>When only presence matters &mdash; tags, short titles &mdash; <code>"multi_hot"</code> is smaller and easier to learn from than a padded sequence.</p>
   </div>
   <div class="pro-tip-card">
-    <h4>max_tokens must fit the data</h4>
-    <p>Keras raises if the cap is below the vocabulary actually found. Set it generously or leave it unset.</p>
+    <h4>Tokens are standardized before they are counted</h4>
+    <p>Text is lowercased and stripped of punctuation before it is split on whitespace, so <code>"Great product,"</code> contributes <code>great</code> and <code>product</code>. That is <code>TextVectorization</code>'s own default, and the vocabulary collected from your data is spelled to match it.</p>
   </div>
 </div>
 

@@ -8,9 +8,10 @@ class DateParsingLayer(keras.layers.Layer):
         """Initializing DateParsingLayer.
 
         Args:
-            date_format (str): Accepted and not used. Both supported
-                spellings, YYYY-MM-DD and YYYY/MM/DD, are parsed whatever this
-                says: the separator is normalised before the date is read.
+            date_format (str): Accepted and not used. Every supported
+                spelling -- YYYY-MM-DD and YYYY/MM/DD, each optionally followed
+                by a time -- is parsed whatever this says: the separator is
+                normalised and any time dropped before the date is read.
             kwargs (dict): other params to pass to the class.
         """
         super().__init__(**kwargs)
@@ -29,16 +30,37 @@ class DateParsingLayer(keras.layers.Layer):
         """
 
         def parse_date(date_str: str) -> tf.Tensor:
-            # Handle missing/invalid dates
+            # Handle missing/invalid dates. A time part is allowed after the
+            # date -- "2021-06-15 13:45:00" and its ISO "T" spelling are what a
+            # timestamp column holds, and rejecting them left a very ordinary
+            # kind of column with no way through this layer at all: the model
+            # built, then died on the first batch inside a graph error deep
+            # enough to bury the reason.
             is_valid = tf.strings.regex_full_match(
                 date_str,
-                r"^\d{1,4}[-/]\d{1,2}[-/]\d{1,2}$",
+                r"^\d{1,4}[-/]\d{1,2}[-/]\d{1,2}([ T].*)?$",
             )
-            tf.debugging.assert_equal(
+            # `tf.Assert` rather than `assert_equal`, so the value that failed
+            # can be printed alongside the reason. The old assertion surfaced
+            # as a graph error naming an internal node and nothing else, which
+            # is all a caller saw when one row held an empty string or a null.
+            tf.Assert(
                 is_valid,
-                True,
-                message="Invalid date format. Expected YYYY-MM-DD or YYYY/MM/DD",
+                [
+                    tf.constant(
+                        "Invalid date value. Expected YYYY-MM-DD or "
+                        "YYYY/MM/DD, optionally followed by a time. An empty "
+                        "value counts: a date column cannot hold nulls, so "
+                        "fill or drop those rows before preprocessing. The "
+                        "value that failed was:",
+                    ),
+                    date_str,
+                ],
             )
+
+            # Everything below is built from the calendar date, so drop any
+            # time that came with it.
+            date_str = tf.strings.regex_replace(date_str, r"[ T].*$", "")
 
             # First, standardize the separator to '-' in case of YYYY/MM/DD format
             date_str = tf.strings.regex_replace(date_str, "/", "-")
