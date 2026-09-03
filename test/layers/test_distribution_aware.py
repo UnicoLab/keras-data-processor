@@ -4,6 +4,8 @@ import keras
 import numpy as np
 import tensorflow as tf
 import os
+import tempfile
+from pathlib import Path
 
 from kdp.layers.distribution_aware_encoder_layer import (
     DistributionAwareEncoder,
@@ -362,32 +364,29 @@ class TestDistributionAwareEncoder(tf.test.TestCase):
         preds = model.predict(x_train[:10])
         self.assertEqual(preds.shape, (10, 1))
 
-        # Verify we can save and load the model with custom objects
-        model_path = "test_model.keras"  # Add .keras extension for proper saving
+        # Verify we can save and load the model with custom objects.
+        # The path is a private temporary directory rather than
+        # "test_model.keras" in the working directory: another test in the
+        # `layers` group saved and deleted a file of that same name, and under
+        # `pytest -n auto` the two raced -- this one failed with
+        # "File not found: filepath=test_model.keras" when the other removed
+        # it first. The directory also cleans itself up when the test fails.
+        with tempfile.TemporaryDirectory() as directory:
+            model_path = Path(directory) / "test_model.keras"
+            try:
+                model.save(model_path)
+                # Use get_custom_objects to load the model
+                custom_objects = get_custom_objects()
+                loaded_model = keras.saving.load_model(
+                    model_path, custom_objects=custom_objects
+                )
 
-        try:
-            model.save(model_path)
-            # Use get_custom_objects to load the model
-            custom_objects = get_custom_objects()
-            loaded_model = keras.saving.load_model(
-                model_path, custom_objects=custom_objects
-            )
-
-            # Check that the loaded model gives same predictions
-            loaded_preds = loaded_model.predict(x_train[:10])
-            # Use a higher tolerance level to account for floating-point differences
-            self.assertAllClose(preds, loaded_preds, rtol=1e-1, atol=1e-1)
-
-            # Clean up
-            if os.path.exists(model_path):
-                os.remove(
-                    model_path
-                )  # Use os.remove for file instead of shutil.rmtree for directory
-        except Exception as e:
-            # Clean up even if test fails
-            if os.path.exists(model_path):
-                os.remove(model_path)  # Use os.remove for file
-            self.fail(f"Model saving/loading failed: {e}")
+                # Check that the loaded model gives same predictions
+                loaded_preds = loaded_model.predict(x_train[:10])
+                # Use a higher tolerance level for floating-point differences
+                self.assertAllClose(preds, loaded_preds, rtol=1e-1, atol=1e-1)
+            except Exception as e:
+                self.fail(f"Model saving/loading failed: {e}")
 
     def test_config(self):
         """Test configuration serialization."""

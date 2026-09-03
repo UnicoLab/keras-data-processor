@@ -1,3 +1,6 @@
+import tempfile
+from pathlib import Path
+
 import keras
 import tensorflow as tf
 import numpy as np
@@ -242,10 +245,13 @@ def test_in_model():
     print("\nTesting encoder in a model:")
     model.fit(x_train, y_train, batch_size=32, epochs=2, verbose=1)
 
-    # Verify we can save and load the model
-    model_path = "test_model.keras"
-    print("  Testing model saving and loading...")
-    try:
+    # Verify we can save and load the model. A private temporary directory,
+    # not "test_model.keras" in the working directory: this test and
+    # test_distribution_aware.py used that same name, and under
+    # `pytest -n auto` whichever finished first deleted the other's file.
+    with tempfile.TemporaryDirectory() as directory:
+        model_path = Path(directory) / "test_model.keras"
+        print("  Testing model saving and loading...")
         model.save(model_path)
         loaded_model = keras.saving.load_model(model_path)
         print("  Model saved and loaded successfully")
@@ -256,15 +262,6 @@ def test_in_model():
 
         # Use higher tolerance for floating-point differences
         np.testing.assert_allclose(preds, loaded_preds, rtol=1e-1, atol=1e-1)
-
-        # Clean up
-        import os
-
-        if os.path.exists(model_path):
-            os.remove(model_path)
-    except Exception as e:
-        print(f"  Error in model saving/loading: {e}")
-        # This might need fixing if it fails
 
 
 if __name__ == "__main__":
