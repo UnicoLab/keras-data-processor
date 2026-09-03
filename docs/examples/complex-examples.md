@@ -308,12 +308,13 @@ user_result = user_preprocessor.build_preprocessor()
 
 4. **Save Your Preprocessing Pipeline**
    ```python
-   # Save the complete pipeline for reuse
-   preprocessor.save_model("my_preprocessor.keras")
+   # Save the complete pipeline for reuse. The argument is a directory: the
+   # Keras model and the metadata needed to rebuild the pipeline go inside it.
+   preprocessor.save_model("my_preprocessor")
 
-   # Load it when needed
+   # Load it when needed. load_model returns the model and that metadata.
    from kdp import PreprocessingModel
-   loaded_preprocessor = PreprocessingModel.load_model("my_preprocessor.keras")
+   loaded_model, metadata = PreprocessingModel.load_model("my_preprocessor")
    ```
 
 ## 🔗 Related Topics

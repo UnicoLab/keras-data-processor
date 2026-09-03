@@ -341,6 +341,54 @@ class TestDocumentedCodeMatchesTheAPI(unittest.TestCase):
                     broken.append(f"{path.relative_to(DOCS)} -> {link}")
         self.assertEqual(broken, [], "\n".join(broken))
 
+    def test_a_documented_call_unpacks_what_the_method_returns(self):
+        """A method returning a tuple has to be shown returning a tuple.
+
+        `PreprocessingModel.load_model` returns `(model, metadata)`. Two pages
+        assigned it to one name and called that name `loaded_preprocessor`, so
+        a reader following them wrote `loaded_preprocessor.predict(...)` next
+        and got `AttributeError: 'tuple' object has no attribute 'predict'`.
+        The runnable-example harness cannot catch this: it skips every block
+        that calls `load_model`, because it cannot invent the saved directory.
+        """
+        import inspect
+
+        from kdp import PreprocessingModel
+
+        # Only methods whose annotation actually promises a tuple.
+        tuple_returning = {
+            name
+            for name, member in inspect.getmembers(PreprocessingModel)
+            if callable(member)
+            and "tuple" in str(getattr(member, "__annotations__", {}).get("return", ""))
+        }
+        self.assertIn("load_model", tuple_returning)
+
+        offenders = []
+        for path, index, code in _doc_blocks():
+            for line in code.split("\n"):
+                stripped = line.strip()
+                for method in tuple_returning:
+                    # Scoped to the class: `keras.models.load_model` is a
+                    # different function that returns a model, not a tuple.
+                    if f"PreprocessingModel.{method}(" not in stripped:
+                        continue
+                    if "=" not in stripped:
+                        continue
+                    target = stripped.split("=")[0]
+                    if "," not in target:
+                        offenders.append(f"{path} block #{index}: {stripped}")
+        self.assertEqual(
+            offenders,
+            [],
+            "\n".join(
+                [
+                    "These calls return a tuple but are assigned to one name:",
+                    *offenders,
+                ],
+            ),
+        )
+
     def test_documented_methods_exist(self):
         """A method the docs call must be a method the class has.
 

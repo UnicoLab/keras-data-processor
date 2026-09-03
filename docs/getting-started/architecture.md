@@ -257,12 +257,12 @@ preprocessor = PreprocessingModel(
 result = preprocessor.build_preprocessor()
 model = result["model"]  # Standard Keras model
 
-# Save for production
+# Save for production. The argument names a directory to write into.
 preprocessor.save_model("customer_preprocess_model")
 
-# Load anywhere
+# Load anywhere. You get the model back together with its metadata.
 from kdp import PreprocessingModel
-loaded = PreprocessingModel.load_model("customer_preprocess_model")
+loaded_model, metadata = PreprocessingModel.load_model("customer_preprocess_model")
 ```
 
   </div>
