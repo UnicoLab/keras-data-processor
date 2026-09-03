@@ -208,6 +208,10 @@ jobs:
 
           # Attempt to deploy docs
           mike deploy --push --update-aliases ${{ steps.get_docs_version.outputs.VERSION }} latest
+
+          # mike deploy only updates <version>/ and the alias symlink; the site
+          # root needs a separate call to redirect to the latest alias.
+          mike set-default --push latest
         continue-on-error: true
 
       - name: Retry documentation release on failure
@@ -220,3 +224,4 @@ jobs:
 
           # Use the version from recovery process
           mike deploy --push --update-aliases --force ${{ steps.get_docs_version.outputs.VERSION }} latest
+          mike set-default --push latest

@@ -63,6 +63,12 @@ jobs:
 
           # Execute the command
           $COMMAND
+
+          # mike deploy only updates <version>/ and the alias symlink; the site
+          # root needs a separate call to redirect to the latest alias.
+          if [[ "${{ inputs.UPDATE_LATEST }}" == "true" ]]; then
+            mike set-default --push latest
+          fi
         continue-on-error: true
 
       - name: Retry documentation release on failure
@@ -76,6 +82,7 @@ jobs:
           # Set up command based on whether to update latest alias
           if [[ "${{ inputs.UPDATE_LATEST }}" == "true" ]]; then
             mike deploy --push --update-aliases --force ${{ inputs.RELEASE_VERSION }} latest
+            mike set-default --push latest
           else
             mike deploy --push --force ${{ inputs.RELEASE_VERSION }}
           fi
