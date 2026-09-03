@@ -43,13 +43,10 @@ class TextPreprocessingLayer(keras.layers.Layer):
             dict: The configuration dictionary.
         """
         config = super().get_config()
-        config.update(
-            {
-                "stop_words": self.stop_words,
-                "punctuation_pattern": self.punctuation_pattern,
-                "stop_words_pattern": self.stop_words_pattern,
-            },
-        )
+        # Only what `__init__` takes. The two patterns are derived from
+        # `stop_words`, and writing them here made every saved model carry
+        # arguments the constructor would not accept.
+        config.update({"stop_words": self.stop_words})
         return config
 
     @classmethod
@@ -62,4 +59,12 @@ class TextPreprocessingLayer(keras.layers.Layer):
         Returns:
             object: The TextPreprocessingLayer instance.
         """
+        # Models saved before this release carry the two derived patterns,
+        # which `__init__` never accepted: loading one failed outright with
+        # "Unrecognized keyword arguments passed to TextPreprocessingLayer".
+        # They are rebuilt from `stop_words`, so they are dropped here and
+        # those files load.
+        config = dict(config)
+        config.pop("punctuation_pattern", None)
+        config.pop("stop_words_pattern", None)
         return cls(**config)

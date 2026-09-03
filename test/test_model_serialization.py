@@ -218,3 +218,99 @@ class TestSaveModelErrors(unittest.TestCase):
         """Loading a non-existent model directory raises a clear error."""
         with self.assertRaises(ValueError):
             PreprocessingModel.load_model("/nonexistent/path/to/model")
+
+
+def _config_keys_the_constructor_rejects() -> list[tuple[str, str, list[str]]]:
+    """Classes whose `get_config` writes a key `__init__` will not take.
+
+    Keras rebuilds a layer by calling `from_config`, which hands the stored
+    config straight to `__init__`; anything the constructor does not name
+    reaches `Layer.__init__` as an unexpected keyword and Keras raises. So a
+    single extra key in `get_config` makes every saved model containing that
+    layer impossible to load, and nothing notices until someone tries.
+    `TextPreprocessingLayer` stored two patterns it derives from `stop_words`
+    and could not be reloaded at all.
+    """
+    import ast
+
+    root = Path(__file__).resolve().parent.parent / "kdp"
+    findings = []
+    for path in sorted(root.rglob("*.py")):
+        tree = ast.parse(path.read_text())
+        for cls in [n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)]:
+            members = {n.name: n for n in cls.body if isinstance(n, ast.FunctionDef)}
+            if "__init__" not in members or "get_config" not in members:
+                continue
+            init, config = members["__init__"], members["get_config"]
+            accepted = {a.arg for a in init.args.args if a.arg != "self"}
+            accepted |= {a.arg for a in init.args.kwonlyargs}
+
+            written = set()
+            for node in ast.walk(config):
+                if isinstance(node, ast.Dict):
+                    written |= {
+                        key.value
+                        for key in node.keys
+                        if isinstance(key, ast.Constant) and isinstance(key.value, str)
+                    }
+                if isinstance(node, ast.Assign) and isinstance(
+                    node.targets[0],
+                    ast.Subscript,
+                ):
+                    index = node.targets[0].slice
+                    if isinstance(index, ast.Constant) and isinstance(
+                        index.value,
+                        str,
+                    ):
+                        written.add(index.value)
+
+            extra = sorted(written - accepted)
+            if extra:
+                findings.append(
+                    (str(path.relative_to(root.parent)), cls.name, extra),
+                )
+    return findings
+
+
+@pytest.mark.unit
+class TestEveryConfigKeyCanBeRead(unittest.TestCase):
+    """A config a constructor cannot read is a model that cannot be loaded."""
+
+    def test_no_class_writes_a_config_key_its_constructor_rejects(self):
+        findings = _config_keys_the_constructor_rejects()
+        message = "\n".join(
+            f"  {path}: {cls}.get_config writes {keys}, which __init__ "
+            "does not accept -- a saved model carrying this layer will not load."
+            for path, cls, keys in findings
+        )
+        self.assertEqual(findings, [], f"\n{message}")
+
+    def test_the_text_layer_survives_a_round_trip(self):
+        """The layer that could not be reloaded, and the old configs of it."""
+        from kdp.layers.text_preprocessing_layer import TextPreprocessingLayer
+
+        probe = tf.constant([["The quick, brown fox!"], ["A lazy dog."]])
+        inputs = keras.Input(shape=(1,), dtype=tf.string)
+        model = keras.Model(
+            inputs,
+            TextPreprocessingLayer(stop_words=["the", "a"])(inputs),
+        )
+        before = np.asarray(model(probe))
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "text.keras"
+            model.save(path)
+            reloaded = keras.saving.load_model(path)
+        np.testing.assert_array_equal(np.asarray(reloaded(probe)), before)
+
+        # A config written by an earlier release still loads.
+        legacy = {
+            "name": "text",
+            "stop_words": ["the"],
+            "punctuation_pattern": "ignored",
+            "stop_words_pattern": "the",
+        }
+        self.assertEqual(
+            TextPreprocessingLayer.from_config(legacy).stop_words,
+            ["the"],
+        )
