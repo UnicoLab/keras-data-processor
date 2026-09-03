@@ -29,9 +29,10 @@ class DistributionTransformLayer(keras.layers.Layer):
         lambda_param: Parameter for parameterized transformations like Box-Cox and Yeo-Johnson.
             Default is 0.0.
         epsilon: Small value added to prevent numerical issues like log(0). Default is 1e-10.
-        min_value: Minimum value for min-max scaling. Default is 0.0.
-        max_value: Maximum value for min-max scaling. Default is 1.0.
-        clip_values: Whether to clip values to the specified range in min-max scaling. Default is True.
+        min_value: Low end of the range 'min-max' scales onto. Default is 0.0.
+        max_value: High end of the range 'min-max' scales onto. Default is 1.0.
+        clip_values: Whether 'min-max' clips its result into
+            [min_value, max_value]. Default is True.
         auto_candidates: list of transformation types to consider when transform_type is 'auto'.
             If None, all available transformations will be considered. Default is None.
         name: Optional name for the layer.
@@ -540,21 +541,36 @@ class DistributionTransformLayer(keras.layers.Layer):
             return tf.math.log(x_clipped / (1.0 - x_clipped))
 
         def apply_min_max() -> tf.Tensor:
-            # Min-Max scaling to [0, 1]
+            # Scale each feature's own range onto [min_value, max_value].
+            #
+            # Those two used to be read as the *source* range instead --
+            # `(x - min_value) / (max_value - min_value)` -- so with their
+            # defaults of 0 and 1 the transform returned its input untouched,
+            # and no setting could scale onto a range other than [0, 1].
+            # `clip_values` chose between that and the data's own range, which
+            # is not what "whether to clip values to the specified range" says
+            # and left the output far outside the range it names.
+            #
+            # Per feature, like `robust-scale` and `quantile` below: a single
+            # min and max across the whole tensor would let one wide column
+            # flatten every other one.
+            data_min = tf.reduce_min(x, axis=0, keepdims=True)
+            data_max = tf.reduce_max(x, axis=0, keepdims=True)
+
+            spread = data_max - data_min
+            spread = tf.where(
+                tf.abs(spread) < self.epsilon,
+                tf.ones_like(spread),
+                spread,
+            )
+
+            low = tf.cast(self.min_value, x.dtype)
+            high = tf.cast(self.max_value, x.dtype)
+            scaled = low + (x - data_min) / spread * (high - low)
+
             if self.clip_values:
-                # Use predefined min/max values
-                min_val = self.min_value
-                max_val = self.max_value
-            else:
-                # Compute min/max from data
-                min_val = tf.reduce_min(x)
-                max_val = tf.reduce_max(x)
-
-            # Avoid division by zero
-            denom = max_val - min_val
-            denom = tf.where(tf.abs(denom) < self.epsilon, tf.ones_like(denom), denom)
-
-            return (x - min_val) / denom
+                scaled = tf.clip_by_value(scaled, low, high)
+            return scaled
 
         def apply_robust_scale() -> tf.Tensor:
             # Robust scaling: centre on the per-feature median and divide by the
