@@ -334,3 +334,67 @@ class TestFeatureMoEResidual(unittest.TestCase):
             preprocessor = _build(Path(tmp), feature_moe_expert_dim=1)
             output = preprocessor.model(BATCH)
         self.assertEqual(int(output.shape[-1]), len(COLUMNS))
+
+
+@pytest.mark.unit
+class TestAddFeatureMoeToModel(unittest.TestCase):
+    """The module-level helper, which nothing exercised.
+
+    `add_feature_moe_to_model` stacked the feature outputs without padding
+    them, so it worked only when every feature happened to be the same width --
+    which preprocessing rarely produces. `PreprocessingModel` pads for exactly
+    this reason and this now does the same.
+    """
+
+    @staticmethod
+    def _model(widths, **kwargs):
+        from kdp.moe import add_feature_moe_to_model
+
+        keras.backend.clear_session()
+        names = tuple("abcde"[: len(widths)])
+        inputs = {name: keras.Input(shape=(1,), name=name) for name in names}
+        outputs = [
+            keras.layers.Dense(width, name=f"preprocessed_{name}")(inputs[name])
+            for name, width in zip(names, widths, strict=True)
+        ]
+        base = keras.Model(inputs=list(inputs.values()), outputs=outputs)
+        kwargs.setdefault("num_experts", 2)
+        kwargs.setdefault("expert_dim", 4)
+        return names, add_feature_moe_to_model(base, inputs, **kwargs)
+
+    def test_features_of_different_widths(self):
+        for widths in ([3, 3, 3], [2, 3, 5], [1, 1, 10]):
+            with self.subTest(widths=widths):
+                names, model = self._model(widths)
+                probe = {
+                    name: tf.constant([[float(index + 1)]])
+                    for index, name in enumerate(names)
+                }
+                outputs = model(probe)
+                self.assertEqual(len(outputs), len(names))
+                for output in outputs:
+                    self.assertEqual(int(output.shape[-1]), 4)
+
+    def test_every_feature_still_reaches_its_own_output(self):
+        """Padding must not let a feature's signal go missing."""
+        names, model = self._model([2, 3, 5])
+        baseline_input = {name: tf.constant([[1.0]]) for name in names}
+        baseline = [np.asarray(t) for t in model(baseline_input)]
+        for index, name in enumerate(names):
+            moved = dict(baseline_input)
+            moved[name] = tf.constant([[9.0]])
+            output = np.asarray(model(moved)[index])
+            self.assertFalse(np.allclose(output, baseline[index]), name)
+
+    def test_the_result_survives_a_round_trip(self):
+        names, model = self._model([2, 3, 5])
+        probe = {
+            name: tf.constant([[float(index + 1)]]) for index, name in enumerate(names)
+        }
+        before = [np.asarray(t) for t in model(probe)]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "moe.keras"
+            model.save(path)
+            after = [np.asarray(t) for t in keras.saving.load_model(path)(probe)]
+        for expected, actual in zip(before, after, strict=True):
+            np.testing.assert_allclose(actual, expected, rtol=1e-5)

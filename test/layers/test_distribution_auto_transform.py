@@ -96,5 +96,44 @@ class TestAutoTransformShapes(unittest.TestCase):
         self.assertTrue(np.isfinite(out).all())
 
 
+@pytest.mark.layers
+class TestAutoWithAnEmptyCandidateList(unittest.TestCase):
+    """`auto_candidates=[]` reaches a branch nothing else does.
+
+    Passing `None` -- the default -- makes `__init__` fill in the full list, so
+    the code that builds candidates from the data's own shape only runs when a
+    caller asks for `auto` with an explicitly empty list. That path had never
+    been executed.
+    """
+
+    CASES = {
+        "strictly positive": lambda rng: rng.gamma(2.0, 2.0, (200, 1)),
+        "positive with zeros": lambda rng: np.abs(rng.normal(0, 2, (200, 1))),
+        "mixed signs": lambda rng: rng.normal(0, 5, (200, 1)),
+        "bounded in 0-1": lambda rng: rng.uniform(0.01, 0.99, (200, 1)),
+    }
+
+    def test_it_produces_finite_values_of_the_right_shape(self):
+        rng = np.random.default_rng(4)
+        for label, make in self.CASES.items():
+            with self.subTest(case=label):
+                data = make(rng).astype("float32")
+                layer = DistributionTransformLayer(
+                    transform_type="auto",
+                    auto_candidates=[],
+                )
+                output = np.asarray(layer(tf.constant(data), training=True))
+                self.assertEqual(output.shape, data.shape)
+                self.assertTrue(np.isfinite(output).all())
+
+    def test_it_still_round_trips_through_a_config(self):
+        layer = DistributionTransformLayer(
+            transform_type="auto",
+            auto_candidates=[],
+        )
+        rebuilt = DistributionTransformLayer.from_config(layer.get_config())
+        self.assertEqual(rebuilt.transform_type, "auto")
+
+
 if __name__ == "__main__":
     unittest.main()

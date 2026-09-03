@@ -852,8 +852,19 @@ def add_feature_moe_to_model(
         model.get_layer(f"preprocessed_{name}").output for name in feature_names
     ]
 
+    # Features rarely come out of preprocessing the same width, and stacking
+    # needs them equal. `PreprocessingModel` pads them for exactly this reason;
+    # doing it here too means this helper is not limited to the case where
+    # every feature happens to match. The widest is padded by zero columns, so
+    # nothing is added to it.
+    widest = max(int(output.shape[-1]) for output in feature_outputs)
+    padded_outputs = [
+        PadFeatureLayer(width=widest, name=f"{name}_moe_pad")(output)
+        for name, output in zip(feature_names, feature_outputs, strict=True)
+    ]
+
     # Stack feature representations
-    stacked_features = StackFeaturesLayer()(feature_outputs)
+    stacked_features = StackFeaturesLayer()(padded_outputs)
 
     # Apply Feature-wise MoE
     moe = FeatureMoE(
