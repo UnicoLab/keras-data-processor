@@ -1,0 +1,3042 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://unicolab.github.io/keras-data-processor/1.13.0/getting-started/upgrading.html">
+      
+      
+        <link rel="prev" href="architecture.html">
+      
+      
+        <link rel="next" href="../features/overview.html">
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.16">
+    
+    
+      
+        <title>⬆️ Upgrading from 1.11.x - KDP - Keras Data Preprocessor</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.7e37652d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+  
+  
+    
+    
+  
+    
+    
+  
+    
+    
+  
+    
+    
+  
+    
+    
+  
+    
+    
+  
+    
+    
+  
+    
+    
+  
+    
+    
+  
+    
+    
+  
+    
+    
+  
+    
+    
+  
+  
+  <style>:root{--md-admonition-icon--note:url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2016%2016%22%3E%3Cpath%20d%3D%22M1%207.775V2.75C1%201.784%201.784%201%202.75%201h5.025c.464%200%20.91.184%201.238.513l6.25%206.25a1.75%201.75%200%200%201%200%202.474l-5.026%205.026a1.75%201.75%200%200%201-2.474%200l-6.25-6.25A1.75%201.75%200%200%201%201%207.775m1.5%200c0%20.066.026.13.073.177l6.25%206.25a.25.25%200%200%200%20.354%200l5.025-5.025a.25.25%200%200%200%200-.354l-6.25-6.25a.25.25%200%200%200-.177-.073H2.75a.25.25%200%200%200-.25.25ZM6%205a1%201%200%201%201%200%202%201%201%200%200%201%200-2%22/%3E%3C/svg%3E');--md-admonition-icon--abstract:url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2016%2016%22%3E%3Cpath%20d%3D%22M2.5%201.75v11.5c0%20.138.112.25.25.25h3.17a.75.75%200%200%201%200%201.5H2.75A1.75%201.75%200%200%201%201%2013.25V1.75C1%20.784%201.784%200%202.75%200h8.5C12.216%200%2013%20.784%2013%201.75v7.736a.75.75%200%200%201-1.5%200V1.75a.25.25%200%200%200-.25-.25h-8.5a.25.25%200%200%200-.25.25m13.274%209.537zl-4.557%204.45a.75.75%200%200%201-1.055-.008l-1.943-1.95a.75.75%200%200%201%201.062-1.058l1.419%201.425%204.026-3.932a.75.75%200%201%201%201.048%201.074M4.75%204h4.5a.75.75%200%200%201%200%201.5h-4.5a.75.75%200%200%201%200-1.5M4%207.75A.75.75%200%200%201%204.75%207h2a.75.75%200%200%201%200%201.5h-2A.75.75%200%200%201%204%207.75%22/%3E%3C/svg%3E');--md-admonition-icon--info:url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2016%2016%22%3E%3Cpath%20d%3D%22M0%208a8%208%200%201%201%2016%200A8%208%200%200%201%200%208m8-6.5a6.5%206.5%200%201%200%200%2013%206.5%206.5%200%200%200%200-13M6.5%207.75A.75.75%200%200%201%207.25%207h1a.75.75%200%200%201%20.75.75v2.75h.25a.75.75%200%200%201%200%201.5h-2a.75.75%200%200%201%200-1.5h.25v-2h-.25a.75.75%200%200%201-.75-.75M8%206a1%201%200%201%201%200-2%201%201%200%200%201%200%202%22/%3E%3C/svg%3E');--md-admonition-icon--tip:url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2016%2016%22%3E%3Cpath%20d%3D%22M3.499.75a.75.75%200%200%201%201.5%200v.996C5.9%202.903%206.793%203.65%207.662%204.376l.24.202c-.036-.694.055-1.422.426-2.163C9.1.873%2010.794-.045%2012.622.26%2014.408.558%2016%201.94%2016%204.25c0%201.278-.954%202.575-2.44%202.734l.146.508.065.22c.203.701.412%201.455.476%202.226.142%201.707-.4%203.03-1.487%203.898C11.714%2014.671%2010.27%2015%208.75%2015h-6a.75.75%200%200%201%200-1.5h1.376a4.5%204.5%200%200%201-.563-1.191%203.84%203.84%200%200%201-.05-2.063%204.65%204.65%200%200%201-2.025-.293.75.75%200%200%201%20.525-1.406c1.357.507%202.376-.006%202.698-.318l.009-.01a.747.747%200%200%201%201.06%200%20.75.75%200%200%201-.012%201.074c-.912.92-.992%201.835-.768%202.586.221.74.745%201.337%201.196%201.621H8.75c1.343%200%202.398-.296%203.074-.836.635-.507%201.036-1.31.928-2.602-.05-.603-.216-1.224-.422-1.93l-.064-.221c-.12-.407-.246-.84-.353-1.29a2.4%202.4%200%200%201-.507-.441%203.1%203.1%200%200%201-.633-1.248.75.75%200%200%201%201.455-.364c.046.185.144.436.31.627.146.168.353.305.712.305.738%200%201.25-.615%201.25-1.25%200-1.47-.95-2.315-2.123-2.51-1.172-.196-2.227.387-2.706%201.345-.46.92-.27%201.774.019%203.062l.042.19.01.05c.348.443.666.949.94%201.553a.75.75%200%201%201-1.365.62c-.553-1.217-1.32-1.94-2.3-2.768L6.7%205.527c-.814-.68-1.75-1.462-2.692-2.619a3.7%203.7%200%200%200-1.023.88c-.406.495-.663%201.036-.722%201.508.116.122.306.21.591.239.388.038.797-.06%201.032-.19a.75.75%200%200%201%20.728%201.31c-.515.287-1.23.439-1.906.373-.682-.067-1.473-.38-1.879-1.193L.75%205.677V5.5c0-.984.48-1.94%201.077-2.664.46-.559%201.05-1.055%201.673-1.353z%22/%3E%3C/svg%3E');--md-admonition-icon--success:url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2016%2016%22%3E%3Cpath%20d%3D%22M13.78%204.22a.75.75%200%200%201%200%201.06l-7.25%207.25a.75.75%200%200%201-1.06%200L2.22%209.28a.75.75%200%200%201%20.018-1.042.75.75%200%200%201%201.042-.018L6%2010.94l6.72-6.72a.75.75%200%200%201%201.06%200%22/%3E%3C/svg%3E');--md-admonition-icon--question:url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2016%2016%22%3E%3Cpath%20d%3D%22M0%208a8%208%200%201%201%2016%200A8%208%200%200%201%200%208m8-6.5a6.5%206.5%200%201%200%200%2013%206.5%206.5%200%200%200%200-13M6.92%206.085h.001a.749.749%200%201%201-1.342-.67c.169-.339.436-.701.849-.977C6.845%204.16%207.369%204%208%204a2.76%202.76%200%200%201%201.637.525c.503.377.863.965.863%201.725%200%20.448-.115.83-.329%201.15-.205.307-.47.513-.692.662-.109.072-.22.138-.313.195l-.006.004a6%206%200%200%200-.26.16%201%201%200%200%200-.276.245.75.75%200%200%201-1.248-.832c.184-.264.42-.489.692-.661q.154-.1.313-.195l.007-.004c.1-.061.182-.11.258-.161a1%201%200%200%200%20.277-.245C8.96%206.514%209%206.427%209%206.25a.61.61%200%200%200-.262-.525A1.27%201.27%200%200%200%208%205.5c-.369%200-.595.09-.74.187a1%201%200%200%200-.34.398M9%2011a1%201%200%201%201-2%200%201%201%200%200%201%202%200%22/%3E%3C/svg%3E');--md-admonition-icon--warning:url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2016%2016%22%3E%3Cpath%20d%3D%22M6.457%201.047c.659-1.234%202.427-1.234%203.086%200l6.082%2011.378A1.75%201.75%200%200%201%2014.082%2015H1.918a1.75%201.75%200%200%201-1.543-2.575Zm1.763.707a.25.25%200%200%200-.44%200L1.698%2013.132a.25.25%200%200%200%20.22.368h12.164a.25.25%200%200%200%20.22-.368Zm.53%203.996v2.5a.75.75%200%200%201-1.5%200v-2.5a.75.75%200%200%201%201.5%200M9%2011a1%201%200%201%201-2%200%201%201%200%200%201%202%200%22/%3E%3C/svg%3E');--md-admonition-icon--failure:url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2016%2016%22%3E%3Cpath%20d%3D%22M2.344%202.343za8%208%200%200%201%2011.314%2011.314A8.002%208.002%200%200%201%20.234%2010.089a8%208%200%200%201%202.11-7.746m1.06%2010.253a6.5%206.5%200%201%200%209.108-9.275%206.5%206.5%200%200%200-9.108%209.275M6.03%204.97%208%206.94l1.97-1.97a.749.749%200%200%201%201.275.326.75.75%200%200%201-.215.734L9.06%208l1.97%201.97a.749.749%200%200%201-.326%201.275.75.75%200%200%201-.734-.215L8%209.06l-1.97%201.97a.749.749%200%200%201-1.275-.326.75.75%200%200%201%20.215-.734L6.94%208%204.97%206.03a.75.75%200%200%201%20.018-1.042.75.75%200%200%201%201.042-.018%22/%3E%3C/svg%3E');--md-admonition-icon--danger:url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2016%2016%22%3E%3Cpath%20d%3D%22M9.504.43a1.516%201.516%200%200%201%202.437%201.713L10.415%205.5h2.123c1.57%200%202.346%201.909%201.22%203.004l-7.34%207.142a1.25%201.25%200%200%201-.871.354h-.302a1.25%201.25%200%200%201-1.157-1.723L5.633%2010.5H3.462c-1.57%200-2.346-1.909-1.22-3.004zm1.047%201.074L3.286%208.571A.25.25%200%200%200%203.462%209H6.75a.75.75%200%200%201%20.694%201.034l-1.713%204.188%206.982-6.793A.25.25%200%200%200%2012.538%207H9.25a.75.75%200%200%201-.683-1.06l2.008-4.418.003-.006-.004-.009-.006-.006-.008-.001q-.005%200-.009.004%22/%3E%3C/svg%3E');--md-admonition-icon--bug:url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2016%2016%22%3E%3Cpath%20d%3D%22M4.72.22a.75.75%200%200%201%201.06%200l1%20.999a3.5%203.5%200%200%201%202.441%200l.999-1a.748.748%200%200%201%201.265.332.75.75%200%200%201-.205.729l-.775.776c.616.63.995%201.493.995%202.444v.327q0%20.15-.025.292c.408.14.764.392%201.029.722l1.968-.787a.75.75%200%200%201%20.556%201.392L13%207.258V9h2.25a.75.75%200%200%201%200%201.5H13v.5q-.002.615-.141%201.186l2.17.868a.75.75%200%200%201-.557%201.392l-2.184-.873A5%205%200%200%201%208%2016a5%205%200%200%201-4.288-2.427l-2.183.873a.75.75%200%200%201-.558-1.392l2.17-.868A5%205%200%200%201%203%2011v-.5H.75a.75.75%200%200%201%200-1.5H3V7.258L.971%206.446a.75.75%200%200%201%20.558-1.392l1.967.787c.265-.33.62-.583%201.03-.722a1.7%201.7%200%200%201-.026-.292V4.5c0-.951.38-1.814.995-2.444L4.72%201.28a.75.75%200%200%201%200-1.06m.53%206.28a.75.75%200%200%200-.75.75V11a3.5%203.5%200%201%200%207%200V7.25a.75.75%200%200%200-.75-.75ZM6.173%205h3.654A.17.17%200%200%200%2010%204.827V4.5a2%202%200%201%200-4%200v.327c0%20.096.077.173.173.173%22/%3E%3C/svg%3E');--md-admonition-icon--example:url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2016%2016%22%3E%3Cpath%20d%3D%22M5%205.782V2.5h-.25a.75.75%200%200%201%200-1.5h6.5a.75.75%200%200%201%200%201.5H11v3.282l3.666%205.76C15.619%2013.04%2014.543%2015%2012.767%2015H3.233c-1.776%200-2.852-1.96-1.899-3.458Zm-2.4%206.565a.75.75%200%200%200%20.633%201.153h9.534a.75.75%200%200%200%20.633-1.153L12.225%2010.5h-8.45ZM9.5%202.5h-3V6c0%20.143-.04.283-.117.403L4.73%209h6.54L9.617%206.403A.75.75%200%200%201%209.5%206Z%22/%3E%3C/svg%3E');--md-admonition-icon--quote:url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2016%2016%22%3E%3Cpath%20d%3D%22M1.75%202.5h10.5a.75.75%200%200%201%200%201.5H1.75a.75.75%200%200%201%200-1.5m4%205h8.5a.75.75%200%200%201%200%201.5h-8.5a.75.75%200%200%201%200-1.5m0%205h8.5a.75.75%200%200%201%200%201.5h-8.5a.75.75%200%200%201%200-1.5M2.5%207.75v6a.75.75%200%200%201-1.5%200v-6a.75.75%200%200%201%201.5%200%22/%3E%3C/svg%3E');}</style>
+
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="black">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#upgrading-from-111x" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../index.html" title="KDP - Keras Data Preprocessor" class="md-header__button md-logo" aria-label="KDP - Keras Data Preprocessor" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 11a1 1 0 0 1 1 1 1 1 0 0 1-1 1 1 1 0 0 1-1-1 1 1 0 0 1 1-1M4.22 4.22C5.65 2.79 8.75 3.43 12 5.56c3.25-2.13 6.35-2.77 7.78-1.34s.79 4.53-1.34 7.78c2.13 3.25 2.77 6.35 1.34 7.78s-4.53.79-7.78-1.34c-3.25 2.13-6.35 2.77-7.78 1.34S3.43 15.25 5.56 12C3.43 8.75 2.79 5.65 4.22 4.22m11.32 4.24c.61.62 1.17 1.25 1.69 1.88 1.38-2.13 1.88-3.96 1.13-4.7-.74-.75-2.57-.25-4.7 1.13.63.52 1.26 1.08 1.88 1.69m-7.08 7.08c-.61-.62-1.17-1.25-1.69-1.88-1.38 2.13-1.88 3.96-1.13 4.7.74.75 2.57.25 4.7-1.13-.63-.52-1.26-1.08-1.88-1.69m-2.82-9.9c-.75.74-.25 2.57 1.13 4.7.52-.63 1.08-1.26 1.69-1.88.62-.61 1.25-1.17 1.88-1.69-2.13-1.38-3.96-1.88-4.7-1.13m4.24 8.48c.7.7 1.42 1.34 2.12 1.91.7-.57 1.42-1.21 2.12-1.91s1.34-1.42 1.91-2.12c-.57-.7-1.21-1.42-1.91-2.12S12.7 8.54 12 7.97c-.7.57-1.42 1.21-2.12 1.91S8.54 11.3 7.97 12c.57.7 1.21 1.42 1.91 2.12m8.48 4.24c.75-.74.25-2.57-1.13-4.7-.52.63-1.08 1.26-1.69 1.88-.62.61-1.25 1.17-1.88 1.69 2.13 1.38 3.96 1.88 4.7 1.13"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            KDP - Keras Data Preprocessor
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              ⬆️ Upgrading from 1.11.x
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="black"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 6H7c-3.31 0-6 2.69-6 6s2.69 6 6 6h10c3.31 0 6-2.69 6-6s-2.69-6-6-6m0 10H7c-2.21 0-4-1.79-4-4s1.79-4 4-4h10c2.21 0 4 1.79 4 4s-1.79 4-4 4M7 9c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="teal" data-md-color-accent="teal"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 7H7a5 5 0 0 0-5 5 5 5 0 0 0 5 5h10a5 5 0 0 0 5-5 5 5 0 0 0-5-5m0 8a3 3 0 0 1-3-3 3 3 0 0 1 3-3 3 3 0 0 1 3 3 3 3 0 0 1-3 3"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/UnicoLab/keras-data-processor" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path fill="currentColor" d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Keras Data Preprocessor
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../index.html" title="KDP - Keras Data Preprocessor" class="md-nav__button md-logo" aria-label="KDP - Keras Data Preprocessor" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 11a1 1 0 0 1 1 1 1 1 0 0 1-1 1 1 1 0 0 1-1-1 1 1 0 0 1 1-1M4.22 4.22C5.65 2.79 8.75 3.43 12 5.56c3.25-2.13 6.35-2.77 7.78-1.34s.79 4.53-1.34 7.78c2.13 3.25 2.77 6.35 1.34 7.78s-4.53.79-7.78-1.34c-3.25 2.13-6.35 2.77-7.78 1.34S3.43 15.25 5.56 12C3.43 8.75 2.79 5.65 4.22 4.22m11.32 4.24c.61.62 1.17 1.25 1.69 1.88 1.38-2.13 1.88-3.96 1.13-4.7-.74-.75-2.57-.25-4.7 1.13.63.52 1.26 1.08 1.88 1.69m-7.08 7.08c-.61-.62-1.17-1.25-1.69-1.88-1.38 2.13-1.88 3.96-1.13 4.7.74.75 2.57.25 4.7-1.13-.63-.52-1.26-1.08-1.88-1.69m-2.82-9.9c-.75.74-.25 2.57 1.13 4.7.52-.63 1.08-1.26 1.69-1.88.62-.61 1.25-1.17 1.88-1.69-2.13-1.38-3.96-1.88-4.7-1.13m4.24 8.48c.7.7 1.42 1.34 2.12 1.91.7-.57 1.42-1.21 2.12-1.91s1.34-1.42 1.91-2.12c-.57-.7-1.21-1.42-1.91-2.12S12.7 8.54 12 7.97c-.7.57-1.42 1.21-2.12 1.91S8.54 11.3 7.97 12c.57.7 1.21 1.42 1.91 2.12m8.48 4.24c.75-.74.25-2.57-1.13-4.7-.52.63-1.08 1.26-1.69 1.88-.62.61-1.25 1.17-1.88 1.69 2.13 1.38 3.96 1.88 4.7 1.13"/></svg>
+
+    </a>
+    KDP - Keras Data Preprocessor
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/UnicoLab/keras-data-processor" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path fill="currentColor" d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Keras Data Preprocessor
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    🏠 Home
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    🚀 Getting Started
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            🚀 Getting Started
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    📦 Installation
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="quick-start.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    🎯 Quick Start
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="motivation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    🌍 Why KDP?
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="architecture.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    🧩 Architecture Overview
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    ⬆️ Upgrading from 1.11.x
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="upgrading.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    ⬆️ Upgrading from 1.11.x
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      📋 Overview
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#output-values-change" class="md-nav__link">
+    <span class="md-ellipsis">
+      ⚠️ Output values change
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#feature_crosses-reaches-the-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      ➕ feature_crosses reaches the output
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#feature-moe-routed-slices-not-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      🧩 Feature MoE routed slices, not features
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#feature-moe-routing-no-longer-depends-on-the-batch" class="md-nav__link">
+    <span class="md-ellipsis">
+      🎲 Feature MoE routing no longer depends on the batch
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advanced-numerical-embedding-on-discretised-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      🔢 Advanced numerical embedding on discretised features
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="🔢 Advanced numerical embedding on discretised features">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#dict-output-mode-plus-feature-moe-round-trips-again" class="md-nav__link">
+    <span class="md-ellipsis">
+      Dict output mode plus Feature MoE round-trips again
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#output_modetf_idf-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      🔤 output_mode="tf_idf" works
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#numericalfeatureuse_embeddingtrue-is-honoured" class="md-nav__link">
+    <span class="md-ellipsis">
+      🧮 NumericalFeature(use_embedding=True) is honoured
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#calendar-features-read-dates-not-floats" class="md-nav__link">
+    <span class="md-ellipsis">
+      📅 Calendar features read dates, not floats
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wavelet_transform_config-needs-a-window" class="md-nav__link">
+    <span class="md-ellipsis">
+      〰️ wavelet_transform_config needs a window
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tsfresh_feature_config-needs-a-window-too" class="md-nav__link">
+    <span class="md-ellipsis">
+      〰️ tsfresh_feature_config needs a window too
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-column-order-no-longer-moves-between-builds" class="md-nav__link">
+    <span class="md-ellipsis">
+      🔢 The column order no longer moves between builds
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#calendar-time-series-features-can-be-built" class="md-nav__link">
+    <span class="md-ellipsis">
+      📆 Calendar time series features can be built
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-tf_idf-text-model-can-be-reloaded" class="md-nav__link">
+    <span class="md-ellipsis">
+      💾 A tf_idf text model can be reloaded
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#feature-importances-rank-features-now" class="md-nav__link">
+    <span class="md-ellipsis">
+      🎯 Feature importances rank features now
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-output-is-always-a-table" class="md-nav__link">
+    <span class="md-ellipsis">
+      📐 The output is always a table
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#predict-takes-the-shapes-it-documents" class="md-nav__link">
+    <span class="md-ellipsis">
+      🧾 predict() takes the shapes it documents
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#max_tokens-and-ngrams-on-a-text-feature" class="md-nav__link">
+    <span class="md-ellipsis">
+      🔤 max_tokens and ngrams on a text feature
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configurations-that-are-now-rejected" class="md-nav__link">
+    <span class="md-ellipsis">
+      🚫 Configurations that are now rejected
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#time-series-options-that-did-not-do-what-they-said" class="md-nav__link">
+    <span class="md-ellipsis">
+      〰️ Time series options that did not do what they said
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="〰️ Time series options that did not do what they said">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a-nan-at-the-edge-of-a-series-reached-the-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      A NaN at the edge of a series reached the model
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options-that-are-accepted-and-do-nothing" class="md-nav__link">
+    <span class="md-ellipsis">
+      Options that are accepted and do nothing
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#textvectorizeroutputoptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      🔤 TextVectorizerOutputOptions
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#distributiontype" class="md-nav__link">
+    <span class="md-ellipsis">
+      📐 DistributionType
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#preferred_distribution-spelled-with-two-rs" class="md-nav__link">
+    <span class="md-ellipsis">
+      ✍️ preferred_distribution, spelled with two "r"s
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#missingvaluehandlerlayer-and-nan" class="md-nav__link">
+    <span class="md-ellipsis">
+      🕳️ MissingValueHandlerLayer and NaN
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#featuremoeget_expert_assignments" class="md-nav__link">
+    <span class="md-ellipsis">
+      📊 FeatureMoE.get_expert_assignments()
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#methods-the-documentation-promised" class="md-nav__link">
+    <span class="md-ellipsis">
+      🆕 Methods the documentation promised
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#existing-features_statsjson-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      🗂️ Existing features_stats.json files
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#missing-values-reaching-predict" class="md-nav__link">
+    <span class="md-ellipsis">
+      🕳️ Missing values reaching predict()
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-advisor-can-tell-distributions-apart" class="md-nav__link">
+    <span class="md-ellipsis">
+      📈 The advisor can tell distributions apart
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#columns-float32-cannot-hold" class="md-nav__link">
+    <span class="md-ellipsis">
+      ⚠️ Columns float32 cannot hold
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      🐍 Requirements
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#things-that-now-work-that-did-not-before" class="md-nav__link">
+    <span class="md-ellipsis">
+      ✅ Things that now work that did not before
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#moved-symbols" class="md-nav__link">
+    <span class="md-ellipsis">
+      🔀 Moved symbols
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    📚 Feature Types
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            📚 Feature Types
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/overview.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    🛠️ Features Overview
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/numerical-features.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    🔢 Numerical Features
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/categorical-features.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    🏷️ Categorical Features
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/text-features.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    📝 Text Features
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/date-features.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    📅 Date Features
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/time_series_features.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    📊 Time Series Features
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../time_series_inference.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    🔮 Time Series Inference
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/cross-features.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    ➕ Cross Features
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/passthrough-features.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    🔄 Passthrough Features
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    🧠 Advanced Features
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            🧠 Advanced Features
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced/distribution-aware-encoding.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    📊 Distribution-Aware Encoding
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced/numerical-embeddings.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    🔢 Advanced Numerical Embeddings
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced/tabular-attention.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    👁️ Tabular Attention
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced/transformer-blocks.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    🤖 Transformer Blocks
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced/feature-moe.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    🧩 Feature-wise Mixture of Experts
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../advanced/custom-preprocessing.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    🛠️ Custom Preprocessing Pipelines
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    ⚡ Optimization
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            ⚡ Optimization
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../optimization/feature-selection.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    🎯 Feature Selection
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../optimization/tabular-optimization.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    📈 Tabular Optimization
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../optimization/auto-configuration.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    ⚙️ Auto-Configuration
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    📖 Examples
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            📖 Examples
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/basic-examples.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    🧪 Basic Examples
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/complex-examples.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    🔥 Complex Examples
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples/categorical-hashing-example.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    🧮 Categorical Hashing
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    🔌 Integration
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            🔌 Integration
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../integrations/overview.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    🔄 Integration Overview
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    🤝 Contributing
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            🤝 Contributing
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing/overview.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    🍻 Contributing Guide
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing/development/auto-documentation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    📝 Auto-Documentation
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing/development/images-organization.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    🖼️ Images Organization
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    📑 API Reference
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            📑 API Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/layers-factory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    🏭 Layers Factory
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../generated/api_index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    📚 API Index
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      📋 Overview
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#output-values-change" class="md-nav__link">
+    <span class="md-ellipsis">
+      ⚠️ Output values change
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#feature_crosses-reaches-the-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      ➕ feature_crosses reaches the output
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#feature-moe-routed-slices-not-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      🧩 Feature MoE routed slices, not features
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#feature-moe-routing-no-longer-depends-on-the-batch" class="md-nav__link">
+    <span class="md-ellipsis">
+      🎲 Feature MoE routing no longer depends on the batch
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advanced-numerical-embedding-on-discretised-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      🔢 Advanced numerical embedding on discretised features
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="🔢 Advanced numerical embedding on discretised features">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#dict-output-mode-plus-feature-moe-round-trips-again" class="md-nav__link">
+    <span class="md-ellipsis">
+      Dict output mode plus Feature MoE round-trips again
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#output_modetf_idf-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      🔤 output_mode="tf_idf" works
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#numericalfeatureuse_embeddingtrue-is-honoured" class="md-nav__link">
+    <span class="md-ellipsis">
+      🧮 NumericalFeature(use_embedding=True) is honoured
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#calendar-features-read-dates-not-floats" class="md-nav__link">
+    <span class="md-ellipsis">
+      📅 Calendar features read dates, not floats
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wavelet_transform_config-needs-a-window" class="md-nav__link">
+    <span class="md-ellipsis">
+      〰️ wavelet_transform_config needs a window
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tsfresh_feature_config-needs-a-window-too" class="md-nav__link">
+    <span class="md-ellipsis">
+      〰️ tsfresh_feature_config needs a window too
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-column-order-no-longer-moves-between-builds" class="md-nav__link">
+    <span class="md-ellipsis">
+      🔢 The column order no longer moves between builds
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#calendar-time-series-features-can-be-built" class="md-nav__link">
+    <span class="md-ellipsis">
+      📆 Calendar time series features can be built
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-tf_idf-text-model-can-be-reloaded" class="md-nav__link">
+    <span class="md-ellipsis">
+      💾 A tf_idf text model can be reloaded
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#feature-importances-rank-features-now" class="md-nav__link">
+    <span class="md-ellipsis">
+      🎯 Feature importances rank features now
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-output-is-always-a-table" class="md-nav__link">
+    <span class="md-ellipsis">
+      📐 The output is always a table
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#predict-takes-the-shapes-it-documents" class="md-nav__link">
+    <span class="md-ellipsis">
+      🧾 predict() takes the shapes it documents
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#max_tokens-and-ngrams-on-a-text-feature" class="md-nav__link">
+    <span class="md-ellipsis">
+      🔤 max_tokens and ngrams on a text feature
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configurations-that-are-now-rejected" class="md-nav__link">
+    <span class="md-ellipsis">
+      🚫 Configurations that are now rejected
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#time-series-options-that-did-not-do-what-they-said" class="md-nav__link">
+    <span class="md-ellipsis">
+      〰️ Time series options that did not do what they said
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="〰️ Time series options that did not do what they said">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a-nan-at-the-edge-of-a-series-reached-the-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      A NaN at the edge of a series reached the model
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#options-that-are-accepted-and-do-nothing" class="md-nav__link">
+    <span class="md-ellipsis">
+      Options that are accepted and do nothing
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#textvectorizeroutputoptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      🔤 TextVectorizerOutputOptions
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#distributiontype" class="md-nav__link">
+    <span class="md-ellipsis">
+      📐 DistributionType
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#preferred_distribution-spelled-with-two-rs" class="md-nav__link">
+    <span class="md-ellipsis">
+      ✍️ preferred_distribution, spelled with two "r"s
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#missingvaluehandlerlayer-and-nan" class="md-nav__link">
+    <span class="md-ellipsis">
+      🕳️ MissingValueHandlerLayer and NaN
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#featuremoeget_expert_assignments" class="md-nav__link">
+    <span class="md-ellipsis">
+      📊 FeatureMoE.get_expert_assignments()
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#methods-the-documentation-promised" class="md-nav__link">
+    <span class="md-ellipsis">
+      🆕 Methods the documentation promised
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#existing-features_statsjson-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      🗂️ Existing features_stats.json files
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#missing-values-reaching-predict" class="md-nav__link">
+    <span class="md-ellipsis">
+      🕳️ Missing values reaching predict()
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-advisor-can-tell-distributions-apart" class="md-nav__link">
+    <span class="md-ellipsis">
+      📈 The advisor can tell distributions apart
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#columns-float32-cannot-hold" class="md-nav__link">
+    <span class="md-ellipsis">
+      ⚠️ Columns float32 cannot hold
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      🐍 Requirements
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#things-that-now-work-that-did-not-before" class="md-nav__link">
+    <span class="md-ellipsis">
+      ✅ Things that now work that did not before
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#moved-symbols" class="md-nav__link">
+    <span class="md-ellipsis">
+      🔀 Moved symbols
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="upgrading-from-111x">⬆️ Upgrading from 1.11.x</h1>
+<div class="feature-header">
+  <div class="feature-title">
+    <h2>Upgrade Guide</h2>
+    <p>What changes when you move off 1.11.x, and what you need to do about it.</p>
+  </div>
+</div>
+
+<h2 id="overview">📋 Overview</h2>
+<div class="overview-card">
+  <p>This release repairs defects that produced <strong>wrong numbers rather than errors</strong>. Pipelines that ran without complaint on 1.11.x will keep running, but several of them will now emit different values &mdash; correct ones. Re-train any downstream model that was fitted on the old output.</p>
+</div>
+
+<h2 id="output-values-change">⚠️ Output values change</h2>
+<p>These transforms returned incorrect values before. Nothing about your
+configuration changes, but the numbers coming out of the preprocessor do.</p>
+<table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Before</th>
+<th>Now</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Time series layers</td>
+<td><code>DifferencingLayer</code>, <code>MovingAverageLayer</code>, <code>RollingStatsLayer</code>, <code>LagFeatureLayer</code> and <code>AutoLagSelectionLayer</code> returned fixed constants for certain shapes instead of computing over the input</td>
+<td>Values are computed from the data in every case</td>
+</tr>
+<tr>
+<td><code>AutoLagSelectionLayer</code> on multi-channel input</td>
+<td>Lags were chosen from the autocorrelation of channel 0 alone, then applied to every channel, so reordering the columns of the same data changed the result</td>
+<td>The autocorrelation is averaged over the channels as well as the batch, so every channel contributes and the choice does not depend on column order</td>
+</tr>
+<tr>
+<td><code>TimeSeriesFeature.get_output_dim()</code> on wavelet, tsfresh or calendar configs</td>
+<td>Counted those transforms as columns added to the series. They replace it: the wavelet returns coefficients, tsfresh returns statistics, the calendar returns date components. The declared width matched no configuration at all</td>
+<td>Each layer is asked for its own width, so the number matches the tensor the stack produces</td>
+</tr>
+<tr>
+<td><code>DateFeature(add_season=True)</code></td>
+<td>The season layer ran after the cyclic encoding and read its column 1 — the cosine of the year, <code>1.0</code> for every row — as the month, so every date came out winter and the four season columns were constant</td>
+<td>The season is read from the month before the encoding replaces it, so the four columns carry the season. The output is the same width as before</td>
+</tr>
+<tr>
+<td>Any numeric column far from zero</td>
+<td>The variance was accumulated in float32 by subtracting the running mean from each raw value, so the arithmetic happened at the magnitude of the values. A column around <code>1e8</code> came back with a variance of <strong>minus</strong> 1.6e6 against a true 1.0e6, and <code>Normalization</code> then flattened it to a constant</td>
+<td>Accumulated in float64 and pooled batch by batch, so IDs, epoch timestamps and amounts in cents standardise to mean 0 and variance 1 like any other column</td>
+</tr>
+<tr>
+<td><code>path_data</code> pointing at a file</td>
+<td>The filename was discarded and every <code>*.csv</code> in that directory was read, so <code>path_data="data/train.csv"</code> computed its statistics over <code>test.csv</code> as well</td>
+<td>The named file is the only one read. A directory still reads every CSV in it, and a glob is passed through</td>
+</tr>
+<tr>
+<td>Grouped time series statistics</td>
+<td>Each group was replaced by copies of its own mean before combining, leaving only the variance <em>between</em> the group means — 0.73 against a true 643 for two groups of spread 25</td>
+<td>The groups are pooled whole, so the reported variance is the variance of the data</td>
+</tr>
+<tr>
+<td><code>DistributionTransformLayer</code> — <code>min-max</code></td>
+<td><code>min_value</code> and <code>max_value</code> were read as the range the data was assumed to be <em>in</em> rather than the range to scale it <em>onto</em>, so with their defaults of 0 and 1 the transform returned its input untouched. <code>clip_values</code> chose between that and the data's own range instead of clipping anything</td>
+<td>Each feature's own range is scaled onto <code>[min_value, max_value]</code>, and <code>clip_values</code> clips the result into it. <code>min-max</code> is also one of the candidates <code>transform_type="auto"</code> can pick, so an auto-selected column may change too</td>
+</tr>
+<tr>
+<td><code>DistributionTransformLayer</code> — <code>log</code></td>
+<td><code>log(x + epsilon)</code> with no guard on the domain, so any negative value returned <strong>NaN</strong>, which then travelled through every layer and every gradient downstream without a message</td>
+<td>Clamped at zero first, the way the neighbouring <code>sqrt</code> and <code>box-cox</code> already were, so a negative value lands on the floor of the transform rather than outside it</td>
+</tr>
+<tr>
+<td><code>DistributionTransformLayer</code> — <code>logit</code></td>
+<td>Clipped into <code>[epsilon, 1 - epsilon]</code>, but the default epsilon of <code>1e-10</code> is far below the float32 gap at 1.0, so the upper bound rounded back to exactly 1.0 and every value at or above 1 came out as <strong>+inf</strong></td>
+<td>The margin is at least one float32 step wide, so both ends of the clip bite</td>
+</tr>
+<tr>
+<td><code>DistributionTransformLayer</code> — <code>arcsinh</code></td>
+<td>Spelled out as <code>log(x + sqrt(x*x + 1))</code>, which loses the whole negative tail: at <code>x = -1e6</code> the square is <code>1e12</code>, float32 cannot hold the <code>+1</code>, the root is exactly <code>1e6</code>, the sum is exactly zero and the logarithm is <strong>-inf</strong></td>
+<td>Computed with <code>asinh</code>, which is the same function without the cancellation</td>
+</tr>
+<tr>
+<td>Text vocabularies</td>
+<td>The statistics lowercased and split on whitespace but kept punctuation, while <code>TextVectorization</code> strips punctuation before splitting. The vocabulary held <code>product,</code> and <code>it!</code> while the layer looked up <code>product</code> and <code>it</code>, so on ordinary prose roughly <strong>half of every sentence fell into the out-of-vocabulary slot</strong> — with the right output width and correct-looking counts</td>
+<td>The statistics standardize exactly as the layer does, so the vocabulary collected is the one that gets looked up</td>
+</tr>
+<tr>
+<td><code>DistributionTransformLayer</code> — <code>robust-scale</code></td>
+<td>Median and IQR were taken across the whole tensor</td>
+<td>Computed per feature, as the transform is defined</td>
+</tr>
+<tr>
+<td><code>DistributionTransformLayer</code> — <code>quantile</code></td>
+<td>Ranking was global</td>
+<td>Ranked per feature</td>
+</tr>
+<tr>
+<td>Distribution-aware encoding</td>
+<td><code>preferred_distribution</code> was accepted and then ignored, so the layer always auto-detected</td>
+<td>The requested distribution is honoured</td>
+</tr>
+<tr>
+<td>Output width</td>
+<td><code>get_output_dim()</code> combined dimensions additively for some feature configurations</td>
+<td>Combined multiplicatively, matching the tensor the model actually produces</td>
+</tr>
+<tr>
+<td>Time series + other features</td>
+<td>A time series feature could not be combined with any other feature: the warm-up rows <code>drop_na</code> removes left that column shorter and <code>Concatenate</code> raised</td>
+<td>Transforms preserve rows by default, so the documented combinations build</td>
+</tr>
+<tr>
+<td>Feature MoE in <code>concat</code> mode</td>
+<td>Only <code>feature_moe_num_experts</code>, <code>feature_moe_expert_dim</code> and <code>feature_moe_routing</code> reached the layer; <code>feature_moe_hidden_dims</code>, <code>feature_moe_sparsity</code>, <code>feature_moe_freeze_experts</code> and <code>feature_moe_dropout</code> were dropped on the floor</td>
+<td>Every option reaches the mixture, so a model that set them now has the network it asked for</td>
+</tr>
+<tr>
+<td><code>feature_moe_use_residual</code></td>
+<td>Stored on the model and read nowhere, so the residual connection it names never existed</td>
+<td>The original feature is added back onto its expert output wherever the widths match</td>
+</tr>
+<tr>
+<td><code>feature_moe_freeze_experts</code></td>
+<td>Passed <code>training=False</code> to the experts, which only changes dropout and batch norm; the weights still received gradients</td>
+<td>The experts are marked non-trainable, which is what the option says</td>
+</tr>
+<tr>
+<td><code>feature_moe_sparsity</code></td>
+<td>The top-k mask that enforces it sat behind <code>routing_activation != "softmax"</code>, which <code>PreprocessingModel</code> never exposes, so every feature was routed densely to every expert</td>
+<td>Each feature reaches at most <code>feature_moe_sparsity</code> experts, as documented. With the defaults (4 experts, sparsity 2) a learned-routing model produces different values than it did</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition danger">
+<p class="admonition-title">Statistics change for two common shapes of data</p>
+<p>If any numeric column sits far from zero — an ID, a UNIX timestamp, an
+amount in cents — its statistics were wrong and the column reached your
+model as a constant. It now carries its signal, which changes that
+column's output completely.</p>
+<p>Separately, if you passed <code>path_data</code> a <strong>file</strong> in a directory holding
+other CSVs, the statistics were computed over all of them. If that
+directory held your test set, it was folded into the training statistics.
+Recompute with <code>overwrite_stats=True</code>; any <code>features_stats.json</code> written
+before this release may be built from the wrong rows.</p>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">Re-train downstream models</p>
+<p>If you trained a model on top of KDP output from 1.11.x and any of the
+rows above apply to your feature set, the preprocessor now feeds it
+different numbers. Re-fit before you compare metrics.</p>
+</div>
+<h2 id="feature_crosses-reaches-the-output">➕ <code>feature_crosses</code> reaches the output</h2>
+<p>Every cross was built and then dropped. <code>_group_features_by_type</code> looks each
+processed feature up in <code>features_specs</code>, and a cross is configured with
+<code>feature_crosses</code> rather than by declaring a column, so the lookup found
+nothing and skipped it. In the default <code>concat</code> output mode the option did
+nothing at all: the model built, ran, and had exactly the width it would have
+had with no crosses.</p>
+<p>Each cross now appends one column — the bin the <code>(feature_a, feature_b)</code> pair
+hashes into — alongside the categorical features. <strong>A model that set
+<code>feature_crosses</code> is wider than it was</strong>, so re-train anything fitted on the
+old output.</p>
+<p>Two configurations that used to fail later now fail where you wrote them:</p>
+<ul>
+<li>Crossing a float column. <code>HashedCrossing</code> hashes raw values and accepts only
+  integers and strings; a float built a model that looked complete and raised
+  on the first batch it was given. Bucket the column into a categorical one
+  first.</li>
+<li>Naming a feature that is not in <code>features_specs</code>, which surfaced as a bare
+  <code>KeyError</code>.</li>
+</ul>
+<h2 id="feature-moe-routed-slices-not-features">🧩 Feature MoE routed slices, not features</h2>
+<p>Three defects compounded here, and together they meant the mixture was rarely
+routing what it claimed to.</p>
+<p><code>processed_features_dims</code> was written as a flat <code>{name: dim}</code> mapping and read
+back as a nested one keyed by <code>"numeric"</code>/<code>"categorical"</code>, so the lookup always
+missed. The code then fell back to cutting the concatenated tensor into equal
+parts. With features of unequal width -- a normalised float is one column, a
+discretised one is ten -- that split lands mid-feature: given widths 1, 1 and
+10 it cut 12 columns as <code>[4, 4, 4]</code>, so every "feature" the router saw was a
+slice spanning several real ones, and <code>feature_moe_assignments</code> named the wrong
+thing. Nothing raised; the model built, trained and produced numbers.</p>
+<p>In <code>dict</code> output mode the same mismatch raised instead, on the first batch
+rather than at build time: <code>StackFeaturesLayer</code> reported the <em>first</em> feature's
+width whatever the others were, so Keras built a graph the layer could not
+execute.</p>
+<p>Both are fixed by taking the widths and names from the tensors that were
+actually concatenated, and padding features up to a common width before
+stacking. Padding is parameter-free, so a model whose features are all the same
+width is unchanged; a model with mixed widths was previously routing scrambled
+input and now routes real features.</p>
+<div class="admonition warning">
+<p class="admonition-title">Retrain any model that used Feature MoE with mixed-width features</p>
+<p>Its inputs were being sliced at the wrong offsets. The numbers coming out
+of the mixture are different now, and correct.</p>
+</div>
+<p><code>use_feature_moe</code> combined with <code>use_global_numerical_embedding</code> raises rather
+than producing nonsense: the global embedding merges every numeric feature into
+one vector, leaving no per-feature slices for the mixture to route.</p>
+<h2 id="feature-moe-routing-no-longer-depends-on-the-batch">🎲 Feature MoE routing no longer depends on the batch</h2>
+<p>Learned routing fed a Dense layer the <em>batch mean</em> of the features, so the
+routing weights changed with whatever rows happened to share a batch. Changing
+one row moved every row's output, and the same record scored alone did not
+match itself scored in a batch: training and single-record serving disagreed
+for reasons nothing in the configuration explained.</p>
+<p>Feature-level routing is a property of the feature, not of the data passing
+through, so the logits now live in a trainable weight with one row per feature.
+Routing is identical for every row and every batch, and still learned.</p>
+<div class="code-container">
+
+<div class="highlight"><pre><span></span><code><span class="n">moe</span> <span class="o">=</span> <span class="n">preprocessor</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">get_layer</span><span class="p">(</span><span class="s2">&quot;feature_moe_concat&quot;</span><span class="p">)</span>
+
+<span class="n">moe</span><span class="o">.</span><span class="n">routing_logits</span>          <span class="c1"># (num_features, num_experts), trainable</span>
+</code></pre></div>
+
+</div>
+
+<div class="admonition warning">
+<p class="admonition-title">Retrain models that used learned Feature MoE routing</p>
+<p>The old <code>router</code> Dense layer is gone, so its weights cannot be loaded, and
+the routing a trained model learned was a function of its batches.</p>
+</div>
+<h2 id="advanced-numerical-embedding-on-discretised-features">🔢 Advanced numerical embedding on discretised features</h2>
+<p><code>NumericalEmbedding</code> embeds each column it receives, so a feature arriving one
+column wide came back rank 2 and a discretised one -- ten one-hot columns --
+came back rank 3. Mixing the two failed in <code>Concatenate</code>, and a model built only
+from discretised features silently produced a three-dimensional output. The
+embedding output is flattened now, so every numeric feature is rank 2:
+a discretised feature with <code>embedding_dim=8</code> contributes 80 columns rather
+than a <code>(10, 8)</code> block.</p>
+<h3 id="dict-output-mode-plus-feature-moe-round-trips-again">Dict output mode plus Feature MoE round-trips again</h3>
+<p>That combination used to come back from a save/load with two features holding
+each other's projection weights. <code>.keras</code> stores a layer's weights under a name
+derived from its class and the order it was built -- <code>dense</code>, <code>dense_1</code> -- not
+the name you gave it, and Keras reorders sibling layers when it rebuilds a
+functional graph from config. Dict mode used one <code>Dense</code> per feature, so four
+siblings were enough to cross them.</p>
+<p>The per-feature projections are one <code>PerFeatureDense</code> layer now, holding a
+kernel and bias per feature. The arithmetic is identical and there is no
+sibling to be confused with, so the round trip is exact.</p>
+<h2 id="output_modetf_idf-works">🔤 <code>output_mode="tf_idf"</code> works</h2>
+<p>TF-IDF weights each token by how rare it is across documents, and Keras refuses
+a vocabulary in that mode without matching <code>idf_weights</code> -- which KDP's
+statistics never collected. The documented, exported <code>TF_IDF</code> mode therefore
+could not build at all. The vectorizer is adapted on the column now, which
+computes the vocabulary and the weights together from the same data the
+statistics came from.</p>
+<h2 id="numericalfeatureuse_embeddingtrue-is-honoured">🧮 <code>NumericalFeature(use_embedding=True)</code> is honoured</h2>
+<p>The flag was stored on the feature and read nowhere, so a feature asking for its
+own embedding came through at its original width. It now turns the embedding on
+for that feature alone, the way <code>use_advanced_numerical_embedding</code> does for all
+of them:</p>
+<div class="code-container">
+
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">kdp.features</span><span class="w"> </span><span class="kn">import</span> <span class="n">FeatureType</span><span class="p">,</span> <span class="n">NumericalFeature</span>
+
+<span class="n">NumericalFeature</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;revenue&quot;</span><span class="p">,</span>
+    <span class="n">feature_type</span><span class="o">=</span><span class="n">FeatureType</span><span class="o">.</span><span class="n">FLOAT_NORMALIZED</span><span class="p">,</span>
+    <span class="n">use_embedding</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">embedding_dim</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span>      <span class="c1"># this feature is six columns wide now, not one</span>
+<span class="p">)</span>
+</code></pre></div>
+
+</div>
+
+<h2 id="calendar-features-read-dates-not-floats">📅 Calendar features read dates, not floats</h2>
+<p><code>calendar_feature_config</code> on a <code>TimeSeriesFeature</code> failed with "Cast string to
+float is not supported": the pipeline declared the column float and cast it
+before the calendar layer ever saw it. Such a feature declares a string column
+now and skips the numeric front of the pipeline. Because one column cannot be
+both a date and a number, combining it with <code>lag_config</code>,
+<code>rolling_stats_config</code>, <code>differencing_config</code>, <code>moving_average_config</code>,
+<code>wavelet_transform_config</code> or <code>tsfresh_feature_config</code> raises -- declare those
+as separate features.</p>
+<h2 id="wavelet_transform_config-needs-a-window">〰️ <code>wavelet_transform_config</code> needs a window</h2>
+<p>The wavelet layer computed <code>min(window, time_steps // 2)</code>, which is <code>0</code> for the
+one-column input a time series feature hands it, and the empty coefficients
+failed to broadcast. It also wrote the window sizes back onto itself, so the
+first batch pinned them for good. Both are fixed, and a wavelet with only one
+step to work on now raises instead of emitting a constant column of zeros:
+combine it with <code>lag_config</code>, <code>rolling_stats_config</code> or <code>moving_average_config</code>
+so there is a window to decompose.</p>
+<h2 id="tsfresh_feature_config-needs-a-window-too">〰️ <code>tsfresh_feature_config</code> needs a window too</h2>
+<p>The same shape as the wavelet, one section up. A time series feature hands one
+column per row over, <code>window_size</code> is clamped to the number of steps available,
+and every statistic over a window of one is degenerate: the mean, the minimum
+and the maximum are all the value itself and the standard deviation is zero. A
+<code>tsfresh_feature_config</code> asking for four statistics therefore returned the input
+column three times plus a column of zeros -- four engineered features carrying
+nothing, produced without a word. It raises now, naming the configs that widen
+the feature; paired with any of them the statistics match <code>pandas.rolling</code>
+exactly.</p>
+<h2 id="the-column-order-no-longer-moves-between-builds">🔢 The column order no longer moves between builds</h2>
+<p>Features are preprocessed in parallel batches, and the concatenated output was
+assembled by walking a dict keyed in whichever order the workers happened to
+finish. Building the same configuration twice laid the columns out differently
+— five distinct layouts in six builds of the same six features. Nothing raised,
+and each build's numbers were right for the layout it chose.</p>
+<p>The damage lands on anyone who trains a model on one build of the preprocessor
+and serves it from another: every feature is read as a different one. Reloading
+a saved <code>.keras</code> file was never affected, because the order is baked into its
+graph.</p>
+<p>Columns now follow the order features are declared in — numeric first, then
+categorical, then any crosses — and <code>processed_features_dims</code> reports the same
+order. <strong>If you recorded a column-to-feature mapping from an earlier build,
+take it again.</strong></p>
+<h2 id="calendar-time-series-features-can-be-built">📆 Calendar time series features can be built</h2>
+<p>The documented way to ask for calendar components is a <code>TimeSeriesFeature</code>
+whose <code>calendar_feature_config</code> names them. Its column holds dates, and
+everything it produces is derived from that string by <code>CalendarFeatureLayer</code> --
+there is no mean or variance to take. The statistics pass fed the column to the
+numeric accumulator anyway and died inside a <code>tf.function</code> with <code>Cast string to
+double is not supported</code>, so the whole configuration could not be built. The
+layer had tests; the path from <code>PreprocessingModel</code> to it did not.</p>
+<p>Calendar columns are skipped in the numeric statistics now. With
+<code>normalize=False</code> every component matches what pandas reads off the same
+column; with the default <code>normalize=True</code> they are scaled into <code>[0, 1]</code>.</p>
+<h2 id="a-tf_idf-text-model-can-be-reloaded">💾 A <code>tf_idf</code> text model can be reloaded</h2>
+<p>Saving worked; loading raised <code>object of type 'bool' has no len()</code>. Keras writes
+a <code>tf_idf</code> vectorizer's IDF weights as layer variables and, on load, assigns
+them to a layer that has no vocabulary yet and therefore no such variable. It
+happens with <code>TextVectorization</code> alone, with no KDP in the picture. The
+vocabulary and the weights are now passed to the constructor, where the config
+carries them and loading reads them; the layer computes the same numbers either
+way.</p>
+<h2 id="feature-importances-rank-features-now">🎯 Feature importances rank features now</h2>
+<p><code>get_feature_importances()</code> returned <code>1.0</code> for every feature, on every input.
+Selection wrapped each feature in its own <code>VariableSelection</code> with
+<code>nr_features=1</code>, and a softmax over one element is <code>1.0</code> by definition: the
+gating was real, the numbers ranked nothing, and the documentation had to say
+so.</p>
+<p>A single softmax now scores every selected feature against the others. The
+scores sum to one across features and scale each feature's output, so the
+importances are shares you can sort. The output width is unchanged -- each
+selected feature is still <code>feature_selection_units</code> wide.</p>
+<div class="code-container">
+
+<div class="highlight"><pre><span></span><code><span class="n">importances</span> <span class="o">=</span> <span class="n">preprocessor</span><span class="o">.</span><span class="n">get_feature_importances</span><span class="p">(</span><span class="n">batch</span><span class="p">)</span>
+<span class="c1"># {&quot;age&quot;: 0.39, &quot;income&quot;: 0.35, &quot;city&quot;: 0.18, &quot;signup_date&quot;: 0.08}</span>
+</code></pre></div>
+
+</div>
+
+<div class="admonition warning">
+<p class="admonition-title">Feature selection changes values</p>
+<p>Each selected feature is scaled by its score, where before it was
+multiplied by <code>1.0</code>. A model trained on the old output should be retrained.</p>
+</div>
+<h2 id="the-output-is-always-a-table">📐 The output is always a table</h2>
+<p>A transformer block adds a sequence axis to a 2-D input and hands it back. The
+<code>categorical</code> placement removed it again; <code>transfo_placement="all_features"</code>
+did not, so that one configuration returned <code>(rows, 1, width)</code> while every
+other returned <code>(rows, width)</code> — enough to break a <code>Dense</code> head bolted onto the
+preprocessor, decided by a flag that says nothing about shape.</p>
+<p>Every configuration now returns <code>(rows, width)</code>. If you added a <code>Reshape</code> or a
+<code>Flatten</code> after the preprocessor to work around this, remove it.</p>
+<h2 id="predict-takes-the-shapes-it-documents">🧾 <code>predict()</code> takes the shapes it documents</h2>
+<p>Its docstring offers "pandas DataFrame, dict, or TensorFlow dataset". A
+DataFrame went straight to Keras, which reads a frame as a block of floats and
+raised <code>could not convert string to float</code> on the first categorical column. A
+dict of flat lists — the natural spelling, and exactly what
+<code>InferenceFormatter</code> produces — converted to shape <code>(N,)</code> where every input is
+declared <code>(N, 1)</code>, and failed with <code>as_list() is not defined on an unknown
+TensorShape</code>. Both carried the right values; only the container was wrong.</p>
+<div class="code-container">
+
+<div class="highlight"><pre><span></span><code><span class="c1"># All four of these now give the same tensor.</span>
+<span class="n">preprocessor</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">frame</span><span class="p">)</span>
+<span class="n">preprocessor</span><span class="o">.</span><span class="n">predict</span><span class="p">({</span><span class="s2">&quot;age&quot;</span><span class="p">:</span> <span class="n">frame</span><span class="p">[</span><span class="s2">&quot;age&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">tolist</span><span class="p">(),</span> <span class="s2">&quot;city&quot;</span><span class="p">:</span> <span class="n">frame</span><span class="p">[</span><span class="s2">&quot;city&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">tolist</span><span class="p">()})</span>
+<span class="n">preprocessor</span><span class="o">.</span><span class="n">predict</span><span class="p">({</span><span class="s2">&quot;age&quot;</span><span class="p">:</span> <span class="p">[[</span><span class="mf">35.0</span><span class="p">]],</span> <span class="s2">&quot;city&quot;</span><span class="p">:</span> <span class="p">[[</span><span class="s2">&quot;paris&quot;</span><span class="p">]]})</span>
+<span class="n">preprocessor</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">tf</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">Dataset</span><span class="o">.</span><span class="n">from_tensor_slices</span><span class="p">(</span><span class="nb">dict</span><span class="p">(</span><span class="n">frame</span><span class="p">))</span><span class="o">.</span><span class="n">batch</span><span class="p">(</span><span class="mi">32</span><span class="p">))</span>
+</code></pre></div>
+
+</div>
+
+<h2 id="max_tokens-and-ngrams-on-a-text-feature">🔤 <code>max_tokens</code> and <code>ngrams</code> on a text feature</h2>
+<p>Both were accepted and neither could work, because the vocabulary handed to
+<code>TextVectorization</code> came from the statistics pass, which collects single
+standardized words:</p>
+<ul>
+<li><code>max_tokens</code> below the vocabulary the data holds was refused by Keras with
+  "Attempted to set a vocabulary larger than the maximum vocab size", so the
+  only reason to set the option — asking for a smaller vocabulary — could not
+  build. A larger one worked and did nothing.</li>
+<li><code>ngrams</code> asked for word pairs the statistics never recorded, so every n-gram
+  landed in the single out-of-vocabulary slot. The output width did not move.</li>
+</ul>
+<p>Either option, and a custom <code>standardize</code> or <code>split</code>, now reads the column
+again and lets the layer build the vocabulary it will actually use — the same
+thing <code>output_mode="tf_idf"</code> already did. <strong>A model that set <code>ngrams</code> is wider
+than it was.</strong></p>
+<h2 id="configurations-that-are-now-rejected">🚫 Configurations that are now rejected</h2>
+<p>These configurations used to be accepted and then silently do the wrong thing.
+They raise now, with a message naming what to fix.</p>
+<div class="code-container">
+
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">kdp</span><span class="w"> </span><span class="kn">import</span> <span class="n">PreprocessingModel</span><span class="p">,</span> <span class="n">FeatureType</span>
+
+<span class="n">features</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;age&quot;</span><span class="p">:</span> <span class="n">FeatureType</span><span class="o">.</span><span class="n">FLOAT_NORMALIZED</span><span class="p">,</span>
+    <span class="s2">&quot;income&quot;</span><span class="p">:</span> <span class="n">FeatureType</span><span class="o">.</span><span class="n">FLOAT_RESCALED</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="c1"># Predefined MoE routing with an incomplete map. &quot;income&quot; had no expert, so</span>
+<span class="c1"># its routing row was all zeros and the feature was multiplied away -- the</span>
+<span class="c1"># model built, ran, and silently dropped the column.</span>
+<span class="n">PreprocessingModel</span><span class="p">(</span>
+    <span class="n">path_data</span><span class="o">=</span><span class="s2">&quot;data.csv&quot;</span><span class="p">,</span>
+    <span class="n">features_specs</span><span class="o">=</span><span class="n">features</span><span class="p">,</span>
+    <span class="n">use_feature_moe</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">feature_moe_routing</span><span class="o">=</span><span class="s2">&quot;predefined&quot;</span><span class="p">,</span>
+    <span class="n">feature_moe_assignments</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;age&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;income&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">},</span>  <span class="c1"># every feature, or ValueError</span>
+<span class="p">)</span>
+</code></pre></div>
+
+</div>
+
+<p>An expert index outside the mixture, or a name the mixture never sees, is
+rejected the same way.</p>
+<p>A date format the parser cannot read is the next. <code>DateFeature</code> never read the
+format string it was given, so <code>format="%d-%m-%Y"</code> was accepted, ignored, and
+met again at the first batch as an assertion failure inside a TensorFlow graph
+error, far from the line that caused it. Dates are read as year, then month,
+then day; anything else raises where you write it. <code>date_format</code> is accepted as
+a synonym for <code>format</code>, and <code>output_format</code> and <code>extract</code> — which nothing reads
+— now say so in a warning.</p>
+<p>The same parser gained a capability rather than losing one: a time after the
+date is dropped instead of rejected, so <code>"2021-06-15 13:45:00"</code> and its ISO
+<code>T</code> spelling are read as the date they carry. A timestamp column previously had
+no way through the layer at all.</p>
+<p>A categorical feature whose column holds no values at all is the other case. Its
+vocabulary came back empty and was replaced with <code>["&lt;UNK&gt;"]</code>, which for a string
+feature encoded every real value to the out-of-vocabulary slot — a constant
+column, produced without a word — and for an integer feature failed inside Keras
+with <code>invalid literal for int() with base 10</code>, naming neither the feature nor
+the cause. Both now raise a <code>ValueError</code> that names the feature and points at
+<code>CategoryEncodingOptions.HASHING</code>, which needs no vocabulary.</p>
+<p>This check is deliberately narrow. A column of empty strings has the vocabulary
+<code>[""]</code> and a column with one repeated value has a vocabulary of length one;
+neither is empty, and both still build.</p>
+<h2 id="time-series-options-that-did-not-do-what-they-said">〰️ Time series options that did not do what they said</h2>
+<p>Two of these raised on every input they were given. The rest were accepted and
+changed nothing.</p>
+<p><code>WaveletTransformLayer(flatten_output=False)</code> returned an array of zeros —
+every coefficient it had just computed, discarded — and then declared a rank-2
+shape for the rank-3 tensor it returned, so <code>set_shape</code> rejected it before the
+zeros could reach anyone. It now returns the same coefficients as
+<code>flatten_output=True</code>, split out per input channel, and inside a
+<code>TimeSeriesFeature</code> they are folded back into the feature's columns, so the
+width is the same either way.</p>
+<p><code>TSFreshFeatureLayer(window_size=...)</code> computed the window count from the raw
+<code>window_size</code> while the extraction clamped it to the length of the series.
+A window longer than the series therefore declared a negative number of
+windows and raised <code>Dimension -1 must be &gt;= 0</code>. A window longer than the
+series now covers all of it, which is one window.</p>
+<p><code>CalendarFeatureLayer(cyclic_encoding=...)</code> was accepted, stored and
+serialized, and read nowhere: the output is identical whichever value you
+pass. The sin/cos components are requested by name, and always were —
+<code>features=["month_sin", "month_cos", "day_of_week_sin", "day_of_week_cos"]</code>.
+The flag is deprecated, warns when you pass it, and still loads.</p>
+<div class="admonition warning">
+<p class="admonition-title"><code>month</code> is not cyclic</p>
+<p>If you asked for <code>month</code> and set <code>cyclic_encoding=True</code>, you were getting a
+plain normalised month all along, where December and January sit at
+opposite ends of the range. Add <code>month_sin</code> and <code>month_cos</code> to <code>features</code>
+to get the encoding the flag promised. This widens your output, so re-fit
+anything trained on it.</p>
+</div>
+<h3 id="a-nan-at-the-edge-of-a-series-reached-the-model">A <code>NaN</code> at the edge of a series reached the model</h3>
+<p>No imputation strategy can fill a gap at the very start or end of a series: a
+gap at the start has nothing before it to carry forward, a gap at the end
+nothing after it to carry back. <code>MissingValueHandlerLayer</code> has an <code>extrapolate</code>
+option, documented and defaulting to <code>True</code>, that names exactly this case — and
+it was read nowhere. With the default <code>forward_fill</code> strategy and
+<code>mask_value=float("nan")</code>, a leading <code>NaN</code> came back untouched and went
+straight into the model; <code>backward_fill</code> and <code>linear_interpolation</code> did the
+same at the end.</p>
+<p>Those gaps now take the nearest value that is not itself a gap, so no strategy
+leaves a missing value behind. A series missing everywhere has nothing to reach
+for and becomes zeros. Setting <code>extrapolate=False</code> keeps the old behaviour, and
+now genuinely means it.</p>
+<h3 id="options-that-are-accepted-and-do-nothing">Options that are accepted and do nothing</h3>
+<p>Each of these was stored, round-tripped through <code>get_config</code>, and read nowhere.
+None of them raises — they are documented as inert so nobody plans around
+behaviour that is not there:</p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Why it does nothing</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>WaveletTransformLayer(drop_na=...)</code></td>
+<td>The transform zero-fills, so no row carries a <code>NaN</code> for it to drop</td>
+</tr>
+<tr>
+<td><code>MovingAverageLayer(pad_value=...)</code></td>
+<td>With <code>drop_na=False</code> the leading rows keep their original values instead of being padded</td>
+</tr>
+<tr>
+<td><code>CalendarFeatureLayer(onehot_categorical=...)</code></td>
+<td>Every requested feature comes back as one numeric column</td>
+</tr>
+<tr>
+<td><code>CalendarFeatureLayer(cyclic_encoding=...)</code></td>
+<td>See above — the components are requested by name</td>
+</tr>
+<tr>
+<td><code>DistributionAwareEncoder(handle_sparsity=...)</code></td>
+<td>Sparse data is detected and handled as one of the recognised distributions either way</td>
+</tr>
+<tr>
+<td><code>DateParsingLayer(date_format=...)</code></td>
+<td>Both <code>YYYY-MM-DD</code> and <code>YYYY/MM/DD</code> are parsed regardless; the separator is normalised first</td>
+</tr>
+<tr>
+<td><code>FeatureMoE(routing_activation=...)</code></td>
+<td>Routing is always a softmax. For fewer experts per feature, use <code>sparsity</code></td>
+</tr>
+</tbody>
+</table>
+<p>A test now walks every class in <code>kdp</code> and fails on a constructor argument that
+is stored and never read unless its docstring says so, so this list cannot grow
+without someone deciding it should.</p>
+<h2 id="textvectorizeroutputoptions">🔤 <code>TextVectorizerOutputOptions</code></h2>
+<p><code>kdp.features</code> and <code>kdp.processor</code> each defined a class of this name.  The
+<code>kdp.processor</code> one held the strings Keras accepts; the <code>kdp.features</code> one held
+<code>auto()</code> integers, so <code>TextFeature(output_mode=TextVectorizerOutputOptions.TF_IDF)</code>
+produced <code>1</code> and matched nothing. There is one class now, exported from <code>kdp</code>,
+whose members are the strings:</p>
+<div class="code-container">
+
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">kdp</span><span class="w"> </span><span class="kn">import</span> <span class="n">TextVectorizerOutputOptions</span>
+
+<span class="n">TextVectorizerOutputOptions</span><span class="o">.</span><span class="n">TF_IDF</span> <span class="o">==</span> <span class="s2">&quot;tf_idf&quot;</span>      <span class="c1"># True, was False</span>
+</code></pre></div>
+
+</div>
+
+<p>If you compared against <code>.value</code> and got <code>1</code>, <code>2</code> or <code>3</code>, that comparison now
+sees <code>"tf_idf"</code>, <code>"int"</code> and <code>"multi_hot"</code>.</p>
+<h2 id="distributiontype">📐 <code>DistributionType</code></h2>
+<p>Like <code>TextVectorizerOutputOptions</code>, this enum existed twice. The <code>kdp.features</code>
+copy carried a <code>WEIBULL</code> member the encoder has never known, so
+<code>preferred_distribution=DistributionType.WEIBULL</code> was warned about and replaced
+with <code>"normal"</code>. There is one class now -- the encoder's own -- and every
+member it exposes is a distribution the encoder accepts. <code>WEIBULL</code> is gone
+rather than silently ignored.</p>
+<p>Note also that <code>BOUNDED</code>, <code>ORDINAL</code> and <code>POISSON</code> can be requested explicitly
+but are never returned by automatic detection: the detector scores no evidence
+for them.</p>
+<h2 id="preferred_distribution-spelled-with-two-rs">✍️ <code>preferred_distribution</code>, spelled with two "r"s</h2>
+<p><code>kdp.layers</code> and the model advisor spell this option <code>prefered_distribution</code>,
+with one "r", while <code>NumericalFeature</code> takes <code>preferred_distribution</code>. The
+feature swallows <code>**kwargs</code>, so the misspelling was discarded and the feature
+stayed on automatic detection while looking configured. The advisor's own
+recommendation went the same way, and the code snippet it generates never
+carried the distribution at all -- so following <code>auto_configure()</code> end to end
+gave you none of its distribution advice.</p>
+<p>Three changes:</p>
+<ul>
+<li><code>NumericalFeature</code> accepts <code>prefered_distribution</code> as a deprecated alias and
+  warns. Existing code keeps working.</li>
+<li>The advisor's recommendation now uses the key <code>preferred_distribution</code>. If
+  you read <code>recommendation["config"]["prefered_distribution"]</code>, read the
+  correctly spelled key instead.</li>
+<li>The generated snippet writes <code>preferred_distribution=...</code> onto the feature.</li>
+</ul>
+<div class="code-container">
+
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">kdp.features</span><span class="w"> </span><span class="kn">import</span> <span class="n">FeatureType</span><span class="p">,</span> <span class="n">NumericalFeature</span>
+
+<span class="n">NumericalFeature</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;revenue&quot;</span><span class="p">,</span>
+    <span class="n">feature_type</span><span class="o">=</span><span class="n">FeatureType</span><span class="o">.</span><span class="n">FLOAT_RESCALED</span><span class="p">,</span>
+    <span class="n">preferred_distribution</span><span class="o">=</span><span class="s2">&quot;log_normal&quot;</span><span class="p">,</span>   <span class="c1"># two &quot;r&quot;s</span>
+<span class="p">)</span>
+</code></pre></div>
+
+</div>
+
+<h2 id="missingvaluehandlerlayer-and-nan">🕳️ <code>MissingValueHandlerLayer</code> and NaN</h2>
+<p>Missing values were found with <code>inputs == mask_value</code>, and NaN compares equal
+to nothing -- not even itself -- so a series carrying the marker pandas and
+numpy actually use passed through untouched, and those NaNs then poisoned
+every statistic computed from it. No value of <code>mask_value</code> could select them.
+Setting <code>mask_value</code> to NaN now does:</p>
+<div class="code-container">
+
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">kdp.layers.time_series.missing_value_handler_layer</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">MissingValueHandlerLayer</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">MissingValueHandlerLayer</span><span class="p">(</span><span class="n">mask_value</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="s2">&quot;nan&quot;</span><span class="p">),</span> <span class="n">strategy</span><span class="o">=</span><span class="s2">&quot;linear_interpolation&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+
+<p>A sentinel such as <code>0.0</code> behaves exactly as before.</p>
+<h2 id="featuremoeget_expert_assignments">📊 <code>FeatureMoE.get_expert_assignments()</code></h2>
+<p>It returned an empty dictionary for learned routing -- the default -- so the
+documented way to see which expert handles which feature reported nothing. It
+answers for both routing modes now, as <code>{feature: {expert_index: weight}}</code>.
+Learned routing decides from the data, so pass it a batch:</p>
+<div class="code-container">
+
+<div class="highlight"><pre><span></span><code><span class="n">moe</span> <span class="o">=</span> <span class="n">preprocessor</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">get_layer</span><span class="p">(</span><span class="s2">&quot;feature_moe_concat&quot;</span><span class="p">)</span>
+
+<span class="n">moe</span><span class="o">.</span><span class="n">get_expert_assignments</span><span class="p">()</span>            <span class="c1"># predefined routing</span>
+<span class="n">moe</span><span class="o">.</span><span class="n">get_expert_assignments</span><span class="p">(</span><span class="n">batch</span><span class="p">)</span>       <span class="c1"># learned routing</span>
+</code></pre></div>
+
+</div>
+
+<p>Predefined routing used to return the map you passed in, unchanged. It now
+returns the same information as weights: <code>{"age": 0}</code> reads back as
+<code>{"age": {0: 1.0}}</code>.</p>
+<h2 id="methods-the-documentation-promised">🆕 Methods the documentation promised</h2>
+<p><code>get_timing_metrics()</code>, <code>get_memory_usage()</code> and <code>plot_model()</code> appeared in the
+docs and did not exist. They do now:</p>
+<div class="code-container">
+
+<div class="highlight"><pre><span></span><code><span class="n">preprocessor</span><span class="o">.</span><span class="n">build_preprocessor</span><span class="p">()</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="n">preprocessor</span><span class="o">.</span><span class="n">get_timing_metrics</span><span class="p">()[</span><span class="s2">&quot;total_seconds&quot;</span><span class="p">])</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">preprocessor</span><span class="o">.</span><span class="n">get_memory_usage</span><span class="p">()[</span><span class="s2">&quot;peak_mb&quot;</span><span class="p">])</span>
+<span class="n">preprocessor</span><span class="o">.</span><span class="n">plot_model</span><span class="p">(</span><span class="s2">&quot;architecture.png&quot;</span><span class="p">)</span>   <span class="c1"># needs pydot and Graphviz</span>
+</code></pre></div>
+
+</div>
+
+<p><code>get_feature_importance()</code>, <code>plot_feature_importance()</code>, <code>get_top_features()</code>,
+<code>update_statistics()</code>, <code>transform()</code> and <code>fit()</code> were documented too and were
+never real. The pages that used them now show the working equivalents:
+<code>get_feature_importances()</code>, an <code>overwrite_stats=True</code> rebuild, and calling the
+built Keras model on a batch.</p>
+<h2 id="existing-features_statsjson-files">🗂️ Existing <code>features_stats.json</code> files</h2>
+<p>Statistics files written by 1.11.2 and earlier stored categorical
+vocabularies as byte reprs — the literal string <code>"b'paris'"</code> rather than
+<code>paris</code>. Such a file loaded without complaint and produced a model in which
+<strong>every category missed the vocabulary and encoded identically to an unseen
+value</strong>.</p>
+<p>Files written before this release are also missing the <code>min</code>, <code>max</code>,
+<code>skewness</code> and <code>kurtosis</code> entries the model advisor reads; a stats file without
+them still builds a preprocessor, but the advisor falls back to its neutral
+defaults. Pass <code>overwrite_stats=True</code> once to collect them.</p>
+<p>KDP now detects the byte-repr format and recomputes from the data instead of
+trusting it, logging a warning that names the file. You do not have to do anything,
+but be aware that:</p>
+<ul>
+<li>the first build after upgrading re-reads your dataset, so it takes as long
+  as a fresh statistics pass;</li>
+<li><code>path_data</code> must still point at the data for that recomputation to happen.</li>
+</ul>
+<p>To recompute deliberately instead, pass <code>overwrite_stats=True</code> once.</p>
+<h2 id="missing-values-reaching-predict">🕳️ Missing values reaching <code>predict()</code></h2>
+<p>A frame with a gap in it raised <code>Invalid dtype: object</code> — pandas gives a column
+mixing <code>NaN</code> with strings the object dtype, and Keras refuses that outright.
+<code>predict()</code> now takes a DataFrame apart the way <code>InferenceFormatter</code> does,
+deciding each column's type from the values that are actually there, so the two
+paths agree.</p>
+<p>What each kind of gap becomes:</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>A missing value becomes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Categorical, text</td>
+<td>the empty string, which every vocabulary layer maps to its out-of-vocabulary slot</td>
+</tr>
+<tr>
+<td>Numeric</td>
+<td><code>NaN</code>, which normalization carries through to that one column of that one row</td>
+</tr>
+<tr>
+<td>Date</td>
+<td>refused — see below</td>
+</tr>
+</tbody>
+</table>
+<p>The <code>NaN</code> is deliberate: the statistics know the column's mean, but filling it
+in would hide a hole in your data behind a plausible number. It stays inside
+the feature it came from — the rest of the row, and the rest of the batch, are
+unaffected — so you can find it with <code>np.isfinite</code> on the output. Fill the
+column yourself before preprocessing if you want something else.</p>
+<p>A date is the exception: there is no neutral date, so a value the parser cannot
+read stops the batch rather than being invented. It stopped it before too, as a
+TensorFlow graph error naming an internal assertion node; the message now says
+what was expected, that an empty value counts as invalid, and prints the value
+that failed. Fill or drop those rows before preprocessing.</p>
+<h2 id="the-advisor-can-tell-distributions-apart">📈 The advisor can tell distributions apart</h2>
+<p><code>ModelAdvisor</code> reads <code>skewness</code>, <code>kurtosis</code>, <code>min</code> and <code>max</code> off each numeric
+feature, and the statistics carried none of them. Every column arrived with the
+neutral defaults — skew 0, kurtosis 3 — and came back as "Normal distribution
+detected, standard normalization recommended" whatever shape it had, while the
+rescaling factor derived from <code>min</code> and <code>max</code> always worked out to exactly 1.</p>
+<p>The statistics now collect all four, pooled batch by batch in float64 like the
+mean and variance, so the advisor's existing logic reaches its heavy-tailed,
+log-normal and uniform branches for the first time. The generated code snippet
+also carries a <code>path_data</code> line: without it, pasting the advice raised, because
+every configuration the advisor recommends needs the data to build.</p>
+<h2 id="columns-float32-cannot-hold">⚠️ Columns float32 cannot hold</h2>
+<p>Everything after the CSV reader is float32, which carries about seven
+significant digits. A column whose values sit far from zero and vary only
+slightly loses that variation on the way in: Unix timestamps in seconds are 128
+apart in float32 near <code>1.6e9</code>, so a column spread over half a minute arrives as
+one or two distinct numbers. Normalization then works perfectly on what is
+left, reports a standard deviation of 1.0, and hands the model a constant.</p>
+<p>The loss happens before any statistic is computed and cannot be undone there,
+so this is a warning naming the column, not a change in behaviour. Subtract a
+reference point before training, or declare the column as a <code>DATE</code> feature.</p>
+<h2 id="requirements">🐍 Requirements</h2>
+<div class="code-container">
+
+<div class="highlight"><pre><span></span><code>Python  &gt;= 3.10        # 1.11.x declared 3.9, but never ran on it
+keras   &gt;= 3.5, &lt; 4.0  # now an explicit dependency
+</code></pre></div>
+
+</div>
+
+<p>The package previously reached Keras through the <code>tf.keras</code> compatibility
+shim. It targets the Keras 3 API directly, which means it is no longer tied
+to whichever Keras version TensorFlow happens to pin, and it is tested
+against the newest Keras 3 release on every pull request. The <code>tf-keras</code>
+dependency is gone.</p>
+<p>The 3.9 requirement in 1.11.x was a metadata error rather than a supported
+configuration — the source already used <code>X | None</code> type syntax, which 3.9
+cannot parse — so no working 3.9 installation exists to break.</p>
+<h2 id="things-that-now-work-that-did-not-before">✅ Things that now work that did not before</h2>
+<p>None of these need a change on your side; they simply stop failing.</p>
+<div class="code-container">
+
+<div class="highlight"><pre><span></span><code><span class="c1"># Saving and reloading a preprocessor. Custom layers are registered as</span>
+<span class="c1"># serializable, so a saved model round-trips.</span>
+<span class="n">preprocessor</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="s2">&quot;model.keras&quot;</span><span class="p">)</span>
+<span class="n">reloaded</span> <span class="o">=</span> <span class="n">keras</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">load_model</span><span class="p">(</span><span class="s2">&quot;model.keras&quot;</span><span class="p">)</span>
+
+<span class="c1"># predict() with plain Python or NumPy input, including string columns.</span>
+<span class="n">preprocessor</span><span class="o">.</span><span class="n">predict</span><span class="p">({</span>
+    <span class="s2">&quot;age&quot;</span><span class="p">:</span> <span class="p">[[</span><span class="mf">35.0</span><span class="p">]],</span>
+    <span class="s2">&quot;city&quot;</span><span class="p">:</span> <span class="p">[[</span><span class="s2">&quot;paris&quot;</span><span class="p">]],</span>
+<span class="p">})</span>
+
+<span class="c1"># Custom pipelines by layer name -- the spelling the docs lead with.</span>
+<span class="n">Feature</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;value&quot;</span><span class="p">,</span>
+    <span class="n">feature_type</span><span class="o">=</span><span class="n">FeatureType</span><span class="o">.</span><span class="n">FLOAT_NORMALIZED</span><span class="p">,</span>
+    <span class="n">preprocessors</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Rescaling&quot;</span><span class="p">,</span> <span class="s2">&quot;Dense&quot;</span><span class="p">],</span>
+    <span class="n">scale</span><span class="o">=</span><span class="mf">2.0</span><span class="p">,</span>
+    <span class="n">units</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># auto_configure() returns real per-feature recommendations rather than an</span>
+<span class="c1"># empty set, and DatasetStatistics works from features_specs alone.</span>
+<span class="n">auto_configure</span><span class="p">(</span><span class="s2">&quot;data.csv&quot;</span><span class="p">,</span> <span class="n">features_specs</span><span class="o">=</span><span class="n">specs</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+
+<p>Building a model whose features learn nothing from the data — hashing
+categoricals with an explicit <code>hash_bucket_size</code> — no longer requires
+<code>path_data</code>, because no statistics pass runs. When a feature <em>does</em> need
+statistics and <code>path_data</code> is missing, the error now names the parameter
+instead of surfacing as a <code>TypeError</code> from inside <code>tf.data</code>.</p>
+<h2 id="moved-symbols">🔀 Moved symbols</h2>
+<p><code>FeatureSpaceConverter</code> now lives in <code>kdp.features</code>, next to the feature
+classes it converts. It is re-exported from <code>kdp.processor</code>, so existing
+imports keep working:</p>
+<div class="code-container">
+
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">kdp.features</span><span class="w"> </span><span class="kn">import</span> <span class="n">FeatureSpaceConverter</span>   <span class="c1"># preferred</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">kdp.processor</span><span class="w"> </span><span class="kn">import</span> <span class="n">FeatureSpaceConverter</span>  <span class="c1"># still works</span>
+</code></pre></div>
+
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        <div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/UnicoLab/keras-data-processor" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path fill="currentColor" d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://pypi.org/project/kdp/" target="_blank" rel="noopener" title="pypi.org" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path fill="currentColor" d="M439.8 200.5c-7.7-30.9-22.3-54.2-53.4-54.2h-40.1v47.4c0 36.8-31.2 67.8-66.8 67.8H172.7c-29.2 0-53.4 25-53.4 54.3v101.8c0 29 25.2 46 53.4 54.3 33.8 9.9 66.3 11.7 106.8 0 26.9-7.8 53.4-23.5 53.4-54.3v-40.7H226.2v-13.6h160.2c31.1 0 42.6-21.7 53.4-54.2 11.2-33.5 10.7-65.7 0-108.6M286.2 444.7a20.4 20.4 0 1 1 0-40.7 20.4 20.4 0 1 1 0 40.7M167.8 248.1h106.8c29.7 0 53.4-24.5 53.4-54.3V91.9c0-29-24.4-50.7-53.4-55.6-35.8-5.9-74.7-5.6-106.8.1-45.2 8-53.4 24.7-53.4 55.6v40.7h106.9v13.6h-147c-31.1 0-58.3 18.7-66.8 54.2-9.8 40.7-10.2 66.1 0 108.6 7.6 31.6 25.7 54.2 56.8 54.2H101v-48.8c0-35.3 30.5-66.4 66.8-66.4m-6.6-183.4a20.4 20.4 0 1 1 0 40.8 20.4 20.4 0 1 1 0-40.8"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "..", "features": [], "search": "../assets/javascripts/workers/search.d50fe291.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.50899def.min.js"></script>
+      
+        <script src="../assets/js/fix-image-paths.js"></script>
+      
+    
+  </body>
+</html>
