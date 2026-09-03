@@ -19,4 +19,3 @@ get_unique_values(self) -> list
 Returns the unique categorical values accumulated so far.
 
 ---
-

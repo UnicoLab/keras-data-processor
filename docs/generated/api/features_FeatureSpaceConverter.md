@@ -9,4 +9,3 @@ __init__(self) -> None
 Initialize a feature space converter.
 
 ---
-

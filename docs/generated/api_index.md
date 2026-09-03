@@ -181,4 +181,3 @@ This section provides detailed API documentation extracted directly from the cod
 ## kdp.layers.variable_selection_layer
 
 - [VariableSelection](api/variable_selection_layer_VariableSelection.md)
-

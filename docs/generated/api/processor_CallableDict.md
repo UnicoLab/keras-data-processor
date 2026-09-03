@@ -9,5 +9,3 @@ preprocessor(test_input) instead of preprocessor["model"](test_input).
 
 When called, it will try to invoke the "model" key if it exists, passing all
 arguments and keyword arguments to that function.
-
-

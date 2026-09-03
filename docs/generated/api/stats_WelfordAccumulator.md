@@ -13,4 +13,3 @@ __init__(self)
 Initializes the accumulators for the Welford algorithm.
 
 ---
-

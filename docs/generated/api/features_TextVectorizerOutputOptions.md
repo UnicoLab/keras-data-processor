@@ -7,5 +7,3 @@ KDP's own checks compare against. They used to be `auto()` integers here
 while `kdp.processor` defined a second, string-valued class of the same
 name, so whichever one a caller imported decided whether their option
 worked or was quietly discarded.
-
-

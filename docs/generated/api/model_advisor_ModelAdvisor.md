@@ -41,4 +41,3 @@ generate_code_snippet(self) -> str
 Generate a code snippet implementing the recommendations.
 
 ---
-

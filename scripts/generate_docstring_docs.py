@@ -222,7 +222,11 @@ def extract_module_docs(module, output_dir):
         # Write to file
         output_file = Path(output_dir) / "api" / f"{module_name}_{name}.md"
         with open(output_file, "w") as f:
-            f.write(docs)
+            # Exactly one newline at the end. Each class section is appended
+            # with a trailing blank line, so the file used to end with two --
+            # which `end-of-file-fixer` strips, so every regeneration left the
+            # tree dirty and the pre-commit CI job failed on it.
+            f.write(docs.rstrip() + "\n")
 
         print(f"Generated docs for {module.__name__}.{name} at {output_file}")
 
@@ -237,30 +241,36 @@ def generate_module_index(modules, output_dir):
     """
     output_file = Path(output_dir) / "api_index.md"
 
+    lines = [
+        "# API Reference",
+        "",
+        "This section provides detailed API documentation extracted directly "
+        "from the codebase.",
+        "",
+    ]
+
+    for module in modules:
+        module_name = module.__name__
+        lines += [f"## {module_name}", ""]
+
+        # Find all documented classes in this module
+        doc_dir = Path(output_dir) / "api"
+        module_short_name = module_name.split(".")[-1]
+
+        # List documented classes
+        for doc_file in sorted(doc_dir.glob(f"{module_short_name}_*.md")):
+            # Strip the module prefix rather than splitting on the first
+            # underscore -- every multi-word module name (for example
+            # distribution_aware_encoder_layer) was otherwise cut mid-name.
+            class_name = doc_file.stem[len(module_short_name) + 1 :]
+            relative_path = os.path.relpath(doc_file, Path(output_dir))
+            lines.append(f"- [{class_name}]({relative_path})")
+
+        lines.append("")
+
+    # One trailing newline, so `end-of-file-fixer` has nothing to change.
     with open(output_file, "w") as f:
-        f.write("# API Reference\n\n")
-        f.write(
-            "This section provides detailed API documentation extracted directly from the codebase.\n\n",
-        )
-
-        for module in modules:
-            module_name = module.__name__
-            f.write(f"## {module_name}\n\n")
-
-            # Find all documented classes in this module
-            doc_dir = Path(output_dir) / "api"
-            module_short_name = module_name.split(".")[-1]
-
-            # List documented classes
-            for doc_file in sorted(doc_dir.glob(f"{module_short_name}_*.md")):
-                # Strip the module prefix rather than splitting on the first
-                # underscore -- every multi-word module name (for example
-                # distribution_aware_encoder_layer) was otherwise cut mid-name.
-                class_name = doc_file.stem[len(module_short_name) + 1 :]
-                relative_path = os.path.relpath(doc_file, Path(output_dir))
-                f.write(f"- [{class_name}]({relative_path})\n")
-
-            f.write("\n")
+        f.write("\n".join(lines).rstrip() + "\n")
 
     print(f"Generated API index at {output_file}")
 
