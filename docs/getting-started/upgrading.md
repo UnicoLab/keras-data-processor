@@ -24,6 +24,9 @@ configuration changes, but the numbers coming out of the preprocessor do.
 | `AutoLagSelectionLayer` on multi-channel input | Lags were chosen from the autocorrelation of channel 0 alone, then applied to every channel, so reordering the columns of the same data changed the result | The autocorrelation is averaged over the channels as well as the batch, so every channel contributes and the choice does not depend on column order |
 | `TimeSeriesFeature.get_output_dim()` on wavelet, tsfresh or calendar configs | Counted those transforms as columns added to the series. They replace it: the wavelet returns coefficients, tsfresh returns statistics, the calendar returns date components. The declared width matched no configuration at all | Each layer is asked for its own width, so the number matches the tensor the stack produces |
 | `DateFeature(add_season=True)` | The season layer ran after the cyclic encoding and read its column 1 — the cosine of the year, `1.0` for every row — as the month, so every date came out winter and the four season columns were constant | The season is read from the month before the encoding replaces it, so the four columns carry the season. The output is the same width as before |
+| Any numeric column far from zero | The variance was accumulated in float32 by subtracting the running mean from each raw value, so the arithmetic happened at the magnitude of the values. A column around `1e8` came back with a variance of **minus** 1.6e6 against a true 1.0e6, and `Normalization` then flattened it to a constant | Accumulated in float64 and pooled batch by batch, so IDs, epoch timestamps and amounts in cents standardise to mean 0 and variance 1 like any other column |
+| `path_data` pointing at a file | The filename was discarded and every `*.csv` in that directory was read, so `path_data="data/train.csv"` computed its statistics over `test.csv` as well | The named file is the only one read. A directory still reads every CSV in it, and a glob is passed through |
+| Grouped time series statistics | Each group was replaced by copies of its own mean before combining, leaving only the variance *between* the group means — 0.73 against a true 643 for two groups of spread 25 | The groups are pooled whole, so the reported variance is the variance of the data |
 | `DistributionTransformLayer` — `robust-scale` | Median and IQR were taken across the whole tensor | Computed per feature, as the transform is defined |
 | `DistributionTransformLayer` — `quantile` | Ranking was global | Ranked per feature |
 | Distribution-aware encoding | `preferred_distribution` was accepted and then ignored, so the layer always auto-detected | The requested distribution is honoured |
@@ -33,6 +36,18 @@ configuration changes, but the numbers coming out of the preprocessor do.
 | `feature_moe_use_residual` | Stored on the model and read nowhere, so the residual connection it names never existed | The original feature is added back onto its expert output wherever the widths match |
 | `feature_moe_freeze_experts` | Passed `training=False` to the experts, which only changes dropout and batch norm; the weights still received gradients | The experts are marked non-trainable, which is what the option says |
 | `feature_moe_sparsity` | The top-k mask that enforces it sat behind `routing_activation != "softmax"`, which `PreprocessingModel` never exposes, so every feature was routed densely to every expert | Each feature reaches at most `feature_moe_sparsity` experts, as documented. With the defaults (4 experts, sparsity 2) a learned-routing model produces different values than it did |
+
+!!! danger "Statistics change for two common shapes of data"
+    If any numeric column sits far from zero — an ID, a UNIX timestamp, an
+    amount in cents — its statistics were wrong and the column reached your
+    model as a constant. It now carries its signal, which changes that
+    column's output completely.
+
+    Separately, if you passed `path_data` a **file** in a directory holding
+    other CSVs, the statistics were computed over all of them. If that
+    directory held your test set, it was folded into the training statistics.
+    Recompute with `overwrite_stats=True`; any `features_stats.json` written
+    before this release may be built from the wrong rows.
 
 !!! warning "Re-train downstream models"
     If you trained a model on top of KDP output from 1.11.x and any of the
